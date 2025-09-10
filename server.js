@@ -9,6 +9,7 @@ const fs = require("fs-extra");
 // Import routes
 const whatsappRoutes = require("./routes/whatsapp");
 const businessRoutes = require("./routes/business");
+const googleRoutes = require("./routes/google");
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -78,6 +79,7 @@ app.get("/health", (req, res) => {
 // API routes
 app.use("/", whatsappRoutes);
 app.use("/wbot-api", businessRoutes);
+app.use("/api/google", googleRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

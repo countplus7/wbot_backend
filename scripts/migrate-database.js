@@ -1,8 +1,8 @@
-const pool = require('../config/database');
+const pool = require("../config/database");
 
 const migrateDatabase = async () => {
   try {
-    console.log('Starting database migration for multi-tenant support...');
+    console.log("Starting database migration for multi-tenant support...");
 
     // Check if businesses table exists
     const businessesExists = await pool.query(`
@@ -13,7 +13,7 @@ const migrateDatabase = async () => {
     `);
 
     if (!businessesExists.rows[0].exists) {
-      console.log('Creating businesses table...');
+      console.log("Creating businesses table...");
       await pool.query(`
         CREATE TABLE businesses (
           id SERIAL PRIMARY KEY,
@@ -25,7 +25,7 @@ const migrateDatabase = async () => {
         )
       `);
     } else {
-      console.log('Businesses table already exists');
+      console.log("Businesses table already exists");
     }
 
     // Check if whatsapp_configs table exists
@@ -37,7 +37,7 @@ const migrateDatabase = async () => {
     `);
 
     if (!configsExists.rows[0].exists) {
-      console.log('Creating whatsapp_configs table...');
+      console.log("Creating whatsapp_configs table...");
       await pool.query(`
         CREATE TABLE whatsapp_configs (
           id SERIAL PRIMARY KEY,
@@ -53,7 +53,7 @@ const migrateDatabase = async () => {
         )
       `);
     } else {
-      console.log('WhatsApp configs table already exists');
+      console.log("WhatsApp configs table already exists");
     }
 
     // Check if business_tones table exists
@@ -65,7 +65,7 @@ const migrateDatabase = async () => {
     `);
 
     if (!tonesExists.rows[0].exists) {
-      console.log('Creating business_tones table...');
+      console.log("Creating business_tones table...");
       await pool.query(`
         CREATE TABLE business_tones (
           id SERIAL PRIMARY KEY,
@@ -79,7 +79,36 @@ const migrateDatabase = async () => {
         )
       `);
     } else {
-      console.log('Business tones table already exists');
+      console.log("Business tones table already exists");
+    }
+
+    // Check if google_workspace_integrations table exists
+    const googleIntegrationsExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'google_workspace_integrations'
+      );
+    `);
+
+    if (!googleIntegrationsExists.rows[0].exists) {
+      console.log("Creating google_workspace_integrations table...");
+      await pool.query(`
+        CREATE TABLE google_workspace_integrations (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          provider VARCHAR(20) NOT NULL DEFAULT 'google',
+          email VARCHAR(255) NOT NULL,
+          refresh_token TEXT NOT NULL,
+          access_token TEXT,
+          expiry_date TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          UNIQUE(business_id, provider, email)
+        )
+      `);
+    } else {
+      console.log("Google Workspace integrations table already exists");
     }
 
     // Check if conversations table has business_id column
@@ -99,7 +128,7 @@ const migrateDatabase = async () => {
       `);
 
       if (!hasBusinessId.rows[0].exists) {
-        console.log('Adding business_id column to conversations table...');
+        console.log("Adding business_id column to conversations table...");
         await pool.query(`
           ALTER TABLE conversations 
           ADD COLUMN business_id INTEGER,
@@ -114,11 +143,14 @@ const migrateDatabase = async () => {
         `);
 
         // Update existing conversations with default business
-        await pool.query(`
+        await pool.query(
+          `
           UPDATE conversations 
           SET business_id = $1 
           WHERE business_id IS NULL
-        `, [defaultBusiness.rows[0].id]);
+        `,
+          [defaultBusiness.rows[0].id]
+        );
 
         // Make business_id NOT NULL and add foreign key
         await pool.query(`
@@ -133,12 +165,12 @@ const migrateDatabase = async () => {
           ALTER TABLE conversations DROP COLUMN temp_id
         `);
 
-        console.log('Updated conversations table with business_id');
+        console.log("Updated conversations table with business_id");
       } else {
-        console.log('Conversations table already has business_id column');
+        console.log("Conversations table already has business_id column");
       }
     } else {
-      console.log('Conversations table does not exist, will be created by init-database.js');
+      console.log("Conversations table does not exist, will be created by init-database.js");
     }
 
     // Check if messages table has business_id column
@@ -158,7 +190,7 @@ const migrateDatabase = async () => {
       `);
 
       if (!hasBusinessId.rows[0].exists) {
-        console.log('Adding business_id column to messages table...');
+        console.log("Adding business_id column to messages table...");
         await pool.query(`
           ALTER TABLE messages 
           ADD COLUMN business_id INTEGER,
@@ -172,11 +204,14 @@ const migrateDatabase = async () => {
 
         if (defaultBusiness.rows.length > 0) {
           // Update existing messages with default business
-          await pool.query(`
+          await pool.query(
+            `
             UPDATE messages 
             SET business_id = $1 
             WHERE business_id IS NULL
-          `, [defaultBusiness.rows[0].id]);
+          `,
+            [defaultBusiness.rows[0].id]
+          );
 
           // Make business_id NOT NULL and add foreign key
           await pool.query(`
@@ -192,12 +227,12 @@ const migrateDatabase = async () => {
           ALTER TABLE messages DROP COLUMN temp_id
         `);
 
-        console.log('Updated messages table with business_id');
+        console.log("Updated messages table with business_id");
       } else {
-        console.log('Messages table already has business_id column');
+        console.log("Messages table already has business_id column");
       }
     } else {
-      console.log('Messages table does not exist, will be created by init-database.js');
+      console.log("Messages table does not exist, will be created by init-database.js");
     }
 
     // Check if media_files table has business_id column
@@ -217,7 +252,7 @@ const migrateDatabase = async () => {
       `);
 
       if (!hasBusinessId.rows[0].exists) {
-        console.log('Adding business_id column to media_files table...');
+        console.log("Adding business_id column to media_files table...");
         await pool.query(`
           ALTER TABLE media_files 
           ADD COLUMN business_id INTEGER,
@@ -231,11 +266,14 @@ const migrateDatabase = async () => {
 
         if (defaultBusiness.rows.length > 0) {
           // Update existing media files with default business
-          await pool.query(`
+          await pool.query(
+            `
             UPDATE media_files 
             SET business_id = $1 
             WHERE business_id IS NULL
-          `, [defaultBusiness.rows[0].id]);
+          `,
+            [defaultBusiness.rows[0].id]
+          );
 
           // Make business_id NOT NULL and add foreign key
           await pool.query(`
@@ -251,16 +289,16 @@ const migrateDatabase = async () => {
           ALTER TABLE media_files DROP COLUMN temp_id
         `);
 
-        console.log('Updated media_files table with business_id');
+        console.log("Updated media_files table with business_id");
       } else {
-        console.log('Media files table already has business_id column');
+        console.log("Media files table already has business_id column");
       }
     } else {
-      console.log('Media files table does not exist, will be created by init-database.js');
+      console.log("Media files table does not exist, will be created by init-database.js");
     }
 
     // Create indexes
-    console.log('Creating indexes...');
+    console.log("Creating indexes...");
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_businesses_status 
       ON businesses(status)
@@ -277,6 +315,16 @@ const migrateDatabase = async () => {
     `);
 
     await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_google_workspace_integrations_business_id 
+      ON google_workspace_integrations(business_id)
+    `);
+
+    // await pool.query(`
+    //   CREATE INDEX IF NOT EXISTS idx_google_workspace_integrations_email
+    //   ON google_workspace_integrations(email)
+    // `);
+
+    await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_conversations_business_id 
       ON conversations(business_id)
     `);
@@ -291,11 +339,10 @@ const migrateDatabase = async () => {
       ON media_files(business_id)
     `);
 
-    console.log('✅ Database migration completed successfully!');
-    console.log('\nYou can now run: npm run init-db');
-
+    console.log("✅ Database migration completed successfully!");
+    console.log("\nYou can now run: npm run init-db");
   } catch (error) {
-    console.error('Error during migration:', error);
+    console.error("Error during migration:", error);
     throw error;
   }
 };
@@ -303,10 +350,10 @@ const migrateDatabase = async () => {
 const runMigration = async () => {
   try {
     await migrateDatabase();
-    console.log('Migration completed successfully');
+    console.log("Migration completed successfully");
     process.exit(0);
   } catch (error) {
-    console.error('Migration failed:', error);
+    console.error("Migration failed:", error);
     process.exit(1);
   }
 };
@@ -316,4 +363,4 @@ if (require.main === module) {
   runMigration();
 }
 
-module.exports = { migrateDatabase }; 
+module.exports = { migrateDatabase };
