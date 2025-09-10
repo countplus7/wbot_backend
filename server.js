@@ -79,7 +79,7 @@ app.get("/health", (req, res) => {
 // API routes
 app.use("/", whatsappRoutes);
 app.use("/wbot-api", businessRoutes);
-app.use("/api/google", googleRoutes);
+app.use("/wbot-api/google", googleRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
