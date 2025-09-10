@@ -7,6 +7,7 @@ const path = require("path");
 const fs = require("fs-extra");
 
 // Import routes
+const authRoutes = require("./routes/auth");
 const whatsappRoutes = require("./routes/whatsapp");
 const businessRoutes = require("./routes/business");
 const googleRoutes = require("./routes/google");
@@ -79,6 +80,7 @@ app.get("/health", (req, res) => {
 // API routes
 app.use("/", whatsappRoutes);
 app.use("/api", businessRoutes);
+app.use("/api/auth", authRoutes);
 app.use("/api/google", googleRoutes);
 
 // Error handling middleware

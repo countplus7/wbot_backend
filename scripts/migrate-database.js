@@ -4,6 +4,33 @@ const migrateDatabase = async () => {
   try {
     console.log("Starting database migration for multi-tenant support...");
 
+        // Check if users table exists
+        const usersExists = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'users'
+          );
+        `);
+    
+        if (!usersExists.rows[0].exists) {
+          console.log("Creating users table...");
+          await pool.query(`
+            CREATE TABLE users (
+              id SERIAL PRIMARY KEY,
+              username VARCHAR(100) UNIQUE NOT NULL,
+              email VARCHAR(255) UNIQUE NOT NULL,
+              password_hash VARCHAR(255) NOT NULL,
+              role VARCHAR(20) DEFAULT 'admin',
+              status VARCHAR(20) DEFAULT 'active',
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+          `);
+          console.log("Users table created successfully");
+        } else {
+          console.log("Users table already exists");
+        }
+    
     // Check if businesses table exists
     const businessesExists = await pool.query(`
       SELECT EXISTS (
@@ -299,6 +326,27 @@ const migrateDatabase = async () => {
 
     // Create indexes
     console.log("Creating indexes...");
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_username 
+      ON users(username)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_email 
+      ON users(email)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_role 
+      ON users(role)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_status 
+      ON users(status)
+    `);
+    
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_businesses_status 
       ON businesses(status)

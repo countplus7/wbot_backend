@@ -14,17 +14,19 @@
     "health": "curl -s http://localhost:8000/health | jq ."
   },
   "dependencies": {
-    "express": "^4.18.2",
     "axios": "^1.6.0",
-    "pg": "^8.11.3",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "openai": "^4.20.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
     "form-data": "^4.0.0",
     "fs-extra": "^11.1.1",
-    "cors": "^2.8.5",
+    "googleapis": "^128.0.0",
     "helmet": "^7.1.0",
-    "express-rate-limit": "^7.1.5",
-    "googleapis": "^128.0.0"
+    "jsonwebtoken": "^9.0.2",
+    "openai": "^4.20.1",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

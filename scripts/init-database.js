@@ -13,6 +13,7 @@ const dropAllTables = async () => {
       "whatsapp_configs",
       "google_workspace_integrations",
       "businesses",
+      "users",
     ];
 
     for (const table of tables) {
@@ -30,6 +31,21 @@ const dropAllTables = async () => {
 const createTables = async () => {
   try {
     console.log("Creating fresh database tables...");
+
+    // Create users table for admin authentication
+    await pool.query(`
+      CREATE TABLE users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(100) UNIQUE NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        role VARCHAR(20) DEFAULT 'admin',
+        status VARCHAR(20) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log("Created table: users");
 
     // Create businesses table
     await pool.query(`
