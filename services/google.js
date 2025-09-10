@@ -1,5 +1,5 @@
-const { google } = require('googleapis');
-const pool = require('../config/database');
+const { google } = require("googleapis");
+const pool = require("../config/database");
 
 class GoogleService {
   constructor() {
@@ -11,14 +11,14 @@ class GoogleService {
 
     // Define the scopes we need for Google Workspace integration
     this.scopes = [
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/gmail.send',
-      'https://www.googleapis.com/auth/calendar.readonly',
-      'https://www.googleapis.com/auth/calendar.events',
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive.readonly',
-      'https://www.googleapis.com/auth/userinfo.email',
-      'https://www.googleapis.com/auth/userinfo.profile'
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/gmail.send",
+      "https://www.googleapis.com/auth/calendar.readonly",
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.readonly",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile",
     ];
   }
 
@@ -29,10 +29,10 @@ class GoogleService {
    */
   getAuthUrl(businessId) {
     const authUrl = this.oauth2Client.generateAuthUrl({
-      access_type: 'offline',
+      access_type: "offline",
       scope: this.scopes,
-      prompt: 'consent',
-      state: JSON.stringify({ businessId })
+      prompt: "consent",
+      state: JSON.stringify({ businessId }),
     });
     return authUrl;
   }
@@ -45,35 +45,35 @@ class GoogleService {
    */
   async exchangeCodeForTokens(code, businessId) {
     try {
-      const { tokens } = await this.oauth2Client.getAccessToken(code);
-      
+      const { tokens } = await this.oauth2Client.getToken(code);
+
       // Set credentials to get user info
       this.oauth2Client.setCredentials(tokens);
-      
+
       // Get user info to store email
-      const oauth2 = google.oauth2({ version: 'v2', auth: this.oauth2Client });
+      const oauth2 = google.oauth2({ version: "v2", auth: this.oauth2Client });
       const userInfo = await oauth2.userinfo.get();
-      
+
       const integrationData = {
         business_id: businessId,
-        provider: 'google',
+        provider: "google",
         email: userInfo.data.email,
         refresh_token: tokens.refresh_token,
         access_token: tokens.access_token,
-        expiry_date: tokens.expiry_date ? new Date(tokens.expiry_date) : null
+        expiry_date: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
       };
 
       // Store integration in database
       await this.saveIntegration(integrationData);
-      
+
       return {
         success: true,
         email: userInfo.data.email,
-        tokens
+        tokens,
       };
     } catch (error) {
-      console.error('Error exchanging code for tokens:', error);
-      throw new Error('Failed to authenticate with Google');
+      console.error("Error exchanging code for tokens:", error);
+      throw new Error("Failed to authenticate with Google");
     }
   }
 
@@ -95,21 +95,21 @@ class GoogleService {
           updated_at = CURRENT_TIMESTAMP
         RETURNING id
       `;
-      
+
       const values = [
         integrationData.business_id,
         integrationData.provider,
         integrationData.email,
         integrationData.refresh_token,
         integrationData.access_token,
-        integrationData.expiry_date
+        integrationData.expiry_date,
       ];
-      
+
       const result = await pool.query(query, values);
       return result.rows[0];
     } catch (error) {
-      console.error('Error saving Google integration:', error);
-      throw new Error('Failed to save Google integration');
+      console.error("Error saving Google integration:", error);
+      throw new Error("Failed to save Google integration");
     }
   }
 
@@ -126,12 +126,12 @@ class GoogleService {
         ORDER BY updated_at DESC
         LIMIT 1
       `;
-      
+
       const result = await pool.query(query, [businessId]);
       return result.rows[0] || null;
     } catch (error) {
-      console.error('Error getting Google integration:', error);
-      throw new Error('Failed to get Google integration');
+      console.error("Error getting Google integration:", error);
+      throw new Error("Failed to get Google integration");
     }
   }
 
@@ -143,7 +143,7 @@ class GoogleService {
   async getAuthenticatedClient(businessId) {
     const integration = await this.getIntegration(businessId);
     if (!integration) {
-      throw new Error('No Google integration found for this business');
+      throw new Error("No Google integration found for this business");
     }
 
     const oauth2Client = new google.auth.OAuth2(
@@ -155,11 +155,11 @@ class GoogleService {
     oauth2Client.setCredentials({
       access_token: integration.access_token,
       refresh_token: integration.refresh_token,
-      expiry_date: integration.expiry_date
+      expiry_date: integration.expiry_date,
     });
 
     // Handle token refresh
-    oauth2Client.on('tokens', async (tokens) => {
+    oauth2Client.on("tokens", async (tokens) => {
       if (tokens.refresh_token) {
         integration.refresh_token = tokens.refresh_token;
       }
@@ -169,7 +169,7 @@ class GoogleService {
       if (tokens.expiry_date) {
         integration.expiry_date = new Date(tokens.expiry_date);
       }
-      
+
       // Update tokens in database
       await this.saveIntegration(integration);
     });
@@ -187,12 +187,12 @@ class GoogleService {
         DELETE FROM google_workspace_integrations 
         WHERE business_id = $1 AND provider = 'google'
       `;
-      
+
       await pool.query(query, [businessId]);
       return { success: true };
     } catch (error) {
-      console.error('Error removing Google integration:', error);
-      throw new Error('Failed to remove Google integration');
+      console.error("Error removing Google integration:", error);
+      throw new Error("Failed to remove Google integration");
     }
   }
 
@@ -209,153 +209,153 @@ class GoogleService {
   // Gmail integration methods
   async getGmailService(businessId) {
     const auth = await this.getAuthenticatedClient(businessId);
-    return google.gmail({ version: 'v1', auth });
+    return google.gmail({ version: "v1", auth });
   }
 
   async sendEmail(businessId, { to, subject, body, isHtml = false }) {
     try {
       const gmail = await this.getGmailService(businessId);
-      
+
       const email = [
         `To: ${to}`,
         `Subject: ${subject}`,
-        `Content-Type: ${isHtml ? 'text/html' : 'text/plain'}; charset=utf-8`,
-        '',
-        body
-      ].join('\n');
+        `Content-Type: ${isHtml ? "text/html" : "text/plain"}; charset=utf-8`,
+        "",
+        body,
+      ].join("\n");
 
-      const encodedEmail = Buffer.from(email).toString('base64url');
-      
+      const encodedEmail = Buffer.from(email).toString("base64url");
+
       const result = await gmail.users.messages.send({
-        userId: 'me',
+        userId: "me",
         requestBody: {
-          raw: encodedEmail
-        }
+          raw: encodedEmail,
+        },
       });
 
       return result.data;
     } catch (error) {
-      console.error('Error sending email:', error);
-      throw new Error('Failed to send email via Gmail');
+      console.error("Error sending email:", error);
+      throw new Error("Failed to send email via Gmail");
     }
   }
 
   // Calendar integration methods
   async getCalendarService(businessId) {
     const auth = await this.getAuthenticatedClient(businessId);
-    return google.calendar({ version: 'v3', auth });
+    return google.calendar({ version: "v3", auth });
   }
 
   async createCalendarEvent(businessId, eventData) {
     try {
       const calendar = await this.getCalendarService(businessId);
-      
+
       const event = {
         summary: eventData.title,
         description: eventData.description,
         start: {
           dateTime: eventData.startTime,
-          timeZone: eventData.timeZone || 'UTC'
+          timeZone: eventData.timeZone || "UTC",
         },
         end: {
           dateTime: eventData.endTime,
-          timeZone: eventData.timeZone || 'UTC'
+          timeZone: eventData.timeZone || "UTC",
         },
-        attendees: eventData.attendees?.map(email => ({ email })) || []
+        attendees: eventData.attendees?.map((email) => ({ email })) || [],
       };
 
       const result = await calendar.events.insert({
-        calendarId: 'primary',
-        resource: event
+        calendarId: "primary",
+        resource: event,
       });
 
       return result.data;
     } catch (error) {
-      console.error('Error creating calendar event:', error);
-      throw new Error('Failed to create calendar event');
+      console.error("Error creating calendar event:", error);
+      throw new Error("Failed to create calendar event");
     }
   }
 
   // Sheets integration methods
   async getSheetsService(businessId) {
     const auth = await this.getAuthenticatedClient(businessId);
-    return google.sheets({ version: 'v4', auth });
+    return google.sheets({ version: "v4", auth });
   }
 
   async readSheet(businessId, spreadsheetId, range) {
     try {
       const sheets = await this.getSheetsService(businessId);
-      
+
       const result = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range
+        range,
       });
 
       return result.data.values || [];
     } catch (error) {
-      console.error('Error reading sheet:', error);
-      throw new Error('Failed to read Google Sheet');
+      console.error("Error reading sheet:", error);
+      throw new Error("Failed to read Google Sheet");
     }
   }
 
   async writeSheet(businessId, spreadsheetId, range, values) {
     try {
       const sheets = await this.getSheetsService(businessId);
-      
+
       const result = await sheets.spreadsheets.values.update({
         spreadsheetId,
         range,
-        valueInputOption: 'USER_ENTERED',
+        valueInputOption: "USER_ENTERED",
         resource: {
-          values
-        }
+          values,
+        },
       });
 
       return result.data;
     } catch (error) {
-      console.error('Error writing to sheet:', error);
-      throw new Error('Failed to write to Google Sheet');
+      console.error("Error writing to sheet:", error);
+      throw new Error("Failed to write to Google Sheet");
     }
   }
 
   // Drive integration methods
   async getDriveService(businessId) {
     const auth = await this.getAuthenticatedClient(businessId);
-    return google.drive({ version: 'v3', auth });
+    return google.drive({ version: "v3", auth });
   }
 
-  async listFiles(businessId, query = '', maxResults = 10) {
+  async listFiles(businessId, query = "", maxResults = 10) {
     try {
       const drive = await this.getDriveService(businessId);
-      
+
       const result = await drive.files.list({
         q: query,
         pageSize: maxResults,
-        fields: 'nextPageToken, files(id, name, mimeType, size, modifiedTime)'
+        fields: "nextPageToken, files(id, name, mimeType, size, modifiedTime)",
       });
 
       return result.data.files || [];
     } catch (error) {
-      console.error('Error listing files:', error);
-      throw new Error('Failed to list Google Drive files');
+      console.error("Error listing files:", error);
+      throw new Error("Failed to list Google Drive files");
     }
   }
 
   async downloadFile(businessId, fileId) {
     try {
       const drive = await this.getDriveService(businessId);
-      
+
       const result = await drive.files.get({
         fileId,
-        alt: 'media'
+        alt: "media",
       });
 
       return result.data;
     } catch (error) {
-      console.error('Error downloading file:', error);
-      throw new Error('Failed to download Google Drive file');
+      console.error("Error downloading file:", error);
+      throw new Error("Failed to download Google Drive file");
     }
   }
 }
 
-module.exports = new GoogleService(); 
+module.exports = new GoogleService();
