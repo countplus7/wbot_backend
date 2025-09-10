@@ -1,35 +1,36 @@
-const pool = require('../config/database');
+const pool = require("../config/database");
 
 const dropAllTables = async () => {
   try {
-    console.log('Dropping all existing tables...');
-    
+    console.log("Dropping all existing tables...");
+
     // Drop tables in reverse order of dependencies
     const tables = [
-      'media_files',
-      'messages', 
-      'conversations',
-      'business_tones',
-      'whatsapp_configs',
-      'businesses'
+      "media_files",
+      "messages",
+      "conversations",
+      "business_tones",
+      "whatsapp_configs",
+      "google_workspace_integrations",
+      "businesses",
     ];
 
     for (const table of tables) {
       await pool.query(`DROP TABLE IF EXISTS ${table} CASCADE`);
       console.log(`Dropped table: ${table}`);
     }
-    
-    console.log('All tables dropped successfully');
+
+    console.log("All tables dropped successfully");
   } catch (error) {
-    console.error('Error dropping tables:', error);
+    console.error("Error dropping tables:", error);
     throw error;
   }
 };
 
 const createTables = async () => {
   try {
-    console.log('Creating fresh database tables...');
-    
+    console.log("Creating fresh database tables...");
+
     // Create businesses table
     await pool.query(`
       CREATE TABLE businesses (
@@ -41,7 +42,7 @@ const createTables = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    console.log('Created table: businesses');
+    console.log("Created table: businesses");
 
     // Create WhatsApp configurations table
     await pool.query(`
@@ -58,7 +59,7 @@ const createTables = async () => {
         UNIQUE(business_id, phone_number_id)
       )
     `);
-    console.log('Created table: whatsapp_configs');
+    console.log("Created table: whatsapp_configs");
 
     // Create business tones table (one tone per business)
     await pool.query(`
@@ -73,7 +74,7 @@ const createTables = async () => {
         FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
       )
     `);
-    console.log('Created table: business_tones');
+    console.log("Created table: business_tones");
 
     // Create conversations table (updated to include business_id)
     await pool.query(`
@@ -87,7 +88,7 @@ const createTables = async () => {
         FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
       )
     `);
-    console.log('Created table: conversations');
+    console.log("Created table: conversations");
 
     // Create messages table (updated to include business_id)
     await pool.query(`
@@ -110,7 +111,7 @@ const createTables = async () => {
         FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
       )
     `);
-    console.log('Created table: messages');
+    console.log("Created table: messages");
 
     // Create media files table (updated to include business_id)
     await pool.query(`
@@ -128,11 +129,29 @@ const createTables = async () => {
         FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
       )
     `);
-    console.log('Created table: media_files');
+    console.log("Created table: media_files");
 
-    console.log('Database tables created successfully');
+    // Create Google Workspace integrations table
+    await pool.query(`
+      CREATE TABLE google_workspace_integrations (
+        id SERIAL PRIMARY KEY,
+        business_id INTEGER NOT NULL,
+        provider VARCHAR(20) NOT NULL DEFAULT 'google',
+        email VARCHAR(255) NOT NULL,
+        refresh_token TEXT NOT NULL,
+        access_token TEXT,
+        expiry_date TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+        UNIQUE(business_id, provider, email)
+      )
+    `);
+    console.log("Created table: google_workspace_integrations");
+
+    console.log("Database tables created successfully");
   } catch (error) {
-    console.error('Error creating database tables:', error);
+    console.error("Error creating database tables:", error);
     throw error;
   }
 };
@@ -141,10 +160,10 @@ const initDatabase = async () => {
   try {
     await dropAllTables();
     await createTables();
-    console.log('Database initialization completed - all data cleared and tables recreated');
+    console.log("Database initialization completed - all data cleared and tables recreated");
     process.exit(0);
   } catch (error) {
-    console.error('Database initialization failed:', error);
+    console.error("Database initialization failed:", error);
     process.exit(1);
   }
 };
@@ -154,4 +173,4 @@ if (require.main === module) {
   initDatabase();
 }
 
-module.exports = { createTables, dropAllTables }; 
+module.exports = { createTables, dropAllTables };
