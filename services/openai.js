@@ -22,8 +22,7 @@ class OpenAIService {
       
       if (emailRequest && businessId) {
         try {
-          const googleService = new GoogleService();
-          const result = await googleService.sendEmail(businessId, {
+          const result = await GoogleService.sendEmail(businessId, {
             to: emailRequest.to,
             subject: emailRequest.subject,
             body: emailRequest.body
