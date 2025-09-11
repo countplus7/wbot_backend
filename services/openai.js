@@ -2,6 +2,7 @@ require('dotenv').config();
 const OpenAI = require('openai');
 const fs = require('fs');
 const path = require('path');
+const GoogleService = require('./google');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -13,11 +14,34 @@ class OpenAIService {
     this.visionModel = 'gpt-4o'; // Updated from deprecated gpt-4-vision-preview
   }
 
-  async chatCompletion(messages, conversationHistory = [], businessTone = null) {
+  async chatCompletion(messages, conversationHistory = [], businessTone = null, businessId = null) {
     try {
-      let systemContent = `You are a helpful AI assistant integrated with WhatsApp. 
-      Be conversational, friendly, and helpful. Keep responses concise but informative.
-      If you're analyzing images, describe what you see clearly and provide relevant insights.`;
+      // Check if the latest message contains an email request
+      const latestMessage = messages[messages.length - 1];
+      const emailRequest = this.detectEmailRequest(latestMessage.content);
+      
+      if (emailRequest && businessId) {
+        try {
+          const googleService = new GoogleService();
+          const result = await googleService.sendEmail(businessId, {
+            to: emailRequest.to,
+            subject: emailRequest.subject,
+            body: emailRequest.body
+          });
+          
+          return `✅ Email sent successfully to ${emailRequest.to}!\n\nSubject: ${emailRequest.subject}\n\nMessage: ${emailRequest.body}`;
+        } catch (error) {
+          console.error('Error sending email:', error);
+          return `❌ Sorry, I couldn't send the email. Please make sure Google Workspace integration is properly configured. Error: ${error.message}`;
+        }
+      }
+
+      let systemContent = `You are a helpful AI assistant integrated with WhatsApp and Google Workspace. 
+      You can send emails through Gmail when users request it. Be conversational, friendly, and helpful. 
+      Keep responses concise but informative. If you're analyzing images, describe what you see clearly and provide relevant insights.
+      
+      When users ask to send emails, you can help them by sending emails through Gmail integration.
+      Format for email requests: "send email to [email] with subject [subject] and body [body]"`;
 
       // Apply business-specific tone if provided
       if (businessTone && businessTone.tone_instructions) {
@@ -136,7 +160,7 @@ class OpenAIService {
     }
   }
 
-  async processMessage(messageType, content, filePath = null, conversationHistory = [], businessTone = null) {
+  async processMessage(messageType, content, filePath = null, conversationHistory = [], businessTone = null, businessId = null) {
     try {
       console.log(`OpenAI: Processing message type: ${messageType}`);
       console.log(`OpenAI: Content: ${content}`);
@@ -150,7 +174,7 @@ class OpenAIService {
           console.log('OpenAI: Processing text message');
           aiResponse = await this.chatCompletion([
             { role: 'user', content: content }
-          ], conversationHistory, businessTone);
+          ], conversationHistory, businessTone, businessId);
           break;
 
         case 'image':
@@ -170,12 +194,12 @@ class OpenAIService {
           if (content && content.trim() !== '' && content !== `User sent a ${messageType} message`) {
             aiResponse = await this.chatCompletion([
               { role: 'user', content: `User sent an image with this message: "${content}". Here's what I see in the image: ${imageAnalysis}. Please respond to both the image and the user's message.` }
-            ], conversationHistory, businessTone);
+            ], conversationHistory, businessTone, businessId);
           } else {
             // Just respond to the image analysis
             aiResponse = await this.chatCompletion([
               { role: 'user', content: `I analyzed this image and here's what I see: ${imageAnalysis}. Please provide a helpful response about what's in the image.` }
-            ], conversationHistory, businessTone);
+            ], conversationHistory, businessTone, businessId);
           }
           break;
 
@@ -192,7 +216,7 @@ class OpenAIService {
           const transcription = await this.transcribeAudio(filePath);
           aiResponse = await this.chatCompletion([
             { role: 'user', content: `Transcribed audio: "${transcription}". Please respond to this message naturally and conversationally.` }
-          ], conversationHistory, businessTone);
+          ], conversationHistory, businessTone, businessId);
           break;
 
         default:

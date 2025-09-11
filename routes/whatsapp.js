@@ -229,7 +229,8 @@ router.post('/webhook', async (req, res) => {
         messageData.content || `User sent a ${messageData.messageType} message`,
         localFilePath, // Use absolute path for AI processing
         conversationHistory,
-        businessTone
+        businessTone,
+        businessId // Pass businessId for email functionality
       );
       
       console.log('AI response generated:', aiResponse);
