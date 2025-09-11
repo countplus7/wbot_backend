@@ -185,8 +185,8 @@ class DatabaseService {
       const processedRows = result.rows.map((row) => {
         if (row.file_path) {
           // Construct the full URL for media files
-          const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 8000}`;
-          row.media_url = `${baseUrl}/${row.file_path}`;
+          const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 8000}`;
+          row.media_url = `${baseUrl}/media/${row.file_path}`;
         }
         return row;
       });
@@ -227,16 +227,13 @@ class DatabaseService {
     try {
       // First get the conversation details before deleting
       const conversation = await this.getConversationDetails(conversationId);
-      
+
       if (!conversation) {
         return null;
       }
 
       // Delete the conversation (CASCADE will handle related records)
-      await pool.query(
-        "DELETE FROM conversations WHERE id = $1",
-        [conversationId]
-      );
+      await pool.query("DELETE FROM conversations WHERE id = $1", [conversationId]);
 
       return conversation;
     } catch (error) {
