@@ -233,6 +233,21 @@ class OpenAIService {
       throw error;
     }
   }
+
+  detectEmailRequest(message) {
+    const emailRegex = /send\s+email\s+to\s+([^\s]+@[^\s]+)\s+with\s+subject\s+([^and]+?)\s+and\s+body\s+(.+)/i;
+    const match = message.match(emailRegex);
+    
+    if (match) {
+      return {
+        to: match[1].trim(),
+        subject: match[2].trim(),
+        body: match[3].trim()
+      };
+    }
+    
+    return null;
+  }
 }
 
-module.exports = new OpenAIService(); 
+module.exports = new OpenAIService();
