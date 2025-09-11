@@ -42,10 +42,10 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS configuration for frontend integration
+// CORS configuration - allow all origins for development
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:8080", // Updated to match your frontend port
+    origin: true, // Allow all origins
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
