@@ -293,11 +293,9 @@ class OpenAIService {
   }
 
 
-
   detectEmailRequest(message) {
-    // Format 1: "send email to [email] with subject [subject] and body [body]"
-    let emailRegex = /send\s+email\s+to\s+([^\s]+@[^\s]+)\s+with\s+subject\s+([^and]+?)\s+and\s+body\s+(.+)/i;
-    let match = message.match(emailRegex);
+    const emailRegex = /send\s+email\s+to\s+([^\s]+@[^\s]+)\s+with\s+subject\s+([^and]+?)\s+and\s+body\s+(.+)/i;
+    const match = message.match(emailRegex);
     
     if (match) {
       return {
@@ -305,67 +303,6 @@ class OpenAIService {
         subject: match[2].trim(),
         body: match[3].trim()
       };
-    }
-
-    // Format 2: "send message to [email]\nSubject: [subject]\nContent: [body]"
-    const lines = message.split('\n').map(line => line.trim()).filter(line => line);
-    if (lines.length >= 3) {
-      const firstLine = lines[0].toLowerCase();
-      if (firstLine.includes('send') && firstLine.includes('to') && firstLine.includes('@')) {
-        const emailMatch = firstLine.match(/([^\s]+@[^\s]+)/);
-        if (emailMatch) {
-          let subject = '';
-          let body = '';
-          
-          // Look for Subject: and Content: lines
-          for (let i = 1; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.toLowerCase().startsWith('subject:')) {
-              subject = line.substring(8).trim();
-            } else if (line.toLowerCase().startsWith('content:')) {
-              body = line.substring(8).trim();
-            }
-          }
-          
-          if (subject && body) {
-            return {
-              to: emailMatch[1].trim(),
-              subject: subject,
-              body: body
-            };
-          }
-        }
-      }
-    }
-
-    // Format 3: "send message to [email]\nSubject: [subject]\nBody: [body]"
-    if (lines.length >= 3) {
-      const firstLine = lines[0].toLowerCase();
-      if (firstLine.includes('send') && firstLine.includes('to') && firstLine.includes('@')) {
-        const emailMatch = firstLine.match(/([^\s]+@[^\s]+)/);
-        if (emailMatch) {
-          let subject = '';
-          let body = '';
-          
-          // Look for Subject: and Body: lines
-          for (let i = 1; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.toLowerCase().startsWith('subject:')) {
-              subject = line.substring(8).trim();
-            } else if (line.toLowerCase().startsWith('body:')) {
-              body = line.substring(5).trim();
-            }
-          }
-          
-          if (subject && body) {
-            return {
-              to: emailMatch[1].trim(),
-              subject: subject,
-              body: body
-            };
-          }
-        }
-      }
     }
     
     return null;
