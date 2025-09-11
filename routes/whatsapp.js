@@ -8,7 +8,8 @@ const path = require('path');
 const fs = require('fs-extra');
 
 // Webhook verification endpoint
-router.get('/webhook', (req, res) => {
+// Webhook verification endpoint
+router.get('/webhook', async (req, res) => {
   try {
     const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
 
@@ -19,13 +20,19 @@ router.get('/webhook', (req, res) => {
       return res.status(403).send('Forbidden');
     }
 
-    // For webhook verification, we need to identify which business this is for
-    // We'll use a default business for now, but in production you might want to
-    // identify this from the webhook URL or other parameters
-    const verificationResult = WhatsAppService.verifyWebhook(mode, token, challenge);
-    console.log('Webhook verification successful:', { mode, token: token.substring(0, 10) + '...' });
+    // Check if the verify token matches any business configuration
+    const businessService = new BusinessService();
+    const configs = await businessService.getAllWhatsAppConfigs();
     
-    res.status(200).send(verificationResult);
+    const matchingConfig = configs.find(config => config.verify_token === token);
+    
+    if (mode === 'subscribe' && matchingConfig) {
+      console.log('Webhook verification successful:', { mode, token: token.substring(0, 10) + '...', businessId: matchingConfig.business_id });
+      res.status(200).send(challenge);
+    } else {
+      console.log('Webhook verification failed: Invalid token or mode');
+      res.status(403).send('Forbidden');
+    }
   } catch (error) {
     console.error('Webhook verification error:', error);
     res.status(403).send('Forbidden');

@@ -241,6 +241,16 @@ class BusinessService {
       throw error;
     }
   }
+
+  async getAllWhatsAppConfigs() {
+    try {
+      const result = await pool.query('SELECT * FROM whatsapp_configs');
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting all WhatsApp configs:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new BusinessService(); 
