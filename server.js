@@ -78,9 +78,9 @@ app.get("/health", (req, res) => {
 });
 
 // API routes
-app.use("/", whatsappRoutes);
+app.use("/api/", whatsappRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api", businessRoutes);
+app.use("/api/basic", businessRoutes);
 app.use("/api/google", googleRoutes);
 
 // Error handling middleware
