@@ -8,7 +8,6 @@ const path = require('path');
 const fs = require('fs-extra');
 
 // Webhook verification endpoint
-// Webhook verification endpoint
 router.get('/webhook', async (req, res) => {
   try {
     const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
@@ -21,8 +20,7 @@ router.get('/webhook', async (req, res) => {
     }
 
     // Check if the verify token matches any business configuration
-    const businessService = new BusinessService();
-    const configs = await businessService.getAllWhatsAppConfigs();
+    const configs = await BusinessService.getAllWhatsAppConfigs();
     
     const matchingConfig = configs.find(config => config.verify_token === token);
     
