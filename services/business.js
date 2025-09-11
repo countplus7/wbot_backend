@@ -88,8 +88,8 @@ class BusinessService {
   async getWhatsAppConfigByBusinessId(businessId) {
     try {
       const result = await pool.query(
-        'SELECT * FROM whatsapp_configs WHERE business_id = $1 AND status = $2',
-        [businessId, 'active']
+        'SELECT * FROM whatsapp_configs WHERE business_id = $1',
+        [businessId]
       );
       return result.rows[0];
     } catch (error) {
@@ -101,8 +101,8 @@ class BusinessService {
   async getWhatsAppConfigByPhoneNumber(phoneNumberId) {
     try {
       const result = await pool.query(
-        'SELECT wc.*, b.name as business_name FROM whatsapp_configs wc JOIN businesses b ON wc.business_id = b.id WHERE wc.phone_number_id = $1 AND wc.status = $2',
-        [phoneNumberId, 'active']
+        'SELECT wc.*, b.name as business_name FROM whatsapp_configs wc JOIN businesses b ON wc.business_id = b.id WHERE wc.phone_number_id = $1',
+        [phoneNumberId]
       );
       return result.rows[0];
     } catch (error) {
