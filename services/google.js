@@ -505,6 +505,134 @@ class GoogleService {
     }
   }
 
+  // Calendar reading methods
+  async getCalendarEvents(businessId, options = {}) {
+    try {
+      const calendar = await this.getCalendarService(businessId);
+      
+      const {
+        maxResults = 10,
+        timeMin = new Date().toISOString(),
+        timeMax = null,
+        singleEvents = true,
+        orderBy = 'startTime'
+      } = options;
+
+      const params = {
+        calendarId: 'primary',
+        timeMin,
+        maxResults,
+        singleEvents,
+        orderBy
+      };
+
+      if (timeMax) {
+        params.timeMax = timeMax;
+      }
+
+      const response = await calendar.events.list(params);
+      return response.data.items || [];
+    } catch (error) {
+      console.error("Error getting calendar events:", error);
+      throw new Error("Failed to retrieve calendar events");
+    }
+  }
+
+  async getUpcomingEvents(businessId, maxResults = 10) {
+    return this.getCalendarEvents(businessId, { maxResults });
+  }
+
+  async getEventsByDateRange(businessId, startDate, endDate, maxResults = 50) {
+    return this.getCalendarEvents(businessId, {
+      timeMin: startDate,
+      timeMax: endDate,
+      maxResults
+    });
+  }
+
+  async getEventById(businessId, eventId) {
+    try {
+      const calendar = await this.getCalendarService(businessId);
+      
+      const response = await calendar.events.get({
+        calendarId: 'primary',
+        eventId: eventId
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error("Error getting calendar event by ID:", error);
+      throw new Error("Failed to retrieve calendar event");
+    }
+  }
+
+  async updateCalendarEvent(businessId, eventId, eventData) {
+    try {
+      const calendar = await this.getCalendarService(businessId);
+
+      const event = {
+        summary: eventData.title,
+        description: eventData.description,
+        start: {
+          dateTime: eventData.startTime,
+          timeZone: eventData.timeZone || "UTC",
+        },
+        end: {
+          dateTime: eventData.endTime,
+          timeZone: eventData.timeZone || "UTC",
+        },
+        attendees: eventData.attendees?.map((email) => ({ email })) || [],
+      };
+
+      const result = await calendar.events.update({
+        calendarId: "primary",
+        eventId: eventId,
+        resource: event,
+      });
+
+      return result.data;
+    } catch (error) {
+      console.error("Error updating calendar event:", error);
+      throw new Error("Failed to update calendar event");
+    }
+  }
+
+  async deleteCalendarEvent(businessId, eventId) {
+    try {
+      const calendar = await this.getCalendarService(businessId);
+      
+      await calendar.events.delete({
+        calendarId: 'primary',
+        eventId: eventId
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting calendar event:", error);
+      throw new Error("Failed to delete calendar event");
+    }
+  }
+
+  async searchCalendarEvents(businessId, query, maxResults = 10) {
+    try {
+      const calendar = await this.getCalendarService(businessId);
+      
+      const response = await calendar.events.list({
+        calendarId: 'primary',
+        q: query,
+        maxResults,
+        singleEvents: true,
+        orderBy: 'startTime'
+      });
+
+      return response.data.items || [];
+    } catch (error) {
+      console.error("Error searching calendar events:", error);
+      throw new Error("Failed to search calendar events");
+    }
+  }
+
+
   // Sheets integration methods
   async getSheetsService(businessId) {
     const auth = await this.getAuthenticatedClient(businessId);

@@ -21,7 +21,6 @@ class OpenAIService {
       const emailRequest = this.detectEmailRequest(latestMessage.content);
       const emailReadRequest = this.detectEmailReadRequest(latestMessage.content);
       
-      const calendarRequest = this.detectCalendarRequest(latestMessage.content);
       // Handle email sending request
       if (emailRequest && businessId) {
         try {
@@ -88,59 +87,6 @@ class OpenAIService {
           return `❌ Sorry, I couldn't read your emails. Please make sure Google Workspace integration is properly configured. Error: ${error.message}`;
         }
       }
-
-      // Handle calendar request
-      if (calendarRequest && businessId) {
-        try {
-          let events = [];
-          let response = '';
-
-          switch (calendarRequest.type) {
-            case 'upcoming':
-              events = await GoogleService.getUpcomingEvents(businessId, calendarRequest.maxResults || 5);
-              response = `📅 Here are your upcoming events (${events.length} found):\n\n`;
-              break;
-            case 'today':
-              const today = new Date();
-              const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-              const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
-              events = await GoogleService.getEventsByDateRange(businessId, startOfDay, endOfDay, calendarRequest.maxResults || 10);
-              response = `📅 Here are your events for today (${events.length} found):\n\n`;
-              break;
-            case 'search':
-              events = await GoogleService.searchCalendarEvents(businessId, calendarRequest.query, calendarRequest.maxResults || 5);
-              response = `📅 Search results for "${calendarRequest.query}" (${events.length} found):\n\n`;
-              break;
-            default:
-              events = await GoogleService.getUpcomingEvents(businessId, 5);
-              response = `📅 Here are your upcoming events (${events.length} found):\n\n`;
-          }
-
-          if (events.length === 0) {
-            return `📅 No calendar events found for your request.`;
-          }
-
-          // Format events for display
-          events.forEach((event, index) => {
-            const startTime = event.start?.dateTime ? new Date(event.start.dateTime).toLocaleString() : 'All day';
-            const attendees = event.attendees && event.attendees.length > 0 ? 
-              `\n   👥 Attendees: ${event.attendees.map(a => a.email).join(', ')}` : '';
-            
-            response += `${index + 1}. **${event.summary || 'No Title'}**\n`;
-            response += `   🕐 Time: ${startTime}\n`;
-            if (event.description) {
-              response += `   📝 Description: ${event.description.substring(0, 100)}...\n`;
-            response += `${attendees}\n\n`;
-            }
-          });
-
-          return response;
-        } catch (error) {
-          console.error('Error handling calendar request:', error);
-          return `❌ Sorry, I couldn't access your calendar. Please make sure Google Workspace integration is properly configured. Error: ${error.message}`;
-        }
-      }
-
 
 
       let systemContent = `You are a helpful AI assistant integrated with WhatsApp and Google Workspace. 
@@ -472,35 +418,6 @@ class OpenAIService {
         label: label.trim(),
         maxResults: this.extractNumber(message) || 5 
       };
-    }
-    
-    return null;
-  }
-
-  extractNumber(message) {
-    const numberMatch = message.match(/(\d+)/);
-    return numberMatch ? parseInt(numberMatch[1]) : null;
-  }
-
-  detectCalendarRequest(message) {
-    const lowercaseMessage = message.toLowerCase();
-    
-    // Check for upcoming events / schedule
-    if (lowercaseMessage.includes('upcoming') && 
-        (lowercaseMessage.includes('event') || lowercaseMessage.includes('meeting') || lowercaseMessage.includes('schedule'))) {
-      return { type: 'upcoming', maxResults: this.extractNumber(message) || 5 };
-    }
-    
-    // Check for today's events
-    if (lowercaseMessage.includes('today') && 
-        (lowercaseMessage.includes('event') || lowercaseMessage.includes('meeting') || lowercaseMessage.includes('schedule'))) {
-      return { type: 'today', maxResults: this.extractNumber(message) || 10 };
-    }
-    
-    // Check for general schedule/calendar requests
-    if ((lowercaseMessage.includes('schedule') || lowercaseMessage.includes('calendar') || lowercaseMessage.includes('agenda')) &&
-        (lowercaseMessage.includes('show') || lowercaseMessage.includes('check') || lowercaseMessage.includes('what'))) {
-      return { type: 'upcoming', maxResults: this.extractNumber(message) || 5 };
     }
     
     return null;

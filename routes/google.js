@@ -330,6 +330,246 @@ router.post("/calendar/event/:businessId", async (req, res) => {
 });
 
 /**
+ * Get calendar events
+ * GET /api/google/calendar/events/:businessId
+ */
+router.get("/calendar/events/:businessId", async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const { maxResults = 10, timeMin, timeMax } = req.query;
+
+    if (!businessId || isNaN(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid business ID is required",
+      });
+    }
+
+    const options = {
+      maxResults: parseInt(maxResults)
+    };
+
+    if (timeMin) options.timeMin = timeMin;
+    if (timeMax) options.timeMax = timeMax;
+
+    const events = await googleService.getCalendarEvents(parseInt(businessId), options);
+
+    res.json({
+      success: true,
+      events,
+      count: events.length,
+    });
+  } catch (error) {
+    console.error("Error getting calendar events:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to retrieve calendar events",
+    });
+  }
+});
+
+/**
+ * Get upcoming calendar events
+ * GET /api/google/calendar/upcoming/:businessId
+ */
+router.get("/calendar/upcoming/:businessId", async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const { maxResults = 10 } = req.query;
+
+    if (!businessId || isNaN(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid business ID is required",
+      });
+    }
+
+    const events = await googleService.getUpcomingEvents(parseInt(businessId), parseInt(maxResults));
+
+    res.json({
+      success: true,
+      events,
+      count: events.length,
+    });
+  } catch (error) {
+    console.error("Error getting upcoming events:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to retrieve upcoming events",
+    });
+  }
+});
+
+/**
+ * Get calendar event by ID
+ * GET /api/google/calendar/event/:businessId/:eventId
+ */
+router.get("/calendar/event/:businessId/:eventId", async (req, res) => {
+  try {
+    const { businessId, eventId } = req.params;
+
+    if (!businessId || isNaN(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid business ID is required",
+      });
+    }
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        error: "Event ID is required",
+      });
+    }
+
+    const event = await googleService.getEventById(parseInt(businessId), eventId);
+
+    res.json({
+      success: true,
+      event,
+    });
+  } catch (error) {
+    console.error("Error getting calendar event by ID:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to retrieve calendar event",
+    });
+  }
+});
+
+/**
+ * Update calendar event
+ * PUT /api/google/calendar/event/:businessId/:eventId
+ */
+router.put("/calendar/event/:businessId/:eventId", async (req, res) => {
+  try {
+    const { businessId, eventId } = req.params;
+    const { title, description, startTime, endTime, timeZone, attendees } = req.body;
+
+    if (!businessId || isNaN(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid business ID is required",
+      });
+    }
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        error: "Event ID is required",
+      });
+    }
+
+    if (!title || !startTime || !endTime) {
+      return res.status(400).json({
+        success: false,
+        error: "Title, start time, and end time are required",
+      });
+    }
+
+    const result = await googleService.updateCalendarEvent(parseInt(businessId), eventId, {
+      title,
+      description,
+      startTime,
+      endTime,
+      timeZone,
+      attendees,
+    });
+
+    res.json({
+      success: true,
+      eventId: result.id,
+      eventUrl: result.htmlLink,
+      message: "Calendar event updated successfully",
+    });
+  } catch (error) {
+    console.error("Error updating calendar event:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to update calendar event",
+    });
+  }
+});
+
+/**
+ * Delete calendar event
+ * DELETE /api/google/calendar/event/:businessId/:eventId
+ */
+router.delete("/calendar/event/:businessId/:eventId", async (req, res) => {
+  try {
+    const { businessId, eventId } = req.params;
+
+    if (!businessId || isNaN(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid business ID is required",
+      });
+    }
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        error: "Event ID is required",
+      });
+    }
+
+    const result = await googleService.deleteCalendarEvent(parseInt(businessId), eventId);
+
+    res.json({
+      success: true,
+      message: "Calendar event deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting calendar event:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to delete calendar event",
+    });
+  }
+});
+
+/**
+ * Search calendar events
+ * GET /api/google/calendar/search/:businessId
+ */
+router.get("/calendar/search/:businessId", async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const { q: query, maxResults = 10 } = req.query;
+
+    if (!businessId || isNaN(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid business ID is required",
+      });
+    }
+
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        error: "Search query is required",
+      });
+    }
+
+    const events = await googleService.searchCalendarEvents(parseInt(businessId), query, parseInt(maxResults));
+
+    res.json({
+      success: true,
+      events,
+      count: events.length,
+      query,
+    });
+  } catch (error) {
+    console.error("Error searching calendar events:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to search calendar events",
+    });
+  }
+});
+
+
+/**
  * Read Google Sheet data
  * GET /api/google/sheets/:businessId/:spreadsheetId
  */
