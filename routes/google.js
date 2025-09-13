@@ -212,7 +212,7 @@ router.get("/config/:businessId", async (req, res) => {
  * Remove Google integration
  * DELETE /api/google/integration/:businessId
  */
-router.delete("/integration/:businessId", async (req, res) => {
+router.delete("/config/:businessId", async (req, res) => {
   try {
     const { businessId } = req.params;
 
