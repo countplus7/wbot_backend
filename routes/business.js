@@ -33,8 +33,9 @@ const validateWhatsAppConfig = (req, res, next) => {
 };
 
 const validateBusinessTone = (req, res, next) => {
-  const { name, tone_instructions } = req.body;
-  if (!name || name.trim().length === 0) {
+  const { tone_name, tone_instructions } = req.body; // Change from 'name' to 'tone_name'
+  if (!tone_name || tone_name.trim().length === 0) {
+    // Change from 'name' to 'tone_name'
     return res.status(400).json({
       error: "Validation failed",
       details: "Tone name is required and cannot be empty",
@@ -46,7 +47,8 @@ const validateBusinessTone = (req, res, next) => {
       details: "Tone instructions are required and cannot be empty",
     });
   }
-  if (name.length > 50) {
+  if (tone_name.length > 50) {
+    // Change from 'name' to 'tone_name'
     return res.status(400).json({
       error: "Validation failed",
       details: "Tone name cannot exceed 50 characters",
@@ -58,18 +60,9 @@ const validateBusinessTone = (req, res, next) => {
 // Business Management Routes
 router.get("/businesses", async (req, res) => {
   try {
-    // Temporary fallback when database is unavailable
-    const businesses = [
-      {
-        id: 3,
-        name: "LabStar",
-        description: "Web & Software Development Company located in Colombia",
-        status: "active",
-        created_at: "2025-09-11T14:31:39.920Z",
-        updated_at: "2025-09-11T14:31:39.920Z"
-      }
-    ];
-    
+    // Load businesses from the actual database
+    const businesses = await businessService.getAllBusinesses();
+
     res.json({
       success: true,
       data: businesses,
@@ -223,7 +216,7 @@ router.get("/businesses/:businessId/whatsapp", async (req, res) => {
 
     res.json({
       success: true,
-      data: config,
+      data: config || {}, // Return empty object instead of null
       count: config ? 1 : 0,
     });
   } catch (error) {
@@ -240,6 +233,22 @@ router.post("/businesses/:businessId/whatsapp", validateWhatsAppConfig, async (r
   try {
     const { businessId } = req.params;
     const { phone_number_id, access_token, verify_token, webhook_url } = req.body;
+
+    // Add debugging
+    console.log("Creating WhatsApp config for business ID:", businessId);
+    console.log("Request body:", { phone_number_id, access_token, verify_token, webhook_url });
+
+    // Verify business exists first
+    const business = await businessService.getBusinessById(businessId);
+    if (!business) {
+      return res.status(404).json({
+        success: false,
+        error: "Business not found",
+        message: `Business with ID ${businessId} does not exist`,
+      });
+    }
+
+    console.log("Business found:", business);
 
     const config = await businessService.createWhatsAppConfig({
       business_id: businessId,
@@ -264,31 +273,34 @@ router.post("/businesses/:businessId/whatsapp", validateWhatsAppConfig, async (r
   }
 });
 
-router.put("/whatsapp-config/:id", validateWhatsAppConfig, async (req, res) => {
+router.put("/businesses/:businessId/whatsapp", validateWhatsAppConfig, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { businessId } = req.params;
     const { phone_number_id, access_token, verify_token, webhook_url } = req.body;
 
-    if (!id || isNaN(parseInt(id))) {
+    if (!businessId || isNaN(parseInt(businessId))) {
       return res.status(400).json({
         success: false,
-        error: "Invalid configuration ID",
+        error: "Invalid business ID",
       });
     }
 
-    const config = await businessService.updateWhatsAppConfig(id, {
-      phone_number_id,
-      access_token,
-      verify_token,
-      webhook_url,
-    });
-
-    if (!config) {
+    // First, get the existing WhatsApp config by business ID
+    const existingConfig = await businessService.getWhatsAppConfigByBusinessId(businessId);
+    if (!existingConfig) {
       return res.status(404).json({
         success: false,
         error: "WhatsApp configuration not found",
       });
     }
+
+    // Then update using the config ID
+    const config = await businessService.updateWhatsAppConfig(existingConfig.id, {
+      phone_number_id,
+      access_token,
+      verify_token,
+      webhook_url,
+    });
 
     res.json({
       success: true,
@@ -342,17 +354,17 @@ router.delete("/whatsapp-config/:id", async (req, res) => {
 router.get("/businesses/:businessId/tones", async (req, res) => {
   try {
     const { businessId } = req.params;
-    const tone = await businessService.getBusinessTone(businessId);
+    const tones = await businessService.getBusinessTones(businessId); // This returns an array
 
     res.json({
       success: true,
-      data: tone,
+      data: tones, // This will be an array of tones
     });
   } catch (error) {
-    console.error("Error getting business tone:", error);
+    console.error("Error getting business tones:", error);
     res.status(500).json({
       success: false,
-      error: "Failed to retrieve business tone",
+      error: "Failed to retrieve business tones",
       message: error.message,
     });
   }
@@ -361,11 +373,11 @@ router.get("/businesses/:businessId/tones", async (req, res) => {
 router.post("/businesses/:businessId/tones", validateBusinessTone, async (req, res) => {
   try {
     const { businessId } = req.params;
-    const { name, description, tone_instructions } = req.body;
+    const { tone_name, description, tone_instructions } = req.body;
 
     const tone = await businessService.createBusinessTone({
       business_id: businessId,
-      name: name.trim(),
+      tone_name: tone_name.trim(), // Change from 'name' to 'tone_name'
       description: description?.trim() || null,
       tone_instructions: tone_instructions.trim(),
     });
@@ -388,7 +400,7 @@ router.post("/businesses/:businessId/tones", validateBusinessTone, async (req, r
 router.put("/tones/:id", validateBusinessTone, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, tone_instructions, business_id } = req.body;
+    const { tone_name, description, tone_instructions, business_id } = req.body; // Change from 'name' to 'tone_name'
 
     if (!id || isNaN(parseInt(id))) {
       return res.status(400).json({
@@ -398,7 +410,7 @@ router.put("/tones/:id", validateBusinessTone, async (req, res) => {
     }
 
     const tone = await businessService.updateBusinessTone(id, {
-      name: name.trim(),
+      name: tone_name.trim(), // Map tone_name to name for the service
       description: description?.trim() || null,
       tone_instructions: tone_instructions.trim(),
       business_id,

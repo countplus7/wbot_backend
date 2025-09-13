@@ -67,7 +67,7 @@ Edit `.env` file with your configuration:
 
 ```bash
 # Server Configuration
-PORT=8000
+PORT=5000
 NODE_ENV=development
 
 # Database Configuration
@@ -105,10 +105,10 @@ npm start
 
 ```bash
 # Health check
-curl http://localhost:8000/health
+curl http://localhost:5000/health
 
 # Test API
-curl http://localhost:8000/api/businesses
+curl http://localhost:5000/api/businesses
 ```
 
 ## 🔌 API Endpoints
@@ -148,7 +148,7 @@ This API is designed to work with independent frontend applications. See `API_DO
 ### Basic Frontend Setup
 
 ```javascript
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = "http://localhost:5000/api";
 
 // Example: Get all businesses
 const getBusinesses = async () => {

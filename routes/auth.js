@@ -1,24 +1,26 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const authService = require('../services/auth');
-const { authMiddleware } = require('../middleware/auth');
+const authService = require("../services/auth");
+const { authMiddleware } = require("../middleware/auth");
 
 /**
  * Check if admin exists
  * GET /api/auth/admin-exists
  */
-router.get('/admin-exists', async (req, res) => {
+router.get("/admin-exists", async (req, res) => {
   try {
     const adminExists = await authService.adminExists();
     res.json({
       success: true,
-      adminExists
+      data: {
+        adminExists,
+      },
     });
   } catch (error) {
-    console.error('Error checking admin existence:', error);
+    console.error("Error checking admin existence:", error);
     res.status(500).json({
       success: false,
-      error: 'Failed to check admin existence'
+      error: "Failed to check admin existence",
     });
   }
 });
@@ -27,7 +29,7 @@ router.get('/admin-exists', async (req, res) => {
  * Create admin user (signup)
  * POST /api/auth/signup
  */
-router.post('/signup', async (req, res) => {
+router.post("/signup", async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
@@ -35,14 +37,14 @@ router.post('/signup', async (req, res) => {
     if (!username || !email || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Username, email, and password are required'
+        error: "Username, email, and password are required",
       });
     }
 
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
-        error: 'Password must be at least 6 characters long'
+        error: "Password must be at least 6 characters long",
       });
     }
 
@@ -51,7 +53,7 @@ router.post('/signup', async (req, res) => {
     if (adminExists) {
       return res.status(400).json({
         success: false,
-        error: 'Admin user already exists'
+        error: "Admin user already exists",
       });
     }
 
@@ -61,15 +63,17 @@ router.post('/signup', async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Admin created successfully',
-      user,
-      token
+      message: "Admin created successfully",
+      data: {
+        user,
+        token,
+      },
     });
   } catch (error) {
-    console.error('Error creating admin:', error);
+    console.error("Error creating admin:", error);
     res.status(400).json({
       success: false,
-      error: error.message || 'Failed to create admin'
+      error: error.message || "Failed to create admin",
     });
   }
 });
@@ -78,7 +82,7 @@ router.post('/signup', async (req, res) => {
  * Admin login
  * POST /api/auth/login
  */
-router.post('/login', async (req, res) => {
+router.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -86,7 +90,7 @@ router.post('/login', async (req, res) => {
     if (!username || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Username and password are required'
+        error: "Username and password are required",
       });
     }
 
@@ -95,15 +99,17 @@ router.post('/login', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Login successful',
-      user,
-      token
+      message: "Login successful",
+      data: {
+        user,
+        token,
+      },
     });
   } catch (error) {
-    console.error('Error during login:', error);
+    console.error("Error during login:", error);
     res.status(401).json({
       success: false,
-      error: error.message || 'Login failed'
+      error: error.message || "Login failed",
     });
   }
 });
@@ -112,25 +118,25 @@ router.post('/login', async (req, res) => {
  * Get current user profile
  * GET /api/auth/profile
  */
-router.get('/profile', authMiddleware, async (req, res) => {
+router.get("/profile", authMiddleware, async (req, res) => {
   try {
     const user = await authService.getAdminProfile(req.user.id);
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: "User not found",
       });
     }
 
     res.json({
       success: true,
-      user
+      user,
     });
   } catch (error) {
-    console.error('Error getting profile:', error);
+    console.error("Error getting profile:", error);
     res.status(500).json({
       success: false,
-      error: 'Failed to get profile'
+      error: "Failed to get profile",
     });
   }
 });
@@ -139,7 +145,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
  * Update admin profile
  * PUT /api/auth/profile
  */
-router.put('/profile', authMiddleware, async (req, res) => {
+router.put("/profile", authMiddleware, async (req, res) => {
   try {
     const { username, email, password, status } = req.body;
     const updateData = {};
@@ -152,7 +158,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No valid fields to update'
+        error: "No valid fields to update",
       });
     }
 
@@ -160,14 +166,14 @@ router.put('/profile', authMiddleware, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Profile updated successfully',
-      user
+      message: "Profile updated successfully",
+      user,
     });
   } catch (error) {
-    console.error('Error updating profile:', error);
+    console.error("Error updating profile:", error);
     res.status(400).json({
       success: false,
-      error: error.message || 'Failed to update profile'
+      error: error.message || "Failed to update profile",
     });
   }
 });
@@ -176,19 +182,19 @@ router.put('/profile', authMiddleware, async (req, res) => {
  * Verify token
  * GET /api/auth/verify
  */
-router.get('/verify', authMiddleware, async (req, res) => {
+router.get("/verify", authMiddleware, async (req, res) => {
   try {
     res.json({
       success: true,
-      user: req.user
+      user: req.user,
     });
   } catch (error) {
-    console.error('Error verifying token:', error);
+    console.error("Error verifying token:", error);
     res.status(401).json({
       success: false,
-      error: 'Invalid token'
+      error: "Invalid token",
     });
   }
 });
 
-module.exports = router; 
+module.exports = router;

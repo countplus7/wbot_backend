@@ -185,7 +185,7 @@ class DatabaseService {
       const processedRows = result.rows.map((row) => {
         if (row.file_path) {
           // Construct the full URL for media files
-          const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 8000}`;
+          const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
           row.media_url = `${baseUrl}/media/${row.file_path}`;
         }
         return row;

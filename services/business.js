@@ -1,42 +1,37 @@
-const pool = require('../config/database');
+const pool = require("../config/database");
 
 class BusinessService {
   // Business Management
   async createBusiness(businessData) {
     try {
-      const { name, description, status = 'active' } = businessData;
+      const { name, description, status = "active" } = businessData;
       const result = await pool.query(
-        'INSERT INTO businesses (name, description, status) VALUES ($1, $2, $3) RETURNING *',
+        "INSERT INTO businesses (name, description, status) VALUES ($1, $2, $3) RETURNING *",
         [name, description, status]
       );
       return result.rows[0];
     } catch (error) {
-      console.error('Error creating business:', error);
+      console.error("Error creating business:", error);
       throw error;
     }
   }
 
   async getAllBusinesses() {
     try {
-      const result = await pool.query(
-        'SELECT * FROM businesses ORDER BY created_at DESC'
-      );
+      const result = await pool.query("SELECT * FROM businesses ORDER BY created_at DESC");
       return result.rows;
     } catch (error) {
-      console.error('Error getting businesses:', error);
+      console.error("Error getting businesses:", error);
       throw error;
     }
   }
 
   async getBusinessById(id) {
     try {
-      const result = await pool.query(
-        'SELECT * FROM businesses WHERE id = $1',
-        [id]
-      );
+      const result = await pool.query("SELECT * FROM businesses WHERE id = $1", [id]);
       return result.rows[0];
     } catch (error) {
-      console.error('Error getting business by ID:', error);
+      console.error("Error getting business by ID:", error);
       throw error;
     }
   }
@@ -45,25 +40,22 @@ class BusinessService {
     try {
       const { name, description, status } = businessData;
       const result = await pool.query(
-        'UPDATE businesses SET name = $1, description = $2, status = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *',
+        "UPDATE businesses SET name = $1, description = $2, status = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *",
         [name, description, status, id]
       );
       return result.rows[0];
     } catch (error) {
-      console.error('Error updating business:', error);
+      console.error("Error updating business:", error);
       throw error;
     }
   }
 
   async deleteBusiness(id) {
     try {
-      const result = await pool.query(
-        'DELETE FROM businesses WHERE id = $1 RETURNING *',
-        [id]
-      );
+      const result = await pool.query("DELETE FROM businesses WHERE id = $1 RETURNING *", [id]);
       return result.rows[0];
     } catch (error) {
-      console.error('Error deleting business:', error);
+      console.error("Error deleting business:", error);
       throw error;
     }
   }
@@ -80,20 +72,17 @@ class BusinessService {
       );
       return result.rows[0];
     } catch (error) {
-      console.error('Error creating WhatsApp config:', error);
+      console.error("Error creating WhatsApp config:", error);
       throw error;
     }
   }
 
   async getWhatsAppConfigByBusinessId(businessId) {
     try {
-      const result = await pool.query(
-        'SELECT * FROM whatsapp_configs WHERE business_id = $1',
-        [businessId]
-      );
+      const result = await pool.query("SELECT * FROM whatsapp_configs WHERE business_id = $1", [businessId]);
       return result.rows[0];
     } catch (error) {
-      console.error('Error getting WhatsApp config:', error);
+      console.error("Error getting WhatsApp config:", error);
       throw error;
     }
   }
@@ -101,12 +90,12 @@ class BusinessService {
   async getWhatsAppConfigByPhoneNumber(phoneNumberId) {
     try {
       const result = await pool.query(
-        'SELECT wc.*, b.name as business_name FROM whatsapp_configs wc JOIN businesses b ON wc.business_id = b.id WHERE wc.phone_number_id = $1',
+        "SELECT wc.*, b.name as business_name FROM whatsapp_configs wc JOIN businesses b ON wc.business_id = b.id WHERE wc.phone_number_id = $1",
         [phoneNumberId]
       );
       return result.rows[0];
     } catch (error) {
-      console.error('Error getting WhatsApp config by phone number:', error);
+      console.error("Error getting WhatsApp config by phone number:", error);
       throw error;
     }
   }
@@ -122,20 +111,17 @@ class BusinessService {
       );
       return result.rows[0];
     } catch (error) {
-      console.error('Error updating WhatsApp config:', error);
+      console.error("Error updating WhatsApp config:", error);
       throw error;
     }
   }
 
   async deleteWhatsAppConfig(id) {
     try {
-      const result = await pool.query(
-        'DELETE FROM whatsapp_configs WHERE id = $1 RETURNING *',
-        [id]
-      );
+      const result = await pool.query("DELETE FROM whatsapp_configs WHERE id = $1 RETURNING *", [id]);
       return result.rows[0];
     } catch (error) {
-      console.error('Error deleting WhatsApp config:', error);
+      console.error("Error deleting WhatsApp config:", error);
       throw error;
     }
   }
@@ -143,8 +129,8 @@ class BusinessService {
   // Business Tone Management
   async createBusinessTone(toneData) {
     try {
-      const { business_id, name, description, tone_instructions } = toneData;
-      
+      const { business_id, tone_name, description, tone_instructions } = toneData;
+
       // Use UPSERT to create or update the tone for this business
       const result = await pool.query(
         `INSERT INTO business_tones 
@@ -157,50 +143,43 @@ class BusinessService {
           tone_instructions = EXCLUDED.tone_instructions,
           updated_at = CURRENT_TIMESTAMP
         RETURNING *`,
-        [business_id, name, description, tone_instructions]
+        [business_id, tone_name, description, tone_instructions]
       );
       return result.rows[0];
     } catch (error) {
-      console.error('Error creating/updating business tone:', error);
+      console.error("Error creating/updating business tone:", error);
       throw error;
     }
   }
 
   async getBusinessTones(businessId) {
     try {
-      const result = await pool.query(
-        'SELECT * FROM business_tones WHERE business_id = $1 ORDER BY created_at DESC',
-        [businessId]
-      );
+      const result = await pool.query("SELECT * FROM business_tones WHERE business_id = $1 ORDER BY created_at DESC", [
+        businessId,
+      ]);
       return result.rows;
     } catch (error) {
-      console.error('Error getting business tones:', error);
+      console.error("Error getting business tones:", error);
       throw error;
     }
   }
 
   async getBusinessTone(businessId) {
     try {
-      const result = await pool.query(
-        'SELECT * FROM business_tones WHERE business_id = $1',
-        [businessId]
-      );
+      const result = await pool.query("SELECT * FROM business_tones WHERE business_id = $1", [businessId]);
       return result.rows[0] || null;
     } catch (error) {
-      console.error('Error getting business tone:', error);
+      console.error("Error getting business tone:", error);
       throw error;
     }
   }
 
   async getDefaultTone(businessId) {
     try {
-      const result = await pool.query(
-        'SELECT * FROM business_tones WHERE business_id = $1',
-        [businessId]
-      );
+      const result = await pool.query("SELECT * FROM business_tones WHERE business_id = $1", [businessId]);
       return result.rows[0];
     } catch (error) {
-      console.error('Error getting default tone:', error);
+      console.error("Error getting default tone:", error);
       throw error;
     }
   }
@@ -217,7 +196,7 @@ class BusinessService {
       );
       return result.rows[0];
     } catch (error) {
-      console.error('Error updating business tone:', error);
+      console.error("Error updating business tone:", error);
       throw error;
     }
   }
@@ -234,23 +213,23 @@ class BusinessService {
       return {
         ...business,
         whatsapp_config: whatsappConfig,
-        tones: tones
+        tones: tones,
       };
     } catch (error) {
-      console.error('Error getting business with config and tones:', error);
+      console.error("Error getting business with config and tones:", error);
       throw error;
     }
   }
 
   async getAllWhatsAppConfigs() {
     try {
-      const result = await pool.query('SELECT * FROM whatsapp_configs');
+      const result = await pool.query("SELECT * FROM whatsapp_configs");
       return result.rows;
     } catch (error) {
-      console.error('Error getting all WhatsApp configs:', error);
+      console.error("Error getting all WhatsApp configs:", error);
       throw error;
     }
   }
 }
 
-module.exports = new BusinessService(); 
+module.exports = new BusinessService();

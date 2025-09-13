@@ -180,7 +180,7 @@ router.get("/callback", async (req, res) => {
  * Get Google integration status for a business
  * GET /api/google/status/:businessId
  */
-router.get("/status/:businessId", async (req, res) => {
+router.get("/config/:businessId", async (req, res) => {
   try {
     const { businessId } = req.params;
 
@@ -346,7 +346,7 @@ router.get("/calendar/events/:businessId", async (req, res) => {
     }
 
     const options = {
-      maxResults: parseInt(maxResults)
+      maxResults: parseInt(maxResults),
     };
 
     if (timeMin) options.timeMin = timeMin;
@@ -568,7 +568,6 @@ router.get("/calendar/search/:businessId", async (req, res) => {
   }
 });
 
-
 /**
  * Read Google Sheet data
  * GET /api/google/sheets/:businessId/:spreadsheetId
@@ -725,7 +724,6 @@ router.get("/drive/download/:businessId/:fileId", async (req, res) => {
   }
 });
 
-
 /**
  * Get emails from Gmail
  * GET /api/google/gmail/emails/:businessId
@@ -744,7 +742,7 @@ router.get("/gmail/emails/:businessId", async (req, res) => {
 
     const options = {
       maxResults: parseInt(maxResults),
-      includeSpamTrash: includeSpamTrash === 'true'
+      includeSpamTrash: includeSpamTrash === "true",
     };
 
     if (labelIds) {
@@ -1019,9 +1017,9 @@ router.get("/gmail/attachment/:businessId/:messageId/:attachmentId", async (req,
     const attachmentData = await googleService.downloadAttachment(parseInt(businessId), messageId, attachmentId);
 
     // Set appropriate headers for file download
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'attachment');
-    
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", "attachment");
+
     res.send(attachmentData);
   } catch (error) {
     console.error("Error downloading attachment:", error);
@@ -1031,6 +1029,5 @@ router.get("/gmail/attachment/:businessId/:messageId/:attachmentId", async (req,
     });
   }
 });
-
 
 module.exports = router;
