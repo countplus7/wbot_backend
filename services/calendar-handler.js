@@ -9,8 +9,8 @@ class CalendarHandler {
     this.openaiService = OpenAIService;
     this.conversationContext = new Map();
     
-    // Default timezone - you can make this configurable per business
-    this.defaultTimezone = 'America/New_York'; // Change this to your business timezone
+    // CHANGE THIS TO YOUR BUSINESS TIMEZONE
+    this.defaultTimezone = 'America/New_York'; // Change this to your actual timezone
   }
 
   /**
@@ -27,7 +27,13 @@ class CalendarHandler {
    */
   async processMessage(businessId, message, from) {
     try {
-      // First check if this is a follow-up response (YES/NO)
+      // First check for CANCEL command
+      const cancelResult = await this.handleCancelCommand(businessId, message, from);
+      if (cancelResult) {
+        return cancelResult;
+      }
+
+      // Then check if this is a follow-up response (YES/NO)
       const followUpResult = await this.handleFollowUpResponse(businessId, message, from);
       if (followUpResult) {
         return followUpResult;
@@ -67,6 +73,51 @@ class CalendarHandler {
         success: false,
         message: 'Sorry, I encountered an error processing your calendar request. Please try again.'
       };
+    }
+  }
+
+  /**
+   * Handle CANCEL command
+   */
+  async handleCancelCommand(businessId, message, from) {
+    try {
+      const lowercaseMessage = message.toLowerCase().trim();
+      
+      if (lowercaseMessage === 'cancel' || lowercaseMessage === 'cancelled') {
+        // Get the last calendar context to find the appointment to cancel
+        const context = this.getContext(businessId, from);
+        
+        if (context && context.eventId) {
+          // Cancel the specific appointment
+          try {
+            await this.googleService.deleteCalendarEvent(businessId, context.eventId);
+            this.clearContext(businessId, from);
+            
+            return {
+              success: true,
+              message: '✅ Appointment cancelled successfully! Your appointment has been removed from the calendar.'
+            };
+          } catch (error) {
+            console.error('Error cancelling appointment:', error);
+            return {
+              success: false,
+              message: 'Sorry, I couldn\'t cancel your appointment. Please try again or contact support.'
+            };
+          }
+        } else {
+          // No specific appointment to cancel
+          this.clearContext(businessId, from);
+          return {
+            success: true,
+            message: 'No active appointment to cancel. If you need to cancel a specific appointment, please provide the date and time.'
+          };
+        }
+      }
+      
+      return null; // Not a cancel command
+    } catch (error) {
+      console.error('Error handling cancel command:', error);
+      return null;
     }
   }
 
@@ -115,6 +166,13 @@ class CalendarHandler {
         };
 
         const event = await this.googleService.createCalendarEvent(businessId, eventData);
+        
+        // Store the event ID in context for potential cancellation
+        this.storeContext(businessId, from, {
+          type: 'appointment_created',
+          eventId: event.id,
+          event: event
+        });
         
         return {
           success: true,
@@ -359,8 +417,11 @@ class CalendarHandler {
     }
   }
 
-  // Helper methods to format responses
+  /**
+   * Format appointment confirmation with proper timezone
+   */
   formatAppointmentConfirmation(event, timezone = 'America/New_York') {
+    // Use the event's actual start time and convert to the business timezone
     const startTime = new Date(event.start.dateTime).toLocaleString('en-US', {
       weekday: 'long',
       year: 'numeric',
