@@ -188,14 +188,14 @@ router.post('/webhook', async (req, res) => {
     if (messageData.messageType === 'text' && messageData.content) {
       try {
         console.log('Checking for calendar intent...');
-        const calendarResponse = await CalendarHandler.processMessage(
+        const calendarResult = await CalendarHandler.processMessage(
           businessId, 
           messageData.content, 
           messageData.from
         );
         
-        if (calendarResponse) {
-          console.log('Calendar response sent:', calendarResponse);
+        if (calendarResult) {
+          console.log('Calendar response generated:', calendarResult);
           
           // Save the calendar response to database
           await DatabaseService.saveMessage({
@@ -205,11 +205,19 @@ router.post('/webhook', async (req, res) => {
             fromNumber: messageData.to, // From business
             toNumber: messageData.from, // To user
             messageType: 'text',
-            content: calendarResponse.messages?.[0]?.text?.body || 'Calendar response sent',
+            content: calendarResult.message,
             mediaUrl: null,
             localFilePath: null,
             isFromUser: false
           });
+
+          // Send the calendar response via WhatsApp
+          try {
+            const response = await WhatsAppService.sendTextMessage(messageData.from, calendarResult.message);
+            console.log('Calendar response sent successfully:', response);
+          } catch (whatsappError) {
+            console.error('Error sending calendar response:', whatsappError);
+          }
           
           return res.status(200).send('OK');
         }
