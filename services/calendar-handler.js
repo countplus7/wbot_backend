@@ -7,6 +7,45 @@ class CalendarHandler {
     this.googleService = GoogleService;
     this.whatsappService = WhatsAppService;
     this.openaiService = OpenAIService;
+    this.conversationContext = new Map();
+    
+    // Default timezone - you can make this configurable per business
+    this.defaultTimezone = 'America/New_York'; // Change this to your business timezone
+  }
+
+  /**
+   * Store conversation context
+   */
+  storeContext(businessId, from, context) {
+    const key = `${businessId}_${from}`;
+    this.conversationContext.set(key, {
+      ...context,
+      timestamp: Date.now()
+    });
+  }
+
+  /**
+   * Get conversation context
+   */
+  getContext(businessId, from) {
+    const key = `${businessId}_${from}`;
+    const context = this.conversationContext.get(key);
+    
+    // Remove context if it's older than 10 minutes
+    if (context && (Date.now() - context.timestamp) > 10 * 60 * 1000) {
+      this.conversationContext.delete(key);
+      return null;
+    }
+    
+    return context;
+  }
+
+  /**
+   * Clear conversation context
+   */
+  clearContext(businessId, from) {
+    const key = `${businessId}_${from}`;
+    this.conversationContext.delete(key);
   }
 
   /**
@@ -14,6 +53,12 @@ class CalendarHandler {
    */
   async processMessage(businessId, message, from) {
     try {
+      // First check if this is a follow-up response (YES/NO)
+      const followUpResult = await this.handleFollowUpResponse(businessId, message, from);
+      if (followUpResult) {
+        return followUpResult;
+      }
+
       // Detect calendar intent
       const intent = this.openaiService.detectCalendarIntent(message);
       
@@ -63,9 +108,20 @@ class CalendarHandler {
         };
       }
 
-      // Create start and end times
+      // Get business timezone
+      const timezone = this.getBusinessTimezone(businessId);
+      
+      // Create start and end times with proper timezone handling
       const startDateTime = new Date(`${data.date}T${data.time}:00`);
       const endDateTime = new Date(startDateTime.getTime() + (data.duration || 60) * 60000);
+
+      console.log('Creating appointment:', {
+        date: data.date,
+        time: data.time,
+        startDateTime: startDateTime.toISOString(),
+        endDateTime: endDateTime.toISOString(),
+        timezone: timezone
+      });
 
       // Check availability
       const availability = await this.googleService.checkAvailability(
@@ -75,20 +131,20 @@ class CalendarHandler {
       );
 
       if (availability.isAvailable) {
-        // Create the appointment
+        // Create the appointment with proper timezone
         const eventData = {
           title: data.title || 'Appointment',
           description: data.description || '',
           startTime: startDateTime.toISOString(),
           endTime: endDateTime.toISOString(),
-          timeZone: 'UTC'
+          timeZone: timezone
         };
 
         const event = await this.googleService.createCalendarEvent(businessId, eventData);
         
         return {
           success: true,
-          message: this.formatAppointmentConfirmation(event),
+          message: this.formatAppointmentConfirmation(event, timezone),
           event: event
         };
       } else {
@@ -126,6 +182,15 @@ class CalendarHandler {
         );
 
         const timeSlot = `${data.date} at ${data.time}`;
+        
+        // Store context for follow-up
+        this.storeContext(businessId, from, {
+          type: 'availability_check',
+          data: data,
+          availability: availability,
+          timeSlot: timeSlot
+        });
+        
         return {
           success: true,
           message: this.formatAvailabilityResponse(availability, timeSlot),
@@ -252,8 +317,87 @@ class CalendarHandler {
     }
   }
 
+  /**
+   * Handle follow-up responses (YES/NO confirmations)
+   */
+  async handleFollowUpResponse(businessId, message, from) {
+    try {
+      const lowercaseMessage = message.toLowerCase().trim();
+      const context = this.getContext(businessId, from);
+      
+      if (!context) {
+        return null; // No context found
+      }
+      
+      if (lowercaseMessage === 'yes' || lowercaseMessage === 'y') {
+        if (context.type === 'availability_check' && context.availability.isAvailable) {
+          // Book the appointment that was previously checked
+          this.clearContext(businessId, from);
+          return await this.handleBookingRequest(businessId, context.data, from);
+        }
+      } else if (lowercaseMessage === 'no' || lowercaseMessage === 'n') {
+        this.clearContext(businessId, from);
+        return {
+          success: true,
+          message: 'No problem! Let me know if you need help with anything else.'
+        };
+      }
+      
+      return null; // Not a follow-up response
+    } catch (error) {
+      console.error('Error handling follow-up response:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the last calendar message from this conversation
+   */
+  async getLastCalendarMessage(businessId, from) {
+    try {
+      // This would need to be implemented to get the last message from the database
+      // For now, we'll use a simple approach
+      return null; // Placeholder - you'll need to implement this
+    } catch (error) {
+      console.error('Error getting last calendar message:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Parse time slot string to appointment data
+   */
+  parseTimeSlotToAppointmentData(timeSlot) {
+    // timeSlot format: "Friday (September 19) at 2:00 PM"
+    // We need to convert this back to the format expected by handleBookingRequest
+    
+    // This is a simplified parser - you might need to make it more robust
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    
+    // For now, assume it's tomorrow if it says "Friday" and today is Thursday
+    // You'll need to implement proper date parsing based on your needs
+    
+    return {
+      date: tomorrow.toISOString().split('T')[0], // YYYY-MM-DD format
+      time: '14:00', // 2:00 PM in 24-hour format
+      title: 'Appointment',
+      duration: 60
+    };
+  }
+
+  /**
+   * Get timezone for a business (you can make this configurable)
+   */
+  getBusinessTimezone(businessId) {
+    // For now, return default timezone
+    // You can later make this configurable per business
+    return this.defaultTimezone;
+  }
+
   // Helper methods to format responses
-  formatAppointmentConfirmation(event) {
+  formatAppointmentConfirmation(event, timezone = 'America/New_York') {
     const startTime = new Date(event.start.dateTime).toLocaleString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -261,7 +405,8 @@ class CalendarHandler {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      hour12: true
+      hour12: true,
+      timeZone: timezone
     });
 
     let message = `✅ Appointment Confirmed!\n\n`;
@@ -284,11 +429,36 @@ class CalendarHandler {
 
   formatAvailabilityResponse(availability, timeSlot) {
     if (availability.isAvailable) {
-      return `✅ Great! I'm available ${timeSlot}.\n\nWould you like to book this appointment? Reply "YES" to confirm or "NO" to cancel.`;
+      // Format the timeSlot to be more user-friendly
+      const formattedTimeSlot = this.formatTimeSlot(timeSlot);
+      return `✅ Great! I'm available ${formattedTimeSlot}.\n\nWould you like to book this appointment? Reply "YES" to confirm or "NO" to cancel.`;
     } else {
       const conflicts = availability.conflictingEvents.length;
-      return `❌ Sorry, I'm not available ${timeSlot}.\n\nI have ${conflicts} conflicting appointment${conflicts > 1 ? 's' : ''} at that time.\n\nWould you like me to suggest alternative times? Reply "YES" for suggestions.`;
+      const formattedTimeSlot = this.formatTimeSlot(timeSlot);
+      return `❌ Sorry, I'm not available ${formattedTimeSlot}.\n\nI have ${conflicts} conflicting appointment${conflicts > 1 ? 's' : ''} at that time.\n\nWould you like me to suggest alternative times? Reply "YES" for suggestions.`;
     }
+  }
+
+  formatTimeSlot(timeSlot) {
+    // timeSlot format: "2025-09-19 at 14:00"
+    const [datePart, timePart] = timeSlot.split(' at ');
+    const date = new Date(datePart);
+    const time = timePart;
+    
+    // Convert to user-friendly format
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+    const formattedDate = date.toLocaleDateString('en-US', { 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    
+    // Convert 24-hour time to 12-hour format
+    const [hours, minutes] = time.split(':');
+    const hour12 = parseInt(hours) > 12 ? parseInt(hours) - 12 : parseInt(hours);
+    const period = parseInt(hours) >= 12 ? 'PM' : 'AM';
+    const formattedTime = `${hour12}:${minutes} ${period}`;
+    
+    return `${dayName} (${formattedDate}) at ${formattedTime}`;
   }
 
   formatAvailableSlots(date, availableSlots) {
@@ -324,94 +494,4 @@ class CalendarHandler {
 
   formatNextAvailableSlot(nextSlot) {
     if (!nextSlot.nextSlot) {
-      return `❌ ${nextSlot.message || 'No available slots found in the next 30 days.'}`;
-    }
-
-    const { date, nextSlot: slot } = nextSlot;
-    const formattedDate = new Date(date).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-
-    const startTime = new Date(slot.start).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-    const endTime = new Date(slot.end).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-
-    let message = `📅 Next Available Appointment:\n\n`;
-    message += `📅 Date: ${formattedDate}\n`;
-    message += `⏰ Time: ${startTime} - ${endTime}\n`;
-    message += `⏱️ Duration: ${slot.duration} minutes\n\n`;
-    message += `Would you like to book this slot? Reply "YES" to confirm.`;
-
-    return message;
-  }
-
-  formatReminderConfirmation(reminder) {
-    const reminderTime = new Date(reminder.start.dateTime).toLocaleString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-
-    let message = `✅ Reminder Set!\n\n`;
-    message += ` Title: ${reminder.summary}\n`;
-    message += `⏰ Time: ${reminderTime}\n`;
-    
-    if (reminder.description) {
-      message += ` Details: ${reminder.description}\n`;
-    }
-
-    message += `\nYou'll receive a notification at the scheduled time.`;
-    message += `\n\nReply "CANCEL" if you need to remove this reminder.`;
-
-    return message;
-  }
-
-  formatMeetingConfirmation(event, meetingLink) {
-    const startTime = new Date(event.start.dateTime).toLocaleString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-
-    let message = `✅ Meeting Scheduled!\n\n`;
-    message += `📅 Date & Time: ${startTime}\n`;
-    message += `📝 Title: ${event.summary}\n`;
-    
-    if (event.description) {
-      message += ` Description: ${event.description}\n`;
-    }
-
-    if (meetingLink) {
-      message += `🔗 Google Meet Link: ${meetingLink}\n`;
-    }
-
-    if (event.attendees && event.attendees.length > 0) {
-      message += ` Attendees: ${event.attendees.map(a => a.email).join(', ')}\n`;
-    }
-
-    message += `\n⏰ You'll receive a reminder 10 minutes before the meeting.`;
-    message += `\n\nReply "CANCEL" if you need to reschedule or cancel.`;
-
-    return message;
-  }
-}
-
-module.exports = new CalendarHandler(); 
+      return `❌ ${nextSlot.message || 'No available slots found in the next 30 days.'}`

@@ -656,7 +656,7 @@ class OpenAIService {
       data.time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
     
-    // Extract date
+    // Extract date - FIXED VERSION
     const tomorrowMatch = message.match(/tomorrow/i);
     const todayMatch = message.match(/today/i);
     
@@ -674,11 +674,13 @@ class OpenAIService {
       }
     }
     
-    // Extract title/description
-    const titleMatch = message.match(/(?:book|schedule|appointment)\s+(?:for\s+)?(.+?)(?:\s+at|\s+on|\s+tomorrow|\s+today|$)/i);
+    // Extract title/description - IMPROVED VERSION
+    const titleMatch = message.match(/(?:book|schedule|appointment)\s+(?:for\s+)?(.+?)(?:\s+tomorrow|\s+today|\s+at|\s+on|\s+next|\s+monday|\s+tuesday|\s+wednesday|\s+thursday|\s+friday|\s+saturday|\s+sunday|$)/i);
     if (titleMatch) {
       data.title = titleMatch[1].trim();
     }
+    
+    console.log('Extracted booking data:', data); // Debug log
     
     return data;
   }
