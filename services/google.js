@@ -632,6 +632,354 @@ class GoogleService {
     }
   }
 
+  // Enhanced Calendar Operations for Booking & Appointments
+
+  /**
+   * Check availability for a specific time slot
+   */
+  async checkAvailability(businessId, startTime, endTime) {
+    try {
+      const calendar = await this.getCalendarService(businessId);
+      
+      const response = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin: startTime,
+        timeMax: endTime,
+        singleEvents: true,
+        orderBy: 'startTime'
+      });
+
+      const conflictingEvents = (response.data.items || []).map(event => ({
+        start: event.start.dateTime || event.start.date,
+        end: event.end.dateTime || event.end.date,
+        summary: event.summary || 'Busy'
+      }));
+
+      return {
+        isAvailable: conflictingEvents.length === 0,
+        conflictingEvents,
+        startTime,
+        endTime
+      };
+    } catch (error) {
+      console.error("Error checking availability:", error);
+      throw new Error("Failed to check calendar availability");
+    }
+  }
+
+  /**
+   * Find available time slots for a specific date
+   */
+  async findAvailableSlots(businessId, date, durationMinutes = 60, options = {}) {
+    try {
+      const { startHour = 9, endHour = 17, timeZone = 'UTC' } = options;
+      const calendar = await this.getCalendarService(businessId);
+      
+      // Get all events for the specified date
+      const startOfDay = new Date(date);
+      startOfDay.setHours(startHour, 0, 0, 0);
+      
+      const endOfDay = new Date(date);
+      endOfDay.setHours(endHour, 0, 0, 0);
+
+      const response = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin: startOfDay.toISOString(),
+        timeMax: endOfDay.toISOString(),
+        singleEvents: true,
+        orderBy: 'startTime'
+      });
+
+      const events = response.data.items || [];
+      const availableSlots = [];
+      
+      // Generate time slots and check availability
+      const currentTime = new Date(startOfDay);
+      while (currentTime < endOfDay) {
+        const slotStart = new Date(currentTime);
+        const slotEnd = new Date(currentTime.getTime() + durationMinutes * 60000);
+        
+        if (slotEnd <= endOfDay) {
+          // Check if this slot conflicts with any events
+          const hasConflict = events.some(event => {
+            const eventStart = new Date(event.start.dateTime || event.start.date);
+            const eventEnd = new Date(event.end.dateTime || event.end.date);
+            
+            return (slotStart < eventEnd && slotEnd > eventStart);
+          });
+          
+          if (!hasConflict) {
+            availableSlots.push({
+              start: slotStart.toISOString(),
+              end: slotEnd.toISOString(),
+              duration: durationMinutes
+            });
+          }
+        }
+        
+        // Move to next hour
+        currentTime.setHours(currentTime.getHours() + 1);
+      }
+
+      return {
+        date,
+        duration: durationMinutes,
+        availableSlots,
+        count: availableSlots.length
+      };
+    } catch (error) {
+      console.error("Error finding available slots:", error);
+      throw new Error("Failed to find available time slots");
+    }
+  }
+
+  /**
+   * Create a meeting event with Google Meet link
+   */
+  async createMeetingEvent(businessId, eventData) {
+    try {
+      const calendar = await this.getCalendarService(businessId);
+      
+      const event = {
+        summary: eventData.title,
+        description: eventData.description || '',
+        start: {
+          dateTime: eventData.startTime,
+          timeZone: eventData.timeZone || 'UTC'
+        },
+        end: {
+          dateTime: eventData.endTime,
+          timeZone: eventData.timeZone || 'UTC'
+        },
+        attendees: eventData.attendees ? eventData.attendees.map(email => ({ email })) : [],
+        location: eventData.location || '',
+        conferenceData: {
+          createRequest: {
+            requestId: `meet-${Date.now()}`,
+            conferenceSolutionKey: {
+              type: 'hangoutsMeet'
+            }
+          }
+        },
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'email', minutes: 24 * 60 },
+            { method: 'popup', minutes: 10 }
+          ]
+        }
+      };
+
+      const response = await calendar.events.insert({
+        calendarId: 'primary',
+        resource: event,
+        conferenceDataVersion: 1
+      });
+
+      const createdEvent = response.data;
+      const meetingLink = createdEvent.conferenceData?.entryPoints?.[0]?.uri;
+
+      return {
+        ...createdEvent,
+        meetingLink
+      };
+    } catch (error) {
+      console.error("Error creating meeting event:", error);
+      throw new Error("Failed to create meeting event");
+    }
+  }
+
+  /**
+   * Create a reminder event
+   */
+  async createReminder(businessId, reminderData) {
+    try {
+      const calendar = await this.getCalendarService(businessId);
+      
+      const event = {
+        summary: reminderData.title,
+        description: reminderData.description || '',
+        start: {
+          dateTime: reminderData.reminderTime,
+          timeZone: reminderData.timeZone || 'UTC'
+        },
+        end: {
+          dateTime: new Date(new Date(reminderData.reminderTime).getTime() + 15 * 60000).toISOString(),
+          timeZone: reminderData.timeZone || 'UTC'
+        },
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'email', minutes: 0 },
+            { method: 'popup', minutes: 0 }
+          ]
+        }
+      };
+
+      const response = await calendar.events.insert({
+        calendarId: 'primary',
+        resource: event
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error("Error creating reminder:", error);
+      throw new Error("Failed to create reminder");
+    }
+  }
+
+  /**
+   * Get day schedule with availability summary
+   */
+  async getDaySchedule(businessId, date) {
+    try {
+      const calendar = await this.getCalendarService(businessId);
+      
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const response = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin: startOfDay.toISOString(),
+        timeMax: endOfDay.toISOString(),
+        singleEvents: true,
+        orderBy: 'startTime'
+      });
+
+      const events = response.data.items || [];
+      let totalBusyMinutes = 0;
+
+      events.forEach(event => {
+        const start = new Date(event.start.dateTime || event.start.date);
+        const end = new Date(event.end.dateTime || event.end.date);
+        const duration = (end - start) / (1000 * 60); // Convert to minutes
+        totalBusyMinutes += duration;
+      });
+
+      const totalMinutes = 24 * 60; // 24 hours in minutes
+      const totalFreeMinutes = totalMinutes - totalBusyMinutes;
+      const busyPercentage = Math.round((totalBusyMinutes / totalMinutes) * 100);
+
+      return {
+        date,
+        events,
+        summary: {
+          totalEvents: events.length,
+          totalBusyMinutes: Math.round(totalBusyMinutes),
+          totalFreeMinutes: Math.round(totalFreeMinutes),
+          busyPercentage
+        }
+      };
+    } catch (error) {
+      console.error("Error getting day schedule:", error);
+      throw new Error("Failed to get day schedule");
+    }
+  }
+
+  /**
+   * Get next available appointment slot
+   */
+  async getNextAvailableSlot(businessId, durationMinutes = 60, options = {}) {
+    try {
+      const { startDate, maxDays = 30, startHour = 9, endHour = 17, timeZone = 'UTC' } = options;
+      
+      let searchDate = startDate ? new Date(startDate) : new Date();
+      const endSearchDate = new Date(searchDate.getTime() + maxDays * 24 * 60 * 60 * 1000);
+
+      while (searchDate <= endSearchDate) {
+        const dateStr = searchDate.toISOString().split('T')[0];
+        const availableSlots = await this.findAvailableSlots(businessId, dateStr, durationMinutes, {
+          startHour,
+          endHour,
+          timeZone
+        });
+
+        if (availableSlots.availableSlots.length > 0) {
+          return {
+            date: dateStr,
+            availableSlots: availableSlots.availableSlots,
+            nextSlot: availableSlots.availableSlots[0],
+            message: `Found ${availableSlots.availableSlots.length} available slots on ${dateStr}`
+          };
+        }
+
+        searchDate.setDate(searchDate.getDate() + 1);
+      }
+
+      return {
+        date: null,
+        availableSlots: [],
+        nextSlot: null,
+        message: `No available slots found in the next ${maxDays} days`
+      };
+    } catch (error) {
+      console.error("Error getting next available slot:", error);
+      throw new Error("Failed to get next available slot");
+    }
+  }
+
+  /**
+   * Bulk create calendar events
+   */
+  async bulkCreateCalendarEvents(businessId, events) {
+    try {
+      const results = {
+        created: [],
+        failed: []
+      };
+
+      for (const eventData of events) {
+        try {
+          const event = await this.createCalendarEvent(businessId, eventData);
+          results.created.push(event);
+        } catch (error) {
+          results.failed.push({
+            eventData,
+            error: error.message
+          });
+        }
+      }
+
+      return results;
+    } catch (error) {
+      console.error("Error in bulk create calendar events:", error);
+      throw new Error("Failed to bulk create calendar events");
+    }
+  }
+
+  /**
+   * Bulk delete calendar events
+   */
+  async bulkDeleteCalendarEvents(businessId, eventIds) {
+    try {
+      const results = {
+        deleted: 0,
+        failed: 0,
+        errors: []
+      };
+
+      for (const eventId of eventIds) {
+        try {
+          await this.deleteCalendarEvent(businessId, eventId);
+          results.deleted++;
+        } catch (error) {
+          results.failed++;
+          results.errors.push({
+            eventId,
+            error: error.message
+          });
+        }
+      }
+
+      return results;
+    } catch (error) {
+      console.error("Error in bulk delete calendar events:", error);
+      throw new Error("Failed to bulk delete calendar events");
+    }
+  }
 
   // Sheets integration methods
   async getSheetsService(businessId) {
