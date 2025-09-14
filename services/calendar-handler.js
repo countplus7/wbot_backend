@@ -14,38 +14,12 @@ class CalendarHandler {
   }
 
   /**
-   * Store conversation context
+   * Get timezone for a business (you can make this configurable)
    */
-  storeContext(businessId, from, context) {
-    const key = `${businessId}_${from}`;
-    this.conversationContext.set(key, {
-      ...context,
-      timestamp: Date.now()
-    });
-  }
-
-  /**
-   * Get conversation context
-   */
-  getContext(businessId, from) {
-    const key = `${businessId}_${from}`;
-    const context = this.conversationContext.get(key);
-    
-    // Remove context if it's older than 10 minutes
-    if (context && (Date.now() - context.timestamp) > 10 * 60 * 1000) {
-      this.conversationContext.delete(key);
-      return null;
-    }
-    
-    return context;
-  }
-
-  /**
-   * Clear conversation context
-   */
-  clearContext(businessId, from) {
-    const key = `${businessId}_${from}`;
-    this.conversationContext.delete(key);
+  getBusinessTimezone(businessId) {
+    // For now, return default timezone
+    // You can later make this configurable per business
+    return this.defaultTimezone;
   }
 
   /**
@@ -240,7 +214,7 @@ class CalendarHandler {
         title: data.title,
         description: data.description || '',
         reminderTime: reminderTime.toISOString(),
-        timeZone: 'UTC'
+        timeZone: this.getBusinessTimezone(businessId)
       };
 
       const reminder = await this.googleService.createReminder(businessId, reminderData);
@@ -296,7 +270,7 @@ class CalendarHandler {
         description: data.description || '',
         startTime: startDateTime.toISOString(),
         endTime: endDateTime.toISOString(),
-        timeZone: 'UTC',
+        timeZone: this.getBusinessTimezone(businessId),
         attendees: data.participants || [],
         location: data.location || ''
       };
@@ -315,6 +289,41 @@ class CalendarHandler {
         message: 'Sorry, I couldn\'t schedule your meeting. Please try again.'
       };
     }
+  }
+
+  /**
+   * Store conversation context
+   */
+  storeContext(businessId, from, context) {
+    const key = `${businessId}_${from}`;
+    this.conversationContext.set(key, {
+      ...context,
+      timestamp: Date.now()
+    });
+  }
+
+  /**
+   * Get conversation context
+   */
+  getContext(businessId, from) {
+    const key = `${businessId}_${from}`;
+    const context = this.conversationContext.get(key);
+    
+    // Remove context if it's older than 10 minutes
+    if (context && (Date.now() - context.timestamp) > 10 * 60 * 1000) {
+      this.conversationContext.delete(key);
+      return null;
+    }
+    
+    return context;
+  }
+
+  /**
+   * Clear conversation context
+   */
+  clearContext(businessId, from) {
+    const key = `${businessId}_${from}`;
+    this.conversationContext.delete(key);
   }
 
   /**
@@ -348,52 +357,6 @@ class CalendarHandler {
       console.error('Error handling follow-up response:', error);
       return null;
     }
-  }
-
-  /**
-   * Get the last calendar message from this conversation
-   */
-  async getLastCalendarMessage(businessId, from) {
-    try {
-      // This would need to be implemented to get the last message from the database
-      // For now, we'll use a simple approach
-      return null; // Placeholder - you'll need to implement this
-    } catch (error) {
-      console.error('Error getting last calendar message:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Parse time slot string to appointment data
-   */
-  parseTimeSlotToAppointmentData(timeSlot) {
-    // timeSlot format: "Friday (September 19) at 2:00 PM"
-    // We need to convert this back to the format expected by handleBookingRequest
-    
-    // This is a simplified parser - you might need to make it more robust
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    
-    // For now, assume it's tomorrow if it says "Friday" and today is Thursday
-    // You'll need to implement proper date parsing based on your needs
-    
-    return {
-      date: tomorrow.toISOString().split('T')[0], // YYYY-MM-DD format
-      time: '14:00', // 2:00 PM in 24-hour format
-      title: 'Appointment',
-      duration: 60
-    };
-  }
-
-  /**
-   * Get timezone for a business (you can make this configurable)
-   */
-  getBusinessTimezone(businessId) {
-    // For now, return default timezone
-    // You can later make this configurable per business
-    return this.defaultTimezone;
   }
 
   // Helper methods to format responses
@@ -494,4 +457,94 @@ class CalendarHandler {
 
   formatNextAvailableSlot(nextSlot) {
     if (!nextSlot.nextSlot) {
-      return `❌ ${nextSlot.message || 'No available slots found in the next 30 days.'}`
+      return `❌ ${nextSlot.message || 'No available slots found in the next 30 days.'}`;
+    }
+
+    const { date, nextSlot: slot } = nextSlot;
+    const formattedDate = new Date(date).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const startTime = new Date(slot.start).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    const endTime = new Date(slot.end).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    let message = `📅 Next Available Appointment:\n\n`;
+    message += `📅 Date: ${formattedDate}\n`;
+    message += `⏰ Time: ${startTime} - ${endTime}\n`;
+    message += `⏱️ Duration: ${slot.duration} minutes\n\n`;
+    message += `Would you like to book this slot? Reply "YES" to confirm.`;
+
+    return message;
+  }
+
+  formatReminderConfirmation(reminder) {
+    const reminderTime = new Date(reminder.start.dateTime).toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    let message = `✅ Reminder Set!\n\n`;
+    message += `📝 Title: ${reminder.summary}\n`;
+    message += `⏰ Time: ${reminderTime}\n`;
+    
+    if (reminder.description) {
+      message += `📋 Details: ${reminder.description}\n`;
+    }
+
+    message += `\nYou'll receive a notification at the scheduled time.`;
+    message += `\n\nReply "CANCEL" if you need to remove this reminder.`;
+
+    return message;
+  }
+
+  formatMeetingConfirmation(event, meetingLink) {
+    const startTime = new Date(event.start.dateTime).toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    let message = `✅ Meeting Scheduled!\n\n`;
+    message += `📅 Date & Time: ${startTime}\n`;
+    message += `📝 Title: ${event.summary}\n`;
+    
+    if (event.description) {
+      message += `📋 Description: ${event.description}\n`;
+    }
+
+    if (meetingLink) {
+      message += `🔗 Google Meet Link: ${meetingLink}\n`;
+    }
+
+    if (event.attendees && event.attendees.length > 0) {
+      message += `📧 Attendees: ${event.attendees.map(a => a.email).join(', ')}\n`;
+    }
+
+    message += `\n⏰ You'll receive a reminder 10 minutes before the meeting.`;
+    message += `\n\nReply "CANCEL" if you need to reschedule or cancel.`;
+
+    return message;
+  }
+}
+
+module.exports = new CalendarHandler();
