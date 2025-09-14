@@ -510,6 +510,357 @@ class OpenAIService {
     const numberMatch = message.match(/(\d+)/);
     return numberMatch ? parseInt(numberMatch[1]) : null;
   }
+
+  // Enhanced Calendar Intent Detection Methods
+
+  /**
+   * Detect calendar booking intent from message
+   */
+  detectCalendarBookingIntent(message) {
+    const lowercaseMessage = message.toLowerCase();
+    
+    // Booking keywords
+    const bookingKeywords = [
+      'book', 'schedule', 'appointment', 'meeting', 'reserve', 'set up',
+      'arrange', 'plan', 'organize', 'fix', 'make an appointment'
+    ];
+    
+    // Time indicators
+    const timeKeywords = [
+      'tomorrow', 'today', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+      'am', 'pm', 'morning', 'afternoon', 'evening', 'night', 'at', 'on', 'for'
+    ];
+    
+    // Check if message contains booking intent
+    const hasBookingIntent = bookingKeywords.some(keyword => lowercaseMessage.includes(keyword));
+    const hasTimeIntent = timeKeywords.some(keyword => lowercaseMessage.includes(keyword));
+    
+    if (hasBookingIntent && hasTimeIntent) {
+      return {
+        intent: 'book_appointment',
+        confidence: 0.8,
+        extractedData: this.extractBookingData(message)
+      };
+    }
+    
+    return null;
+  }
+
+  /**
+   * Detect availability check intent
+   */
+  detectAvailabilityIntent(message) {
+    const lowercaseMessage = message.toLowerCase();
+    
+    const availabilityKeywords = [
+      'available', 'free', 'busy', 'open', 'check', 'are you free',
+      'do you have time', 'when are you available', 'what time'
+    ];
+    
+    const hasAvailabilityIntent = availabilityKeywords.some(keyword => 
+      lowercaseMessage.includes(keyword)
+    );
+    
+    if (hasAvailabilityIntent) {
+      return {
+        intent: 'check_availability',
+        confidence: 0.7,
+        extractedData: this.extractTimeData(message)
+      };
+    }
+    
+    return null;
+  }
+
+  /**
+   * Detect reminder intent
+   */
+  detectReminderIntent(message) {
+    const lowercaseMessage = message.toLowerCase();
+    
+    const reminderKeywords = [
+      'remind', 'reminder', 'remember', 'don\'t forget', 'call me',
+      'notify', 'alert', 'ping'
+    ];
+    
+    const hasReminderIntent = reminderKeywords.some(keyword => 
+      lowercaseMessage.includes(keyword)
+    );
+    
+    if (hasReminderIntent) {
+      return {
+        intent: 'create_reminder',
+        confidence: 0.8,
+        extractedData: this.extractReminderData(message)
+      };
+    }
+    
+    return null;
+  }
+
+  /**
+   * Detect meeting scheduling intent
+   */
+  detectMeetingIntent(message) {
+    const lowercaseMessage = message.toLowerCase();
+    
+    const meetingKeywords = [
+      'meeting', 'call', 'conference', 'video call', 'zoom', 'teams',
+      'discuss', 'talk', 'chat', 'conversation'
+    ];
+    
+    const participantKeywords = [
+      'with', 'and', 'include', 'invite', 'add'
+    ];
+    
+    const hasMeetingIntent = meetingKeywords.some(keyword => 
+      lowercaseMessage.includes(keyword)
+    );
+    const hasParticipants = participantKeywords.some(keyword => 
+      lowercaseMessage.includes(keyword)
+    );
+    
+    if (hasMeetingIntent) {
+      return {
+        intent: 'schedule_meeting',
+        confidence: 0.8,
+        extractedData: this.extractMeetingData(message)
+      };
+    }
+    
+    return null;
+  }
+
+  /**
+   * Extract booking data from message
+   */
+  extractBookingData(message) {
+    const data = {
+      title: '',
+      time: null,
+      date: null,
+      duration: 60, // default 1 hour
+      description: ''
+    };
+    
+    // Extract time
+    const timeMatch = message.match(/(\d{1,2}):?(\d{0,2})\s*(am|pm|AM|PM)?/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
+      
+      if (period === 'pm' && hours !== 12) hours += 12;
+      if (period === 'am' && hours === 12) hours = 0;
+      
+      data.time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+    
+    // Extract date
+    const tomorrowMatch = message.match(/tomorrow/i);
+    const todayMatch = message.match(/today/i);
+    
+    if (tomorrowMatch) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      data.date = tomorrow.toISOString().split('T')[0];
+    } else if (todayMatch) {
+      data.date = new Date().toISOString().split('T')[0];
+    } else {
+      // Check for day names
+      const dayMatch = message.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
+      if (dayMatch) {
+        data.date = this.getNextDayOfWeek(dayMatch[1].toLowerCase());
+      }
+    }
+    
+    // Extract title/description
+    const titleMatch = message.match(/(?:book|schedule|appointment)\s+(?:for\s+)?(.+?)(?:\s+at|\s+on|\s+tomorrow|\s+today|$)/i);
+    if (titleMatch) {
+      data.title = titleMatch[1].trim();
+    }
+    
+    return data;
+  }
+
+  /**
+   * Extract time data from message
+   */
+  extractTimeData(message) {
+    const data = {
+      date: null,
+      time: null
+    };
+    
+    // Extract date
+    const tomorrowMatch = message.match(/tomorrow/i);
+    const todayMatch = message.match(/today/i);
+    const fridayMatch = message.match(/friday/i);
+    
+    if (tomorrowMatch) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      data.date = tomorrow.toISOString().split('T')[0];
+    } else if (todayMatch) {
+      data.date = new Date().toISOString().split('T')[0];
+    } else if (fridayMatch) {
+      data.date = this.getNextDayOfWeek('friday');
+    }
+    
+    // Extract time
+    const timeMatch = message.match(/(\d{1,2}):?(\d{0,2})\s*(am|pm|AM|PM)?/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
+      
+      if (period === 'pm' && hours !== 12) hours += 12;
+      if (period === 'am' && hours === 12) hours = 0;
+      
+      data.time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+    
+    return data;
+  }
+
+  /**
+   * Extract reminder data from message
+   */
+  extractReminderData(message) {
+    const data = {
+      title: '',
+      time: null,
+      date: null,
+      description: ''
+    };
+    
+    // Extract reminder text
+    const reminderMatch = message.match(/(?:remind|reminder)\s+(?:me\s+to\s+)?(.+?)(?:\s+at|\s+on|\s+tomorrow|\s+today|$)/i);
+    if (reminderMatch) {
+      data.title = reminderMatch[1].trim();
+    }
+    
+    // Extract time
+    const timeMatch = message.match(/(\d{1,2}):?(\d{0,2})\s*(am|pm|AM|PM)?/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
+      
+      if (period === 'pm' && hours !== 12) hours += 12;
+      if (period === 'am' && hours === 12) hours = 0;
+      
+      data.time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+    
+    // Extract date
+    const tomorrowMatch = message.match(/tomorrow/i);
+    const todayMatch = message.match(/today/i);
+    
+    if (tomorrowMatch) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      data.date = tomorrow.toISOString().split('T')[0];
+    } else if (todayMatch) {
+      data.date = new Date().toISOString().split('T')[0];
+    }
+    
+    return data;
+  }
+
+  /**
+   * Extract meeting data from message
+   */
+  extractMeetingData(message) {
+    const data = {
+      title: '',
+      time: null,
+      date: null,
+      participants: [],
+      duration: 60
+    };
+    
+    // Extract participants
+    const withMatch = message.match(/with\s+([^at]+?)(?:\s+at|\s+on|\s+tomorrow|\s+today|$)/i);
+    if (withMatch) {
+      const participants = withMatch[1].split(/[,\s]+/).filter(p => p.trim());
+      data.participants = participants.map(p => p.trim());
+    }
+    
+    // Extract time
+    const timeMatch = message.match(/(\d{1,2}):?(\d{0,2})\s*(am|pm|AM|PM)?/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
+      
+      if (period === 'pm' && hours !== 12) hours += 12;
+      if (period === 'am' && hours === 12) hours = 0;
+      
+      data.time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+    
+    // Extract date
+    const tomorrowMatch = message.match(/tomorrow/i);
+    const todayMatch = message.match(/today/i);
+    const mondayMatch = message.match(/monday/i);
+    
+    if (tomorrowMatch) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      data.date = tomorrow.toISOString().split('T')[0];
+    } else if (todayMatch) {
+      data.date = new Date().toISOString().split('T')[0];
+    } else if (mondayMatch) {
+      data.date = this.getNextDayOfWeek('monday');
+    }
+    
+    return data;
+  }
+
+  /**
+   * Get next occurrence of a day of the week
+   */
+  getNextDayOfWeek(dayName) {
+    const days = {
+      'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
+      'thursday': 4, 'friday': 5, 'saturday': 6
+    };
+    
+    const targetDay = days[dayName.toLowerCase()];
+    const today = new Date();
+    const currentDay = today.getDay();
+    
+    let daysUntilTarget = targetDay - currentDay;
+    if (daysUntilTarget <= 0) {
+      daysUntilTarget += 7;
+    }
+    
+    const targetDate = new Date(today);
+    targetDate.setDate(today.getDate() + daysUntilTarget);
+    
+    return targetDate.toISOString().split('T')[0];
+  }
+
+  /**
+   * Main calendar intent detection method
+   */
+  detectCalendarIntent(message) {
+    // Try different intent detectors
+    const bookingIntent = this.detectCalendarBookingIntent(message);
+    if (bookingIntent) return bookingIntent;
+    
+    const availabilityIntent = this.detectAvailabilityIntent(message);
+    if (availabilityIntent) return availabilityIntent;
+    
+    const reminderIntent = this.detectReminderIntent(message);
+    if (reminderIntent) return reminderIntent;
+    
+    const meetingIntent = this.detectMeetingIntent(message);
+    if (meetingIntent) return meetingIntent;
+    
+    return null;
+  }
 }
 
 module.exports = new OpenAIService();

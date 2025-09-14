@@ -4,6 +4,7 @@ const WhatsAppService = require('../services/whatsapp');
 const OpenAIService = require('../services/openai');
 const DatabaseService = require('../services/database');
 const BusinessService = require('../services/business');
+const CalendarHandler = require('../services/calendar-handler');
 const path = require('path');
 const fs = require('fs-extra');
 
@@ -67,14 +68,6 @@ router.post('/webhook', async (req, res) => {
     const whatsappConfig = await BusinessService.getWhatsAppConfigByPhoneNumber(messageData.to);
     if (!whatsappConfig) {
       console.error('No WhatsApp configuration found for phone number:', messageData.to);
-      console.error('Available phone numbers in database:');
-      // Let's also log what phone numbers we have in the database for debugging
-      try {
-        const allConfigs = await BusinessService.getAllWhatsAppConfigs();
-        console.error('All WhatsApp configs:', allConfigs.map(c => ({ id: c.id, phone_number_id: c.phone_number_id, business_id: c.business_id })));
-      } catch (dbError) {
-        console.error('Error fetching WhatsApp configs for debugging:', dbError);
-      }
       return res.status(200).send('OK');
     }
 
@@ -89,36 +82,12 @@ router.post('/webhook', async (req, res) => {
     }
 
     if (business.status === 'inactive') {
-      console.log(`Business ${businessId} (${business.name}) is inactive. Skipping AI response.`);
-      
-      // Still save the incoming message for record keeping
-      const conversation = await DatabaseService.createOrGetConversation(businessId, messageData.from);
-      console.log('Conversation created/found:', { id: conversation.id, business_id: conversation.business_id, phone_number: conversation.phone_number });
-
-      // Save the incoming message
-      const savedMessage = await DatabaseService.saveMessage({
-        businessId: businessId,
-        conversationId: conversation.id,
-        messageId: messageData.messageId,
-        fromNumber: messageData.from,
-        toNumber: messageData.to,
-        messageType: messageData.messageType,
-        content: messageData.content,
-        mediaUrl: messageData.mediaUrl,
-        localFilePath: null,
-        isFromUser: true
-      });
-
-      console.log('Incoming message saved (business inactive, no AI response)');
+      console.log(`Business ${businessId} (${business.name}) is inactive. Skipping response.`);
       return res.status(200).send('OK');
     }
 
     // Set WhatsApp service configuration for this business
     WhatsAppService.setBusinessConfig(whatsappConfig);
-
-    // Get business tone for AI responses
-    const businessTone = await BusinessService.getBusinessTone(businessId);
-    console.log(`Using business tone: ${businessTone ? businessTone.name : 'default'}`);
 
     // Create or get conversation
     const conversation = await DatabaseService.createOrGetConversation(businessId, messageData.from);
@@ -138,11 +107,11 @@ router.post('/webhook', async (req, res) => {
       isFromUser: true
     });
 
-    // Handle media files if present
+    // Handle media files if present (existing code)
     let localFilePath = null;
     let aiResponse = '';
 
-    // Handle different message types
+    // Handle different message types (existing media processing code)
     if (messageData.messageType === 'image' || messageData.messageType === 'audio') {
       try {
         console.log(`Processing ${messageData.messageType} message...`);
@@ -215,29 +184,60 @@ router.post('/webhook', async (req, res) => {
       }
     }
 
-    // Generate AI response
+    // Check for calendar intent first (before general AI processing)
+    if (messageData.messageType === 'text' && messageData.content) {
+      try {
+        console.log('Checking for calendar intent...');
+        const calendarResponse = await CalendarHandler.processMessage(
+          businessId, 
+          messageData.content, 
+          messageData.from
+        );
+        
+        if (calendarResponse) {
+          console.log('Calendar response sent:', calendarResponse);
+          
+          // Save the calendar response to database
+          await DatabaseService.saveMessage({
+            businessId: businessId,
+            conversationId: conversation.id,
+            messageId: `calendar_${Date.now()}`,
+            fromNumber: messageData.to, // From business
+            toNumber: messageData.from, // To user
+            messageType: 'text',
+            content: calendarResponse.messages?.[0]?.text?.body || 'Calendar response sent',
+            mediaUrl: null,
+            localFilePath: null,
+            isFromUser: false
+          });
+          
+          return res.status(200).send('OK');
+        }
+      } catch (calendarError) {
+        console.error('Error processing calendar message:', calendarError);
+        // Continue with regular AI processing if calendar processing fails
+      }
+    }
+
+    // Generate AI response (existing code)
     try {
       const conversationHistory = await DatabaseService.getConversationHistoryForAI(conversation.id);
+      const businessTone = await BusinessService.getBusinessTone(businessId);
       
       console.log(`Generating AI response for message type: ${messageData.messageType}`);
-      console.log(`Local file path: ${localFilePath}`);
-      console.log(`File exists: ${localFilePath ? fs.existsSync(localFilePath) : 'N/A'}`);
-      console.log(`Message content: ${messageData.content}`);
       
       aiResponse = await OpenAIService.processMessage(
         messageData.messageType,
         messageData.content || `User sent a ${messageData.messageType} message`,
-        localFilePath, // Use absolute path for AI processing
+        localFilePath,
         conversationHistory,
         businessTone,
-        businessId // Pass businessId for email functionality
+        businessId
       );
       
       console.log('AI response generated:', aiResponse);
     } catch (aiError) {
       console.error('Error generating AI response:', aiError);
-      console.error('AI Error details:', aiError.message);
-      console.error('AI Error stack:', aiError.stack);
       aiResponse = 'Sorry, I encountered an error processing your message. Please try again.';
     }
 
@@ -248,61 +248,31 @@ router.post('/webhook', async (req, res) => {
     }
 
     // Save AI response to database
-    const aiMessageId = `ai_${messageData.messageId}_${Date.now()}`;
     await DatabaseService.saveMessage({
       businessId: businessId,
       conversationId: conversation.id,
-      messageId: aiMessageId,
-      fromNumber: messageData.to,
-      toNumber: messageData.from,
+      messageId: `ai_${Date.now()}`,
+      fromNumber: messageData.to, // From business
+      toNumber: messageData.from, // To user
       messageType: 'text',
       content: aiResponse,
       mediaUrl: null,
       localFilePath: null,
-      isFromUser: false,
-      aiResponse: aiResponse
+      isFromUser: false
     });
 
-    // Send response back to WhatsApp
+    // Send WhatsApp response
     try {
-      await WhatsAppService.sendTextMessage(messageData.from, aiResponse);
-      console.log('AI response sent to WhatsApp successfully');
-    } catch (error) {
-      console.error('Error sending response to WhatsApp:', error);
-      
-      // Check if it's a token expiration error
-      if (error.message.includes('access token has expired')) {
-        console.error(' CRITICAL: WhatsApp access token has expired for business ID:', businessId);
-        console.error('Please update the access token in the WhatsApp configuration for this business.');
-        
-        // Save a message indicating the token issue
-        try {
-          await DatabaseService.saveMessage({
-            businessId: businessId,
-            conversationId: conversation.id,
-            messageId: `error_${messageData.messageId}_${Date.now()}`,
-            fromNumber: 'system',
-            toNumber: messageData.from,
-            messageType: 'text',
-            content: 'Sorry, there was an issue sending the response. Please contact support.',
-            mediaUrl: null,
-            localFilePath: null,
-            isFromUser: false,
-            aiResponse: 'Token expired - unable to send response'
-          });
-        } catch (saveError) {
-          console.error('Error saving token expiration message:', saveError);
-        }
-      }
-      
-      // Don't fail the webhook, just log the error
+      const response = await WhatsAppService.sendTextMessage(messageData.from, aiResponse);
+      console.log('WhatsApp response sent successfully:', response);
+    } catch (whatsappError) {
+      console.error('Error sending WhatsApp response:', whatsappError);
     }
 
-    console.log('=== WEBHOOK PROCESSING COMPLETED ===');
-    res.status(200).send('OK');
+    return res.status(200).send('OK');
   } catch (error) {
     console.error('Webhook processing error:', error);
-    res.status(500).send('Internal Server Error');
+    return res.status(500).send('Internal Server Error');
   }
 });
 

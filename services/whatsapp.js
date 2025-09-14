@@ -268,6 +268,342 @@ class WhatsAppService {
       throw error;
     }
   }
+
+  // Calendar Integration Response Methods
+
+  /**
+   * Send calendar availability response
+   */
+  async sendAvailabilityResponse(to, availability, timeSlot) {
+    try {
+      let message;
+      
+      if (availability.isAvailable) {
+        message = `✅ Great! I'm available ${timeSlot}.\n\nWould you like to book this appointment? Reply "YES" to confirm or "NO" to cancel.`;
+      } else {
+        const conflicts = availability.conflictingEvents.length;
+        message = `❌ Sorry, I'm not available ${timeSlot}.\n\nI have ${conflicts} conflicting appointment${conflicts > 1 ? 's' : ''} at that time.\n\nWould you like me to suggest alternative times? Reply "YES" for suggestions.`;
+      }
+
+      return await this.sendTextMessage(to, message);
+    } catch (error) {
+      console.error('Error sending availability response:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send available time slots
+   */
+  async sendAvailableSlots(to, date, availableSlots) {
+    try {
+      if (availableSlots.length === 0) {
+        return await this.sendTextMessage(to, `❌ No available slots found for ${date}.\n\nWould you like me to check another date?`);
+      }
+
+      let message = `📅 Available time slots for ${date}:\n\n`;
+      
+      availableSlots.slice(0, 5).forEach((slot, index) => {
+        const startTime = new Date(slot.start).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+        const endTime = new Date(slot.end).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+        
+        message += `${index + 1}. ${startTime} - ${endTime}\n`;
+      });
+
+      if (availableSlots.length > 5) {
+        message += `\n... and ${availableSlots.length - 5} more slots available.\n`;
+      }
+
+      message += `\nReply with the number (1-${Math.min(availableSlots.length, 5)}) to book that slot, or "MORE" to see additional times.`;
+
+      return await this.sendTextMessage(to, message);
+    } catch (error) {
+      console.error('Error sending available slots:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send appointment confirmation
+   */
+  async sendAppointmentConfirmation(to, event, meetingLink = null) {
+    try {
+      const startTime = new Date(event.start.dateTime).toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      let message = `✅ Appointment Confirmed!\n\n`;
+      message += ` Date & Time: ${startTime}\n`;
+      message += `📝 Title: ${event.summary}\n`;
+      
+      if (event.description) {
+        message += `📋 Description: ${event.description}\n`;
+      }
+      
+      if (event.location) {
+        message += `📍 Location: ${event.location}\n`;
+      }
+
+      if (meetingLink) {
+        message += ` Meeting Link: ${meetingLink}\n`;
+      }
+
+      message += `\n⏰ You'll receive a reminder 30 minutes before your appointment.`;
+      message += `\n\nReply "CANCEL" if you need to reschedule or cancel.`;
+
+      return await this.sendTextMessage(to, message);
+    } catch (error) {
+      console.error('Error sending appointment confirmation:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send reminder notification
+   */
+  async sendReminder(to, reminder) {
+    try {
+      const reminderTime = new Date(reminder.start.dateTime).toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      let message = `⏰ Reminder: ${reminder.summary}\n\n`;
+      message += ` Scheduled for: ${reminderTime}\n`;
+      
+      if (reminder.description) {
+        message += `📋 Details: ${reminder.description}\n`;
+      }
+
+      return await this.sendTextMessage(to, message);
+    } catch (error) {
+      console.error('Error sending reminder:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send day schedule summary
+   */
+  async sendDaySchedule(to, schedule) {
+    try {
+      const { date, events, summary } = schedule;
+      const formattedDate = new Date(date).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      let message = ` Your schedule for ${formattedDate}:\n\n`;
+      message += `📊 Summary:\n`;
+      message += `• Total appointments: ${summary.totalEvents}\n`;
+      message += `• Busy time: ${summary.totalBusyMinutes} minutes\n`;
+      message += `• Free time: ${summary.totalFreeMinutes} minutes\n`;
+      message += `• Busy percentage: ${summary.busyPercentage}%\n\n`;
+
+      if (events.length > 0) {
+        message += ` Appointments:\n`;
+        events.slice(0, 5).forEach((event, index) => {
+          const startTime = new Date(event.start.dateTime).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          });
+          message += `${index + 1}. ${startTime} - ${event.summary}\n`;
+        });
+
+        if (events.length > 5) {
+          message += `\n... and ${events.length - 5} more appointments.`;
+        }
+      } else {
+        message += `🎉 No appointments scheduled for this day!`;
+      }
+
+      return await this.sendTextMessage(to, message);
+    } catch (error) {
+      console.error('Error sending day schedule:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send next available slot information
+   */
+  async sendNextAvailableSlot(to, nextSlot) {
+    try {
+      if (!nextSlot.nextSlot) {
+        return await this.sendTextMessage(to, `❌ ${nextSlot.message || 'No available slots found in the next 30 days.'}`);
+      }
+
+      const { date, nextSlot: slot } = nextSlot;
+      const formattedDate = new Date(date).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      const startTime = new Date(slot.start).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      const endTime = new Date(slot.end).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      const message = ` Next Available Appointment:\n\n`;
+      message += ` Date: ${formattedDate}\n`;
+      message += `⏰ Time: ${startTime} - ${endTime}\n`;
+      message += `⏱️ Duration: ${slot.duration} minutes\n\n`;
+      message += `Would you like to book this slot? Reply "YES" to confirm.`;
+
+      return await this.sendTextMessage(to, message);
+    } catch (error) {
+      console.error('Error sending next available slot:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send appointment cancellation confirmation
+   */
+  async sendCancellationConfirmation(to, eventTitle, eventTime) {
+    try {
+      const formattedTime = new Date(eventTime).toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      const message = `✅ Appointment Cancelled\n\n`;
+      message += `📝 Title: ${eventTitle}\n`;
+      message += `📅 Time: ${formattedTime}\n\n`;
+      message += `Your appointment has been successfully cancelled.`;
+      message += `\n\nReply "BOOK" if you'd like to schedule a new appointment.`;
+
+      return await this.sendTextMessage(to, message);
+    } catch (error) {
+      console.error('Error sending cancellation confirmation:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send error message for calendar operations
+   */
+  async sendCalendarError(to, errorMessage) {
+    try {
+      const message = `❌ Calendar Error\n\n`;
+      message += `${errorMessage}\n\n`;
+      message += `Please try again or contact support if the issue persists.`;
+
+      return await this.sendTextMessage(to, message);
+    } catch (error) {
+      console.error('Error sending calendar error message:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send meeting confirmation with Google Meet link
+   */
+  async sendMeetingConfirmation(to, event, meetingLink) {
+    try {
+      const startTime = new Date(event.start.dateTime).toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      let message = `✅ Meeting Scheduled!\n\n`;
+      message += ` Date & Time: ${startTime}\n`;
+      message += `📝 Title: ${event.summary}\n`;
+      
+      if (event.description) {
+        message += `📋 Description: ${event.description}\n`;
+      }
+
+      if (meetingLink) {
+        message += `🔗 Google Meet Link: ${meetingLink}\n`;
+      }
+
+      if (event.attendees && event.attendees.length > 0) {
+        message += ` Attendees: ${event.attendees.map(a => a.email).join(', ')}\n`;
+      }
+
+      message += `\n⏰ You'll receive a reminder 10 minutes before the meeting.`;
+      message += `\n\nReply "CANCEL" if you need to reschedule or cancel.`;
+
+      return await this.sendTextMessage(to, message);
+    } catch (error) {
+      console.error('Error sending meeting confirmation:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send reminder confirmation
+   */
+  async sendReminderConfirmation(to, reminder) {
+    try {
+      const reminderTime = new Date(reminder.start.dateTime).toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      let message = `✅ Reminder Set!\n\n`;
+      message += `📝 Title: ${reminder.summary}\n`;
+      message += `⏰ Time: ${reminderTime}\n`;
+      
+      if (reminder.description) {
+        message += `📋 Details: ${reminder.description}\n`;
+      }
+
+      message += `\nYou'll receive a notification at the scheduled time.`;
+      message += `\n\nReply "CANCEL" if you need to remove this reminder.`;
+
+      return await this.sendTextMessage(to, message);
+    } catch (error) {
+      console.error('Error sending reminder confirmation:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new WhatsAppService(); 
