@@ -1007,6 +1007,17 @@ class OpenAIService {
   // Odoo operation handlers
   async handleOdooOrder(businessId, orderRequest, phoneNumber) {
     try {
+      // First, check what modules are available
+      const modules = await OdooService.checkAvailableModules(businessId);
+      
+      if (!modules.hasProducts) {
+        return `❌ Sorry, the Sales module is not installed in this Odoo instance. To process orders, please install the Sales module in your Odoo system.\n\nAvailable modules: ${modules.availableModels.join(', ') || 'None detected'}`;
+      }
+
+      if (!modules.hasPartners) {
+        return `❌ Sorry, the Partners module is not available in this Odoo instance. This is required to manage customers.`;
+      }
+
       // First, search for or create customer
       let customer = await OdooService.searchCustomer(businessId, phoneNumber);
       
@@ -1031,6 +1042,11 @@ class OpenAIService {
         return `❌ Sorry, I couldn't find "${orderRequest.product}" in our system. Available products: ${products.map(p => p.name).join(', ')}`;
       }
 
+      // Check if sales module is available for creating orders
+      if (!modules.hasSales) {
+        return `✅ Product found: ${product.name} ($${product.list_price})\n\n❌ However, the Sales module is not installed, so I cannot create an order. Please install the Sales module in your Odoo system to enable order processing.\n\nProduct details:\n• Name: ${product.name}\n• Price: $${product.list_price}\n• Available quantity: ${product.qty_available}`;
+      }
+
       // Create sale order
       const orderData = {
         partner_id: customer.id,
@@ -1047,6 +1063,11 @@ class OpenAIService {
       return `✅ Order created successfully!\n\n📋 Order Details:\n• Product: ${product.name}\n• Quantity: ${orderRequest.quantity}\n• Unit Price: $${product.list_price}\n• Total: $${total}\n• Order ID: ${orderResult.id}\n\n🚚 Your order will be processed shortly. Thank you for your business!`;
     } catch (error) {
       console.error('Error handling Odoo order:', error);
+      
+      if (error.message.includes("Sales module is not installed")) {
+        return `❌ ${error.message}\n\nTo enable order processing, please:\n1. Go to your Odoo Apps menu\n2. Search for "Sales"\n3. Install the Sales module\n4. Configure your products\n\nThen try your order again!`;
+      }
+      
       throw error;
     }
   }

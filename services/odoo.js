@@ -258,22 +258,30 @@ class OdooService {
 
   // ---------- SALES ORDERS ----------
   async createSaleOrder(businessId, orderData) {
-    const values = {
-      partner_id: orderData.partner_id, // Customer ID
-      order_line: orderData.order_lines.map((line) => [
-        0,
-        0,
-        {
+    try {
+      const values = {
+        partner_id: orderData.partner_id, // Customer ID
+        order_line: orderData.order_lines.map(line => [0, 0, {
           product_id: line.product_id,
           product_uom_qty: line.quantity,
           price_unit: line.price_unit,
-        },
-      ]),
-    };
+        }]),
+      };
 
-    const result = await this.makeJsonRpcCall(businessId, "create", "sale.order", [values]);
+      const result = await this.makeJsonRpcCall(
+        businessId,
+        "create",
+        "sale.order",
+        [values]
+      );
 
-    return { id: result, success: true };
+      return { id: result, success: true };
+    } catch (error) {
+      if (error.message.includes("Object sale.order doesn't exist")) {
+        throw new Error("Sales module is not installed in this Odoo instance. Please install the Sales module to enable order management.");
+      }
+      throw error;
+    }
   }
 
   // ---------- INVOICES ----------
@@ -305,18 +313,25 @@ class OdooService {
 
   // ---------- PRODUCTS ----------
   async getProducts(businessId, limit = 100) {
-    const products = await this.makeJsonRpcCall(
-      businessId,
-      "search_read",
-      "product.product",
-      [
-        [["sale_ok", "=", true]], // Only products that can be sold
-        ["id", "name", "list_price", "qty_available"],
-      ],
-      { limit }
-    );
+    try {
+      const products = await this.makeJsonRpcCall(
+        businessId,
+        "search_read",
+        "product.product",
+        [
+          [["sale_ok", "=", true]], // Only products that can be sold
+          ["id", "name", "list_price", "qty_available"],
+        ],
+        { limit }
+      );
 
-    return products || [];
+      return products || [];
+    } catch (error) {
+      if (error.message.includes("Object product.product doesn't exist")) {
+        throw new Error("Sales module is not installed in this Odoo instance. Please install the Sales module to enable product management.");
+      }
+      throw error;
+    }
   }
 
   // ---------- CUSTOMERS ----------
@@ -340,6 +355,39 @@ class OdooService {
     const result = await this.makeJsonRpcCall(businessId, "create", "res.partner", [values]);
 
     return { id: result, success: true };
+  }
+
+  // ---------- CHECK MODULES ----------
+  async checkAvailableModules(businessId) {
+    try {
+      // Try to get available models
+      const models = await this.makeJsonRpcCall(businessId, "search", "ir.model", [
+        [["model", "in", ["product.product", "sale.order", "crm.lead", "helpdesk.ticket", "res.partner"]]],
+        ["model", "name"]
+      ]);
+
+      const availableModels = models.map(m => m.model);
+      
+      return {
+        hasProducts: availableModels.includes("product.product"),
+        hasSales: availableModels.includes("sale.order"),
+        hasCRM: availableModels.includes("crm.lead"),
+        hasHelpdesk: availableModels.includes("helpdesk.ticket"),
+        hasPartners: availableModels.includes("res.partner"),
+        availableModels: availableModels
+      };
+    } catch (error) {
+      console.error("Error checking available modules:", error);
+      return {
+        hasProducts: false,
+        hasSales: false,
+        hasCRM: false,
+        hasHelpdesk: false,
+        hasPartners: false,
+        availableModels: [],
+        error: error.message
+      };
+    }
   }
 }
 
