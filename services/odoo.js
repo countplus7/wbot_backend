@@ -63,17 +63,48 @@ class OdooService {
   async makeJsonRpcCall(businessId, method, model, args = [], kwargs = {}) {
     const auth = await this.getAuthenticatedClient(businessId);
 
+    // First, authenticate to get the user ID
+    const authPayload = {
+      jsonrpc: "2.0",
+      method: "call",
+      params: {
+        service: "common",
+        method: "authenticate",
+        args: [auth.db, auth.username, auth.api_key, {}],
+      },
+      id: 1,
+    };
+
+    console.log('Odoo auth payload:', JSON.stringify(authPayload, null, 2));
+
+    const authResponse = await axios.post(`${auth.instance_url}/jsonrpc`, authPayload, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    console.log('Odoo auth response:', JSON.stringify(authResponse.data, null, 2));
+
+    if (authResponse.data.error) {
+      throw new Error(`Odoo Authentication Error: ${authResponse.data.error.message || JSON.stringify(authResponse.data.error)}`);
+    }
+
+    const userId = authResponse.data.result;
+
+    // Now make the actual API call
     const payload = {
       jsonrpc: "2.0",
       method: "call",
       params: {
         service: "object",
-        method: method,
-        args: [auth.db, auth.username, auth.api_key, model, method, ...args],
+        method: "execute",
+        args: [auth.db, userId, auth.api_key, model, method, ...args],
         kwargs: kwargs,
       },
       id: Math.floor(Math.random() * 1000000),
     };
+
+    console.log('Odoo API payload:', JSON.stringify(payload, null, 2));
 
     const response = await axios.post(`${auth.instance_url}/jsonrpc`, payload, {
       headers: {
@@ -81,8 +112,10 @@ class OdooService {
       },
     });
 
+    console.log('Odoo API response:', JSON.stringify(response.data, null, 2));
+
     if (response.data.error) {
-      throw new Error(`Odoo API Error: ${response.data.error.message}`);
+      throw new Error(`Odoo API Error: ${response.data.error.message || JSON.stringify(response.data.error)}`);
     }
 
     return response.data.result;
