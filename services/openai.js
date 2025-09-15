@@ -3,6 +3,7 @@ const OpenAI = require('openai');
 const fs = require('fs');
 const path = require('path');
 const GoogleService = require('./google');
+const OdooService = require('./odoo');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -14,14 +15,64 @@ class OpenAIService {
     this.visionModel = 'gpt-4o'; // Updated from deprecated gpt-4-vision-preview
   }
 
-  async chatCompletion(messages, conversationHistory = [], businessTone = null, businessId = null) {
+  async chatCompletion(messages, conversationHistory = [], businessTone = null, businessId = null, phoneNumber = null) {
     try {
       // Check if the latest message contains an email request
       const latestMessage = messages[messages.length - 1];
       const emailRequest = this.detectEmailRequest(latestMessage.content);
       const emailReadRequest = this.detectEmailReadRequest(latestMessage.content);
-      
       const calendarRequest = this.detectCalendarRequest(latestMessage.content);
+      
+      // Check for Odoo operations
+      const odooOrderRequest = this.detectOdooOrderRequest(latestMessage.content);
+      const odooInvoiceRequest = this.detectOdooInvoiceRequest(latestMessage.content);
+      const odooLeadRequest = this.detectOdooLeadRequest(latestMessage.content);
+      const odooTicketRequest = this.detectOdooTicketRequest(latestMessage.content);
+      
+      // Handle Odoo order request
+      if (odooOrderRequest && businessId && phoneNumber) {
+        try {
+          const result = await this.handleOdooOrder(businessId, odooOrderRequest, phoneNumber);
+          return result;
+        } catch (error) {
+          console.error('Error processing Odoo order:', error);
+          return `❌ Sorry, I couldn't process your order. Please make sure Odoo integration is properly configured. Error: ${error.message}`;
+        }
+      }
+
+      // Handle Odoo invoice request
+      if (odooInvoiceRequest && businessId) {
+        try {
+          const result = await this.handleOdooInvoice(businessId, odooInvoiceRequest);
+          return result;
+        } catch (error) {
+          console.error('Error processing Odoo invoice request:', error);
+          return `❌ Sorry, I couldn't check your invoice. Please make sure Odoo integration is properly configured. Error: ${error.message}`;
+        }
+      }
+
+      // Handle Odoo lead request
+      if (odooLeadRequest && businessId && phoneNumber) {
+        try {
+          const result = await this.handleOdooLead(businessId, odooLeadRequest, phoneNumber);
+          return result;
+        } catch (error) {
+          console.error('Error processing Odoo lead:', error);
+          return `❌ Sorry, I couldn't create the lead. Please make sure Odoo integration is properly configured. Error: ${error.message}`;
+        }
+      }
+
+      // Handle Odoo ticket request
+      if (odooTicketRequest && businessId && phoneNumber) {
+        try {
+          const result = await this.handleOdooTicket(businessId, odooTicketRequest, phoneNumber);
+          return result;
+        } catch (error) {
+          console.error('Error processing Odoo ticket:', error);
+          return `❌ Sorry, I couldn't create the support ticket. Please make sure Odoo integration is properly configured. Error: ${error.message}`;
+        }
+      }
+
       // Handle email sending request
       if (emailRequest && businessId) {
         try {
@@ -272,7 +323,7 @@ class OpenAIService {
     }
   }
 
-  async processMessage(messageType, content, filePath = null, conversationHistory = [], businessTone = null, businessId = null) {
+  async processMessage(messageType, content, filePath = null, conversationHistory = [], businessTone = null, businessId = null, phoneNumber = null) {
     try {
       console.log(`OpenAI: Processing message type: ${messageType}`);
       console.log(`OpenAI: Content: ${content}`);
@@ -286,7 +337,7 @@ class OpenAIService {
           console.log('OpenAI: Processing text message');
           aiResponse = await this.chatCompletion([
             { role: 'user', content: content }
-          ], conversationHistory, businessTone, businessId);
+          ], conversationHistory, businessTone, businessId, phoneNumber);
           break;
 
         case 'image':
@@ -306,12 +357,12 @@ class OpenAIService {
           if (content && content.trim() !== '' && content !== `User sent a ${messageType} message`) {
             aiResponse = await this.chatCompletion([
               { role: 'user', content: `User sent an image with this message: "${content}". Here's what I see in the image: ${imageAnalysis}. Please respond to both the image and the user's message.` }
-            ], conversationHistory, businessTone, businessId);
+            ], conversationHistory, businessTone, businessId, phoneNumber);
           } else {
             // Just respond to the image analysis
             aiResponse = await this.chatCompletion([
               { role: 'user', content: `I analyzed this image and here's what I see: ${imageAnalysis}. Please provide a helpful response about what's in the image.` }
-            ], conversationHistory, businessTone, businessId);
+            ], conversationHistory, businessTone, businessId, phoneNumber);
           }
           break;
 
@@ -328,7 +379,7 @@ class OpenAIService {
           const transcription = await this.transcribeAudio(filePath);
           aiResponse = await this.chatCompletion([
             { role: 'user', content: `Transcribed audio: "${transcription}". Please respond to this message naturally and conversationally.` }
-          ], conversationHistory, businessTone, businessId);
+          ], conversationHistory, businessTone, businessId, phoneNumber);
           break;
 
         default:
@@ -862,6 +913,228 @@ class OpenAIService {
     if (meetingIntent) return meetingIntent;
     
     return null;
+  }
+
+  // Odoo intent detection methods
+  detectOdooOrderRequest(message) {
+    const orderKeywords = ['order', 'buy', 'purchase', 'pizza', 'food', 'delivery', 'quantity'];
+    const quantityRegex = /(\d+)\s+(pizzas?|items?|products?)/i;
+    const orderRegex = /(?:i\s+want\s+to\s+)?(?:order|buy|purchase)\s+(\d+)\s+(.+)/i;
+    
+    const hasOrderIntent = orderKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword)
+    );
+    
+    if (hasOrderIntent) {
+      const quantityMatch = message.match(quantityRegex);
+      const orderMatch = message.match(orderRegex);
+      
+      if (quantityMatch) {
+        return {
+          type: 'order',
+          quantity: parseInt(quantityMatch[1]),
+          product: quantityMatch[2],
+          originalMessage: message
+        };
+      } else if (orderMatch) {
+        return {
+          type: 'order',
+          quantity: parseInt(orderMatch[1]),
+          product: orderMatch[2],
+          originalMessage: message
+        };
+      }
+    }
+    
+    return null;
+  }
+
+  detectOdooInvoiceRequest(message) {
+    const invoiceKeywords = ['invoice', 'payment', 'bill', 'amount due', 'status'];
+    const invoiceRegex = /(?:invoice|bill)\s*#?([A-Z0-9]+)/i;
+    
+    const hasInvoiceIntent = invoiceKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword)
+    );
+    
+    if (hasInvoiceIntent) {
+      const invoiceMatch = message.match(invoiceRegex);
+      return {
+        type: 'invoice',
+        invoiceNumber: invoiceMatch ? invoiceMatch[1] : null,
+        originalMessage: message
+      };
+    }
+    
+    return null;
+  }
+
+  detectOdooLeadRequest(message) {
+    const leadKeywords = ['lead', 'inquiry', 'interested', 'quote', 'information'];
+    const hasLeadIntent = leadKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword)
+    );
+    
+    if (hasLeadIntent) {
+      return {
+        type: 'lead',
+        description: message,
+        originalMessage: message
+      };
+    }
+    
+    return null;
+  }
+
+  detectOdooTicketRequest(message) {
+    const ticketKeywords = ['support', 'help', 'issue', 'problem', 'ticket'];
+    const hasTicketIntent = ticketKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword)
+    );
+    
+    if (hasTicketIntent) {
+      return {
+        type: 'ticket',
+        subject: message.substring(0, 100),
+        description: message,
+        originalMessage: message
+      };
+    }
+    
+    return null;
+  }
+
+  // Odoo operation handlers
+  async handleOdooOrder(businessId, orderRequest, phoneNumber) {
+    try {
+      // First, search for or create customer
+      let customer = await OdooService.searchCustomer(businessId, phoneNumber);
+      
+      if (!customer) {
+        // Create new customer
+        const customerData = {
+          name: `Customer ${phoneNumber}`,
+          phone: phoneNumber,
+          email: null
+        };
+        const customerResult = await OdooService.createCustomer(businessId, customerData);
+        customer = { id: customerResult.id };
+      }
+
+      // Get products to find the right product
+      const products = await OdooService.getProducts(businessId);
+      const product = products.find(p => 
+        p.name.toLowerCase().includes(orderRequest.product.toLowerCase())
+      );
+
+      if (!product) {
+        return `❌ Sorry, I couldn't find "${orderRequest.product}" in our system. Available products: ${products.map(p => p.name).join(', ')}`;
+      }
+
+      // Create sale order
+      const orderData = {
+        partner_id: customer.id,
+        order_lines: [{
+          product_id: product.id,
+          quantity: orderRequest.quantity,
+          price_unit: product.list_price
+        }]
+      };
+
+      const orderResult = await OdooService.createSaleOrder(businessId, orderData);
+      const total = orderRequest.quantity * product.list_price;
+
+      return `✅ Order created successfully!\n\n📋 Order Details:\n• Product: ${product.name}\n• Quantity: ${orderRequest.quantity}\n• Unit Price: $${product.list_price}\n• Total: $${total}\n• Order ID: ${orderResult.id}\n\n🚚 Your order will be processed shortly. Thank you for your business!`;
+    } catch (error) {
+      console.error('Error handling Odoo order:', error);
+      throw error;
+    }
+  }
+
+  async handleOdooInvoice(businessId, invoiceRequest) {
+    try {
+      if (invoiceRequest.invoiceNumber) {
+        const invoice = await OdooService.getInvoice(businessId, invoiceRequest.invoiceNumber);
+        
+        if (invoice) {
+          return `📄 Invoice ${invoice.name}\n\n💰 Amount: $${invoice.amount_total}\n📊 Status: ${invoice.payment_state}\n State: ${invoice.state}\n\n${invoice.payment_state === 'paid' ? '✅ This invoice has been paid.' : '⏳ This invoice is still pending payment.'}`;
+        } else {
+          return `❌ Invoice ${invoiceRequest.invoiceNumber} not found. Please check the invoice number and try again.`;
+        }
+      } else {
+        return `❌ Please provide an invoice number to check the status. For example: "What's the status of invoice INV123?"`;
+      }
+    } catch (error) {
+      console.error('Error handling Odoo invoice:', error);
+      throw error;
+    }
+  }
+
+  async handleOdooLead(businessId, leadRequest, phoneNumber) {
+    try {
+      // Search for existing customer
+      let customer = await OdooService.searchCustomer(businessId, phoneNumber);
+      
+      if (!customer) {
+        // Create new customer
+        const customerData = {
+          name: `Customer ${phoneNumber}`,
+          phone: phoneNumber,
+          email: null
+        };
+        const customerResult = await OdooService.createCustomer(businessId, customerData);
+        customer = { id: customerResult.id };
+      }
+
+      // Create lead
+      const leadData = {
+        name: `Lead from WhatsApp - ${phoneNumber}`,
+        partner_name: customer.name,
+        email: customer.email,
+        phone: phoneNumber,
+        description: leadRequest.description
+      };
+
+      const leadResult = await OdooService.createLead(businessId, leadData);
+
+      return `✅ Lead created successfully!\n\n📋 Lead Details:\n• Name: ${leadData.name}\n• Contact: ${phoneNumber}\n• Description: ${leadRequest.description}\n• Lead ID: ${leadResult.id}\n\nOur sales team will follow up with you shortly. Thank you for your interest!`;
+    } catch (error) {
+      console.error('Error handling Odoo lead:', error);
+      throw error;
+    }
+  }
+
+  async handleOdooTicket(businessId, ticketRequest, phoneNumber) {
+    try {
+      // Search for existing customer
+      let customer = await OdooService.searchCustomer(businessId, phoneNumber);
+      
+      if (!customer) {
+        // Create new customer
+        const customerData = {
+          name: `Customer ${phoneNumber}`,
+          phone: phoneNumber,
+          email: null
+        };
+        const customerResult = await OdooService.createCustomer(businessId, customerData);
+        customer = { id: customerResult.id };
+      }
+
+      // Create support ticket
+      const ticketData = {
+        subject: ticketRequest.subject,
+        description: ticketRequest.description,
+        partner_id: customer.id,
+        priority: '1' // Normal priority
+      };
+
+      const ticketResult = await OdooService.createTicket(businessId, ticketData);
+
+      return `✅ Support ticket created successfully!\n\n🎫 Ticket Details:\n• Subject: ${ticketRequest.subject}\n• Description: ${ticketRequest.description}\n• Ticket ID: ${ticketResult.id}\n• Priority: Normal\n\nOur support team will review your ticket and get back to you as soon as possible. Thank you for contacting us!`;
+    } catch (error) {
+      console.error('Error handling Odoo ticket:', error);
+      throw error;
+    }
   }
 }
 

@@ -240,7 +240,8 @@ router.post('/webhook', async (req, res) => {
         localFilePath,
         conversationHistory,
         businessTone,
-        businessId
+        businessId,
+        messageData.from  // Add phone number parameter
       );
       
       console.log('AI response generated:', aiResponse);
