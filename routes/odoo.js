@@ -8,7 +8,16 @@ router.post("/config/:businessId", async (req, res) => {
     const { businessId } = req.params;
     const { instance_url, db, username, api_key } = req.body;
 
-    if (!instance_url || !db || !username || !api_key) {
+    // Check if we have an existing integration
+    const existingConfig = await odooService.getIntegration(parseInt(businessId));
+    
+    // If updating existing config and no API key provided, use the existing one
+    let finalApiKey = api_key;
+    if (existingConfig && !api_key) {
+      finalApiKey = existingConfig.api_key;
+    }
+
+    if (!instance_url || !db || !username || !finalApiKey) {
       return res.status(400).json({
         success: false,
         error: "Missing required fields: instance_url, db, username, api_key"
@@ -20,7 +29,7 @@ router.post("/config/:businessId", async (req, res) => {
       instance_url: instance_url.trim(),
       db: db.trim(),
       username: username.trim(),
-      api_key: api_key.trim(),
+      api_key: finalApiKey.trim(),
     };
 
     // Test connection before saving

@@ -21,13 +21,7 @@ class OdooService {
         updated_at = CURRENT_TIMESTAMP
       RETURNING id;
     `;
-    const values = [
-      data.business_id,
-      data.instance_url,
-      data.db,
-      data.username,
-      data.api_key,
-    ];
+    const values = [data.business_id, data.instance_url, data.db, data.username, data.api_key];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
@@ -68,7 +62,7 @@ class OdooService {
   // ---------- JSON-RPC HELPER ----------
   async makeJsonRpcCall(businessId, method, model, args = [], kwargs = {}) {
     const auth = await this.getAuthenticatedClient(businessId);
-    
+
     const payload = {
       jsonrpc: "2.0",
       method: "call",
@@ -81,15 +75,11 @@ class OdooService {
       id: Math.floor(Math.random() * 1000000),
     };
 
-    const response = await axios.post(
-      `${auth.instance_url}/jsonrpc`,
-      payload,
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const response = await axios.post(`${auth.instance_url}/jsonrpc`, payload, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
 
     if (response.data.error) {
       throw new Error(`Odoo API Error: ${response.data.error.message}`);
@@ -103,7 +93,7 @@ class OdooService {
     try {
       // Test by getting current user info
       const auth = await this.getAuthenticatedClient(businessId);
-      
+
       const payload = {
         jsonrpc: "2.0",
         method: "call",
@@ -115,15 +105,11 @@ class OdooService {
         id: 1,
       };
 
-      const response = await axios.post(
-        `${auth.instance_url}/jsonrpc`,
-        payload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await axios.post(`${auth.instance_url}/jsonrpc`, payload, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
       if (response.data.error) {
         throw new Error(`Authentication failed: ${response.data.error.message}`);
@@ -147,12 +133,7 @@ class OdooService {
       source_id: 1, // Default source - could be "WhatsApp Bot"
     };
 
-    const result = await this.makeJsonRpcCall(
-      businessId,
-      "create",
-      "crm.lead",
-      [values]
-    );
+    const result = await this.makeJsonRpcCall(businessId, "create", "crm.lead", [values]);
 
     return { id: result, success: true };
   }
@@ -176,34 +157,31 @@ class OdooService {
   async createSaleOrder(businessId, orderData) {
     const values = {
       partner_id: orderData.partner_id, // Customer ID
-      order_line: orderData.order_lines.map(line => [0, 0, {
-        product_id: line.product_id,
-        product_uom_qty: line.quantity,
-        price_unit: line.price_unit,
-      }]),
+      order_line: orderData.order_lines.map((line) => [
+        0,
+        0,
+        {
+          product_id: line.product_id,
+          product_uom_qty: line.quantity,
+          price_unit: line.price_unit,
+        },
+      ]),
     };
 
-    const result = await this.makeJsonRpcCall(
-      businessId,
-      "create",
-      "sale.order",
-      [values]
-    );
+    const result = await this.makeJsonRpcCall(businessId, "create", "sale.order", [values]);
 
     return { id: result, success: true };
   }
 
   // ---------- INVOICES ----------
   async getInvoice(businessId, invoiceRef) {
-    const invoices = await this.makeJsonRpcCall(
-      businessId,
-      "search_read",
-      "account.move",
+    const invoices = await this.makeJsonRpcCall(businessId, "search_read", "account.move", [
       [
-        [["name", "=", invoiceRef], ["move_type", "=", "out_invoice"]],
-        ["id", "name", "partner_id", "amount_total", "payment_state", "state"],
-      ]
-    );
+        ["name", "=", invoiceRef],
+        ["move_type", "=", "out_invoice"],
+      ],
+      ["id", "name", "partner_id", "amount_total", "payment_state", "state"],
+    ]);
 
     return invoices && invoices.length > 0 ? invoices[0] : null;
   }
@@ -217,12 +195,7 @@ class OdooService {
       priority: ticketData.priority || "1",
     };
 
-    const result = await this.makeJsonRpcCall(
-      businessId,
-      "create",
-      "helpdesk.ticket",
-      [values]
-    );
+    const result = await this.makeJsonRpcCall(businessId, "create", "helpdesk.ticket", [values]);
 
     return { id: result, success: true };
   }
@@ -245,15 +218,10 @@ class OdooService {
 
   // ---------- CUSTOMERS ----------
   async searchCustomer(businessId, phone) {
-    const customers = await this.makeJsonRpcCall(
-      businessId,
-      "search_read",
-      "res.partner",
-      [
-        [["phone", "=", phone]],
-        ["id", "name", "email", "phone"],
-      ]
-    );
+    const customers = await this.makeJsonRpcCall(businessId, "search_read", "res.partner", [
+      [["phone", "=", phone]],
+      ["id", "name", "email", "phone"],
+    ]);
 
     return customers && customers.length > 0 ? customers[0] : null;
   }
@@ -266,12 +234,7 @@ class OdooService {
       is_company: false,
     };
 
-    const result = await this.makeJsonRpcCall(
-      businessId,
-      "create",
-      "res.partner",
-      [values]
-    );
+    const result = await this.makeJsonRpcCall(businessId, "create", "res.partner", [values]);
 
     return { id: result, success: true };
   }
