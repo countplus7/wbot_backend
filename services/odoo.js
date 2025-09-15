@@ -359,35 +359,38 @@ class OdooService {
 
   // ---------- CHECK MODULES ----------
   async checkAvailableModules(businessId) {
-    try {
-      // Try to get available models
-      const models = await this.makeJsonRpcCall(businessId, "search", "ir.model", [
-        [["model", "in", ["product.product", "sale.order", "crm.lead", "helpdesk.ticket", "res.partner"]]],
-        ["model", "name"]
-      ]);
+    const moduleStatus = {
+      hasProducts: false,
+      hasSales: false,
+      hasCRM: false,
+      hasHelpdesk: false,
+      hasPartners: false,
+      availableModels: []
+    };
 
-      const availableModels = models.map(m => m.model);
-      
-      return {
-        hasProducts: availableModels.includes("product.product"),
-        hasSales: availableModels.includes("sale.order"),
-        hasCRM: availableModels.includes("crm.lead"),
-        hasHelpdesk: availableModels.includes("helpdesk.ticket"),
-        hasPartners: availableModels.includes("res.partner"),
-        availableModels: availableModels
-      };
-    } catch (error) {
-      console.error("Error checking available modules:", error);
-      return {
-        hasProducts: false,
-        hasSales: false,
-        hasCRM: false,
-        hasHelpdesk: false,
-        hasPartners: false,
-        availableModels: [],
-        error: error.message
-      };
+    // Test each model individually with a simple search
+    const modelsToTest = [
+      { model: "product.product", key: "hasProducts" },
+      { model: "sale.order", key: "hasSales" },
+      { model: "crm.lead", key: "hasCRM" },
+      { model: "helpdesk.ticket", key: "hasHelpdesk" },
+      { model: "res.partner", key: "hasPartners" }
+    ];
+
+    for (const { model, key } of modelsToTest) {
+      try {
+        // Just try to search with an empty domain to test if model exists
+        await this.makeJsonRpcCall(businessId, "search", model, [[]]);
+        moduleStatus[key] = true;
+        moduleStatus.availableModels.push(model);
+        console.log(`✅ ${model} is available`);
+      } catch (error) {
+        console.log(`❌ ${model} is not available: ${error.message}`);
+        moduleStatus[key] = false;
+      }
     }
+
+    return moduleStatus;
   }
 }
 
