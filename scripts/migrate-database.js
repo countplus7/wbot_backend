@@ -171,6 +171,35 @@ const migrateDatabase = async () => {
       console.log("Google Workspace integrations table already exists");
     }
 
+    // Check if odoo_integrations table exists
+    const odooIntegrationsExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'odoo_integrations'
+      );
+    `);
+
+    if (!odooIntegrationsExists.rows[0].exists) {
+      console.log("Creating odoo_integrations table...");
+      await pool.query(`
+        CREATE TABLE odoo_integrations (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          instance_url VARCHAR(500) NOT NULL,
+          db VARCHAR(100) NOT NULL,
+          username VARCHAR(255) NOT NULL,
+          api_key TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          UNIQUE(business_id)
+        )
+      `);
+      console.log("Odoo integrations table created successfully");
+    } else {
+      console.log("Odoo integrations table already exists");
+    }
+
     // Check if conversations table has business_id column
     const conversationsExists = await pool.query(`
       SELECT EXISTS (
@@ -413,6 +442,16 @@ const migrateDatabase = async () => {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_salesforce_integrations_email
       ON salesforce_integrations(email)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_odoo_integrations_business_id 
+      ON odoo_integrations(business_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_odoo_integrations_username
+      ON odoo_integrations(username)
     `);
 
     await pool.query(`

@@ -15,7 +15,8 @@ const authRoutes = require("./routes/auth");
 const whatsappRoutes = require("./routes/whatsapp");
 const businessRoutes = require("./routes/business");
 const googleRoutes = require("./routes/google");
-const salesforceRoutes = require('./routes/salesforce');
+const salesforceRoutes = require("./routes/salesforce");
+const odooRoutes = require("./routes/odoo"); // Add this line
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -252,6 +253,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/basic", businessRoutes);
 app.use("/api/google", googleRoutes);
 app.use("/api/salesforce", salesforceRoutes);
+app.use("/api/odoo", odooRoutes);
 
 // ===== ERROR HANDLING =====
 

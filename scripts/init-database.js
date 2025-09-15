@@ -13,6 +13,7 @@ const dropAllTables = async () => {
       "whatsapp_configs",
       "google_workspace_integrations",
       "salesforce_integrations",
+      "odoo_integrations", // Add this line
       "businesses",
       "users",
     ];
@@ -187,6 +188,23 @@ const createTables = async () => {
       )
     `);
     console.log("Created table: salesforce_integrations");
+
+    // Create Odoo integrations table
+    await pool.query(`
+      CREATE TABLE odoo_integrations (
+        id SERIAL PRIMARY KEY,
+        business_id INTEGER NOT NULL,
+        instance_url VARCHAR(500) NOT NULL,
+        db VARCHAR(100) NOT NULL,
+        username VARCHAR(255) NOT NULL,
+        api_key TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+        UNIQUE(business_id)
+      )
+    `);
+    console.log("Created table: odoo_integrations");
 
     console.log("Database tables created successfully");
 
