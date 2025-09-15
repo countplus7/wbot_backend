@@ -12,6 +12,7 @@ const dropAllTables = async () => {
       "business_tones",
       "whatsapp_configs",
       "google_workspace_integrations",
+      "salesforce_integrations",
       "businesses",
       "users",
     ];
@@ -164,6 +165,30 @@ const createTables = async () => {
       )
     `);
     console.log("Created table: google_workspace_integrations");
+    console.log("Created table: google_workspace_integrations");
+
+    // Create Salesforce integrations table
+    await pool.query(`
+      CREATE TABLE salesforce_integrations (
+        id SERIAL PRIMARY KEY,
+        business_id INTEGER NOT NULL,
+        provider VARCHAR(20) NOT NULL DEFAULT 'salesforce',
+        instance_url VARCHAR(500) NOT NULL,
+        user_id VARCHAR(255) NOT NULL,
+        username VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        refresh_token TEXT NOT NULL,
+        access_token TEXT,
+        expiry_date TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+        UNIQUE(business_id, provider, user_id)
+      )
+    `);
+    console.log("Created table: salesforce_integrations");
+
+    console.log("Database tables created successfully");
 
     console.log("Database tables created successfully");
   } catch (error) {

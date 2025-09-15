@@ -4,17 +4,17 @@ const migrateDatabase = async () => {
   try {
     console.log("Starting database migration for multi-tenant support...");
 
-        // Check if users table exists
-        const usersExists = await pool.query(`
+    // Check if users table exists
+    const usersExists = await pool.query(`
           SELECT EXISTS (
             SELECT FROM information_schema.tables 
             WHERE table_name = 'users'
           );
         `);
-    
-        if (!usersExists.rows[0].exists) {
-          console.log("Creating users table...");
-          await pool.query(`
+
+    if (!usersExists.rows[0].exists) {
+      console.log("Creating users table...");
+      await pool.query(`
             CREATE TABLE users (
               id SERIAL PRIMARY KEY,
               username VARCHAR(100) UNIQUE NOT NULL,
@@ -26,11 +26,11 @@ const migrateDatabase = async () => {
               updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
           `);
-          console.log("Users table created successfully");
-        } else {
-          console.log("Users table already exists");
-        }
-    
+      console.log("Users table created successfully");
+    } else {
+      console.log("Users table already exists");
+    }
+
     // Check if businesses table exists
     const businessesExists = await pool.query(`
       SELECT EXISTS (
@@ -52,6 +52,39 @@ const migrateDatabase = async () => {
         )
       `);
     } else {
+    }
+
+    // Check if salesforce_integrations table exists
+    const salesforceIntegrationsExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'salesforce_integrations'
+      );
+    `);
+
+    if (!salesforceIntegrationsExists.rows[0].exists) {
+      console.log("Creating salesforce_integrations table...");
+      await pool.query(`
+        CREATE TABLE salesforce_integrations (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          provider VARCHAR(20) NOT NULL DEFAULT 'salesforce',
+          instance_url VARCHAR(500) NOT NULL,
+          user_id VARCHAR(255) NOT NULL,
+          username VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          refresh_token TEXT NOT NULL,
+          access_token TEXT,
+          expiry_date TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          UNIQUE(business_id, provider, user_id)
+        )
+      `);
+      console.log("Salesforce integrations table created successfully");
+    } else {
+      console.log("Salesforce integrations table already exists");
       console.log("Businesses table already exists");
     }
 
@@ -346,7 +379,7 @@ const migrateDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_users_status 
       ON users(status)
     `);
-    
+
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_businesses_status 
       ON businesses(status)
@@ -367,10 +400,20 @@ const migrateDatabase = async () => {
       ON google_workspace_integrations(business_id)
     `);
 
-    // await pool.query(`
-    //   CREATE INDEX IF NOT EXISTS idx_google_workspace_integrations_email
-    //   ON google_workspace_integrations(email)
-    // `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_google_workspace_integrations_email
+      ON google_workspace_integrations(email)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_salesforce_integrations_business_id 
+      ON salesforce_integrations(business_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_salesforce_integrations_email
+      ON salesforce_integrations(email)
+    `);
 
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_conversations_business_id 
