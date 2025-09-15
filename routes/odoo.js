@@ -48,16 +48,20 @@ router.get("/config/:businessId", async (req, res) => {
     if (config) {
       res.json({
         success: true,
-        isIntegrated: true,
-        instance_url: config.instance_url,
-        db: config.db,
-        username: config.username,
-        lastUpdated: config.updated_at
+        data: {
+          isIntegrated: true,
+          instance_url: config.instance_url,
+          db: config.db,
+          username: config.username,
+          lastUpdated: config.updated_at
+        }
       });
     } else {
       res.json({
         success: true,
-        isIntegrated: false
+        data: {
+          isIntegrated: false
+        }
       });
     }
   } catch (error) {
