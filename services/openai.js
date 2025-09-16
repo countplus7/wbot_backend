@@ -1044,7 +1044,11 @@ class OpenAIService {
 
       // Check if sales module is available for creating orders
       if (!modules.hasSales) {
-        return `✅ Product found: ${product.name} ($${product.list_price})\n\n❌ However, the Sales module is not installed, so I cannot create an order. Please install the Sales module in your Odoo system to enable order processing.\n\nProduct details:\n• Name: ${product.name}\n• Price: $${product.list_price}\n• Available quantity: ${product.qty_available}`;
+        const quantityInfo = product.qty_available !== undefined ? 
+          `\n• Available quantity: ${product.qty_available}` : 
+          `\n• Quantity info: Not available (Inventory module not installed)`;
+        
+        return `✅ Product found: ${product.name} ($${product.list_price})\n\n❌ However, the Sales module is not installed, so I cannot create an order. Please install the Sales module in your Odoo system to enable order processing.\n\nProduct details:\n• Name: ${product.name}\n• Price: $${product.list_price}${quantityInfo}`;
       }
 
       // Create sale order

@@ -314,22 +314,53 @@ class OdooService {
   // ---------- PRODUCTS ----------
   async getProducts(businessId, limit = 100) {
     try {
-      const products = await this.makeJsonRpcCall(
-        businessId,
-        "search_read",
-        "product.product",
-        [
-          [["sale_ok", "=", true]], // Only products that can be sold
-          ["id", "name", "list_price", "qty_available"],
-        ],
-        { limit }
-      );
+      // First try with basic fields only
+      let products;
+      try {
+        products = await this.makeJsonRpcCall(
+          businessId,
+          "search_read",
+          "product.product",
+          [
+            [["sale_ok", "=", true]], // Only products that can be sold
+            ["id", "name", "list_price"], // Basic fields that should always exist
+          ],
+          { limit }
+        );
+      } catch (fieldError) {
+        if (fieldError.message.includes("Invalid field")) {
+          // If even basic fields fail, try with minimal fields
+          products = await this.makeJsonRpcCall(
+            businessId,
+            "search_read",
+            "product.product",
+            [
+              [["sale_ok", "=", true]],
+              ["id", "name"], // Absolute minimum fields
+            ],
+            { limit }
+          );
+          
+          // Add default price for products without price field
+          products = products.map(product => ({
+            ...product,
+            list_price: 0 // Default price if list_price field is not available
+          }));
+        } else {
+          throw fieldError;
+        }
+      }
 
       return products || [];
     } catch (error) {
       if (error.message.includes("Object product.product doesn't exist")) {
         throw new Error("Sales module is not installed in this Odoo instance. Please install the Sales module to enable product management.");
       }
+      
+      if (error.message.includes("Invalid field")) {
+        throw new Error("Product fields are not accessible. This might indicate missing modules or insufficient permissions in Odoo.");
+      }
+      
       throw error;
     }
   }
