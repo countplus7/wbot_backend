@@ -241,25 +241,19 @@ class GoogleService {
     }
   }
 
-
   // Gmail reading methods
   async getEmails(businessId, options = {}) {
     try {
       const gmail = await this.getGmailService(businessId);
-      
-      const {
-        maxResults = 10,
-        labelIds = ['INBOX'],
-        query = '',
-        includeSpamTrash = false
-      } = options;
+
+      const { maxResults = 10, labelIds = ["INBOX"], query = "", includeSpamTrash = false } = options;
 
       const response = await gmail.users.messages.list({
-        userId: 'me',
+        userId: "me",
         maxResults,
         labelIds,
         q: query,
-        includeSpamTrash
+        includeSpamTrash,
       });
 
       if (!response.data.messages) {
@@ -284,16 +278,16 @@ class GoogleService {
   async getEmailById(businessId, messageId) {
     try {
       const gmail = await this.getGmailService(businessId);
-      
+
       const response = await gmail.users.messages.get({
-        userId: 'me',
+        userId: "me",
         id: messageId,
-        format: 'full'
+        format: "full",
       });
 
       const message = response.data;
       const headers = message.payload.headers;
-      
+
       // Extract common email properties
       const email = {
         id: message.id,
@@ -301,14 +295,14 @@ class GoogleService {
         labelIds: message.labelIds,
         snippet: message.snippet,
         internalDate: new Date(parseInt(message.internalDate)),
-        subject: this.getHeader(headers, 'Subject'),
-        from: this.getHeader(headers, 'From'),
-        to: this.getHeader(headers, 'To'),
-        cc: this.getHeader(headers, 'Cc'),
-        bcc: this.getHeader(headers, 'Bcc'),
-        date: this.getHeader(headers, 'Date'),
+        subject: this.getHeader(headers, "Subject"),
+        from: this.getHeader(headers, "From"),
+        to: this.getHeader(headers, "To"),
+        cc: this.getHeader(headers, "Cc"),
+        bcc: this.getHeader(headers, "Bcc"),
+        date: this.getHeader(headers, "Date"),
         body: this.extractEmailBody(message.payload),
-        attachments: await this.extractAttachments(businessId, message.payload, messageId)
+        attachments: await this.extractAttachments(businessId, message.payload, messageId),
       };
 
       return email;
@@ -321,31 +315,29 @@ class GoogleService {
   async getUnreadEmails(businessId, maxResults = 10) {
     return this.getEmails(businessId, {
       maxResults,
-      query: 'is:unread',
-      labelIds: ['INBOX']
+      query: "is:unread",
+      labelIds: ["INBOX"],
     });
   }
 
   async getEmailsByLabel(businessId, labelName, maxResults = 10) {
     try {
       const gmail = await this.getGmailService(businessId);
-      
+
       // Get all labels to find the label ID
       const labelsResponse = await gmail.users.labels.list({
-        userId: 'me'
+        userId: "me",
       });
-      
-      const label = labelsResponse.data.labels.find(l => 
-        l.name.toLowerCase() === labelName.toLowerCase()
-      );
-      
+
+      const label = labelsResponse.data.labels.find((l) => l.name.toLowerCase() === labelName.toLowerCase());
+
       if (!label) {
         throw new Error(`Label "${labelName}" not found`);
       }
 
       return this.getEmails(businessId, {
         maxResults,
-        labelIds: [label.id]
+        labelIds: [label.id],
       });
     } catch (error) {
       console.error("Error getting emails by label:", error);
@@ -356,20 +348,20 @@ class GoogleService {
   async searchEmails(businessId, searchQuery, maxResults = 10) {
     return this.getEmails(businessId, {
       maxResults,
-      query: searchQuery
+      query: searchQuery,
     });
   }
 
   async markEmailAsRead(businessId, messageId) {
     try {
       const gmail = await this.getGmailService(businessId);
-      
+
       await gmail.users.messages.modify({
-        userId: 'me',
+        userId: "me",
         id: messageId,
         requestBody: {
-          removeLabelIds: ['UNREAD']
-        }
+          removeLabelIds: ["UNREAD"],
+        },
       });
 
       return { success: true };
@@ -382,13 +374,13 @@ class GoogleService {
   async markEmailAsUnread(businessId, messageId) {
     try {
       const gmail = await this.getGmailService(businessId);
-      
+
       await gmail.users.messages.modify({
-        userId: 'me',
+        userId: "me",
         id: messageId,
         requestBody: {
-          addLabelIds: ['UNREAD']
-        }
+          addLabelIds: ["UNREAD"],
+        },
       });
 
       return { success: true };
@@ -400,22 +392,22 @@ class GoogleService {
 
   // Helper methods for email parsing
   getHeader(headers, name) {
-    const header = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
+    const header = headers.find((h) => h.name.toLowerCase() === name.toLowerCase());
     return header ? header.value : null;
   }
 
   extractEmailBody(payload) {
-    let body = '';
-    
+    let body = "";
+
     if (payload.body && payload.body.data) {
-      body = Buffer.from(payload.body.data, 'base64').toString('utf-8');
+      body = Buffer.from(payload.body.data, "base64").toString("utf-8");
     } else if (payload.parts) {
       for (const part of payload.parts) {
-        if (part.mimeType === 'text/plain' && part.body && part.body.data) {
-          body = Buffer.from(part.body.data, 'base64').toString('utf-8');
+        if (part.mimeType === "text/plain" && part.body && part.body.data) {
+          body = Buffer.from(part.body.data, "base64").toString("utf-8");
           break;
-        } else if (part.mimeType === 'text/html' && part.body && part.body.data && !body) {
-          body = Buffer.from(part.body.data, 'base64').toString('utf-8');
+        } else if (part.mimeType === "text/html" && part.body && part.body.data && !body) {
+          body = Buffer.from(part.body.data, "base64").toString("utf-8");
         } else if (part.parts) {
           // Recursive search for nested parts
           const nestedBody = this.extractEmailBody(part);
@@ -423,13 +415,13 @@ class GoogleService {
         }
       }
     }
-    
+
     return body;
   }
 
   async extractAttachments(businessId, payload, messageId) {
     const attachments = [];
-    
+
     if (payload.parts) {
       for (const part of payload.parts) {
         if (part.filename && part.body && part.body.attachmentId) {
@@ -438,10 +430,10 @@ class GoogleService {
             mimeType: part.mimeType,
             size: part.body.size,
             attachmentId: part.body.attachmentId,
-            messageId: messageId
+            messageId: messageId,
           });
         }
-        
+
         // Check nested parts
         if (part.parts) {
           const nestedAttachments = await this.extractAttachments(businessId, part, messageId);
@@ -449,43 +441,27 @@ class GoogleService {
         }
       }
     }
-    
+
     return attachments;
   }
 
   async downloadAttachment(businessId, messageId, attachmentId) {
     try {
       const gmail = await this.getGmailService(businessId);
-      
+
       const response = await gmail.users.messages.attachments.get({
-        userId: 'me',
+        userId: "me",
         messageId: messageId,
-        id: attachmentId
+        id: attachmentId,
       });
 
-      return Buffer.from(response.data.data, 'base64');
+      return Buffer.from(response.data.data, "base64");
     } catch (error) {
       console.error("Error downloading attachment:", error);
       throw new Error("Failed to download email attachment");
     }
   }
 
-  async getConfig(businessId) {
-    try {
-      const connection = await pool.getConnection();
-      const [rows] = await connection.execute(
-        'SELECT * FROM google_workspace_configs WHERE business_id = ?',
-        [businessId]
-      );
-      connection.release();
-      
-      return rows.length > 0 ? rows[0] : null;
-    } catch (error) {
-      console.error('Error getting Google config:', error);
-      throw new Error('Failed to get Google Workspace configuration');
-    }
-  }
-  
   // Calendar integration methods
   async getCalendarService(businessId) {
     const auth = await this.getAuthenticatedClient(businessId);
@@ -526,21 +502,21 @@ class GoogleService {
   async getCalendarEvents(businessId, options = {}) {
     try {
       const calendar = await this.getCalendarService(businessId);
-      
+
       const {
         maxResults = 10,
         timeMin = new Date().toISOString(),
         timeMax = null,
         singleEvents = true,
-        orderBy = 'startTime'
+        orderBy = "startTime",
       } = options;
 
       const params = {
-        calendarId: 'primary',
+        calendarId: "primary",
         timeMin,
         maxResults,
         singleEvents,
-        orderBy
+        orderBy,
       };
 
       if (timeMax) {
@@ -563,17 +539,17 @@ class GoogleService {
     return this.getCalendarEvents(businessId, {
       timeMin: startDate,
       timeMax: endDate,
-      maxResults
+      maxResults,
     });
   }
 
   async getEventById(businessId, eventId) {
     try {
       const calendar = await this.getCalendarService(businessId);
-      
+
       const response = await calendar.events.get({
-        calendarId: 'primary',
-        eventId: eventId
+        calendarId: "primary",
+        eventId: eventId,
       });
 
       return response.data;
@@ -617,10 +593,10 @@ class GoogleService {
   async deleteCalendarEvent(businessId, eventId) {
     try {
       const calendar = await this.getCalendarService(businessId);
-      
+
       await calendar.events.delete({
-        calendarId: 'primary',
-        eventId: eventId
+        calendarId: "primary",
+        eventId: eventId,
       });
 
       return { success: true };
@@ -633,13 +609,13 @@ class GoogleService {
   async searchCalendarEvents(businessId, query, maxResults = 10) {
     try {
       const calendar = await this.getCalendarService(businessId);
-      
+
       const response = await calendar.events.list({
-        calendarId: 'primary',
+        calendarId: "primary",
         q: query,
         maxResults,
         singleEvents: true,
-        orderBy: 'startTime'
+        orderBy: "startTime",
       });
 
       return response.data.items || [];
@@ -657,26 +633,26 @@ class GoogleService {
   async checkAvailability(businessId, startTime, endTime) {
     try {
       const calendar = await this.getCalendarService(businessId);
-      
+
       const response = await calendar.events.list({
-        calendarId: 'primary',
+        calendarId: "primary",
         timeMin: startTime,
         timeMax: endTime,
         singleEvents: true,
-        orderBy: 'startTime'
+        orderBy: "startTime",
       });
 
-      const conflictingEvents = (response.data.items || []).map(event => ({
+      const conflictingEvents = (response.data.items || []).map((event) => ({
         start: event.start.dateTime || event.start.date,
         end: event.end.dateTime || event.end.date,
-        summary: event.summary || 'Busy'
+        summary: event.summary || "Busy",
       }));
 
       return {
         isAvailable: conflictingEvents.length === 0,
         conflictingEvents,
         startTime,
-        endTime
+        endTime,
       };
     } catch (error) {
       console.error("Error checking availability:", error);
@@ -689,51 +665,51 @@ class GoogleService {
    */
   async findAvailableSlots(businessId, date, durationMinutes = 60, options = {}) {
     try {
-      const { startHour = 9, endHour = 17, timeZone = 'UTC' } = options;
+      const { startHour = 9, endHour = 17, timeZone = "UTC" } = options;
       const calendar = await this.getCalendarService(businessId);
-      
+
       // Get all events for the specified date
       const startOfDay = new Date(date);
       startOfDay.setHours(startHour, 0, 0, 0);
-      
+
       const endOfDay = new Date(date);
       endOfDay.setHours(endHour, 0, 0, 0);
 
       const response = await calendar.events.list({
-        calendarId: 'primary',
+        calendarId: "primary",
         timeMin: startOfDay.toISOString(),
         timeMax: endOfDay.toISOString(),
         singleEvents: true,
-        orderBy: 'startTime'
+        orderBy: "startTime",
       });
 
       const events = response.data.items || [];
       const availableSlots = [];
-      
+
       // Generate time slots and check availability
       const currentTime = new Date(startOfDay);
       while (currentTime < endOfDay) {
         const slotStart = new Date(currentTime);
         const slotEnd = new Date(currentTime.getTime() + durationMinutes * 60000);
-        
+
         if (slotEnd <= endOfDay) {
           // Check if this slot conflicts with any events
-          const hasConflict = events.some(event => {
+          const hasConflict = events.some((event) => {
             const eventStart = new Date(event.start.dateTime || event.start.date);
             const eventEnd = new Date(event.end.dateTime || event.end.date);
-            
-            return (slotStart < eventEnd && slotEnd > eventStart);
+
+            return slotStart < eventEnd && slotEnd > eventStart;
           });
-          
+
           if (!hasConflict) {
             availableSlots.push({
               start: slotStart.toISOString(),
               end: slotEnd.toISOString(),
-              duration: durationMinutes
+              duration: durationMinutes,
             });
           }
         }
-        
+
         // Move to next hour
         currentTime.setHours(currentTime.getHours() + 1);
       }
@@ -742,7 +718,7 @@ class GoogleService {
         date,
         duration: durationMinutes,
         availableSlots,
-        count: availableSlots.length
+        count: availableSlots.length,
       };
     } catch (error) {
       console.error("Error finding available slots:", error);
@@ -756,41 +732,41 @@ class GoogleService {
   async createMeetingEvent(businessId, eventData) {
     try {
       const calendar = await this.getCalendarService(businessId);
-      
+
       const event = {
         summary: eventData.title,
-        description: eventData.description || '',
+        description: eventData.description || "",
         start: {
           dateTime: eventData.startTime,
-          timeZone: eventData.timeZone || 'UTC'
+          timeZone: eventData.timeZone || "UTC",
         },
         end: {
           dateTime: eventData.endTime,
-          timeZone: eventData.timeZone || 'UTC'
+          timeZone: eventData.timeZone || "UTC",
         },
-        attendees: eventData.attendees ? eventData.attendees.map(email => ({ email })) : [],
-        location: eventData.location || '',
+        attendees: eventData.attendees ? eventData.attendees.map((email) => ({ email })) : [],
+        location: eventData.location || "",
         conferenceData: {
           createRequest: {
             requestId: `meet-${Date.now()}`,
             conferenceSolutionKey: {
-              type: 'hangoutsMeet'
-            }
-          }
+              type: "hangoutsMeet",
+            },
+          },
         },
         reminders: {
           useDefault: false,
           overrides: [
-            { method: 'email', minutes: 24 * 60 },
-            { method: 'popup', minutes: 10 }
-          ]
-        }
+            { method: "email", minutes: 24 * 60 },
+            { method: "popup", minutes: 10 },
+          ],
+        },
       };
 
       const response = await calendar.events.insert({
-        calendarId: 'primary',
+        calendarId: "primary",
         resource: event,
-        conferenceDataVersion: 1
+        conferenceDataVersion: 1,
       });
 
       const createdEvent = response.data;
@@ -798,7 +774,7 @@ class GoogleService {
 
       return {
         ...createdEvent,
-        meetingLink
+        meetingLink,
       };
     } catch (error) {
       console.error("Error creating meeting event:", error);
@@ -812,30 +788,30 @@ class GoogleService {
   async createReminder(businessId, reminderData) {
     try {
       const calendar = await this.getCalendarService(businessId);
-      
+
       const event = {
         summary: reminderData.title,
-        description: reminderData.description || '',
+        description: reminderData.description || "",
         start: {
           dateTime: reminderData.reminderTime,
-          timeZone: reminderData.timeZone || 'UTC'
+          timeZone: reminderData.timeZone || "UTC",
         },
         end: {
           dateTime: new Date(new Date(reminderData.reminderTime).getTime() + 15 * 60000).toISOString(),
-          timeZone: reminderData.timeZone || 'UTC'
+          timeZone: reminderData.timeZone || "UTC",
         },
         reminders: {
           useDefault: false,
           overrides: [
-            { method: 'email', minutes: 0 },
-            { method: 'popup', minutes: 0 }
-          ]
-        }
+            { method: "email", minutes: 0 },
+            { method: "popup", minutes: 0 },
+          ],
+        },
       };
 
       const response = await calendar.events.insert({
-        calendarId: 'primary',
-        resource: event
+        calendarId: "primary",
+        resource: event,
       });
 
       return response.data;
@@ -851,25 +827,25 @@ class GoogleService {
   async getDaySchedule(businessId, date) {
     try {
       const calendar = await this.getCalendarService(businessId);
-      
+
       const startOfDay = new Date(date);
       startOfDay.setHours(0, 0, 0, 0);
-      
+
       const endOfDay = new Date(date);
       endOfDay.setHours(23, 59, 59, 999);
 
       const response = await calendar.events.list({
-        calendarId: 'primary',
+        calendarId: "primary",
         timeMin: startOfDay.toISOString(),
         timeMax: endOfDay.toISOString(),
         singleEvents: true,
-        orderBy: 'startTime'
+        orderBy: "startTime",
       });
 
       const events = response.data.items || [];
       let totalBusyMinutes = 0;
 
-      events.forEach(event => {
+      events.forEach((event) => {
         const start = new Date(event.start.dateTime || event.start.date);
         const end = new Date(event.end.dateTime || event.end.date);
         const duration = (end - start) / (1000 * 60); // Convert to minutes
@@ -887,8 +863,8 @@ class GoogleService {
           totalEvents: events.length,
           totalBusyMinutes: Math.round(totalBusyMinutes),
           totalFreeMinutes: Math.round(totalFreeMinutes),
-          busyPercentage
-        }
+          busyPercentage,
+        },
       };
     } catch (error) {
       console.error("Error getting day schedule:", error);
@@ -901,17 +877,17 @@ class GoogleService {
    */
   async getNextAvailableSlot(businessId, durationMinutes = 60, options = {}) {
     try {
-      const { startDate, maxDays = 30, startHour = 9, endHour = 17, timeZone = 'UTC' } = options;
-      
+      const { startDate, maxDays = 30, startHour = 9, endHour = 17, timeZone = "UTC" } = options;
+
       let searchDate = startDate ? new Date(startDate) : new Date();
       const endSearchDate = new Date(searchDate.getTime() + maxDays * 24 * 60 * 60 * 1000);
 
       while (searchDate <= endSearchDate) {
-        const dateStr = searchDate.toISOString().split('T')[0];
+        const dateStr = searchDate.toISOString().split("T")[0];
         const availableSlots = await this.findAvailableSlots(businessId, dateStr, durationMinutes, {
           startHour,
           endHour,
-          timeZone
+          timeZone,
         });
 
         if (availableSlots.availableSlots.length > 0) {
@@ -919,7 +895,7 @@ class GoogleService {
             date: dateStr,
             availableSlots: availableSlots.availableSlots,
             nextSlot: availableSlots.availableSlots[0],
-            message: `Found ${availableSlots.availableSlots.length} available slots on ${dateStr}`
+            message: `Found ${availableSlots.availableSlots.length} available slots on ${dateStr}`,
           };
         }
 
@@ -930,7 +906,7 @@ class GoogleService {
         date: null,
         availableSlots: [],
         nextSlot: null,
-        message: `No available slots found in the next ${maxDays} days`
+        message: `No available slots found in the next ${maxDays} days`,
       };
     } catch (error) {
       console.error("Error getting next available slot:", error);
@@ -945,7 +921,7 @@ class GoogleService {
     try {
       const results = {
         created: [],
-        failed: []
+        failed: [],
       };
 
       for (const eventData of events) {
@@ -955,7 +931,7 @@ class GoogleService {
         } catch (error) {
           results.failed.push({
             eventData,
-            error: error.message
+            error: error.message,
           });
         }
       }
@@ -975,7 +951,7 @@ class GoogleService {
       const results = {
         deleted: 0,
         failed: 0,
-        errors: []
+        errors: [],
       };
 
       for (const eventId of eventIds) {
@@ -986,7 +962,7 @@ class GoogleService {
           results.failed++;
           results.errors.push({
             eventId,
-            error: error.message
+            error: error.message,
           });
         }
       }
@@ -1080,10 +1056,10 @@ class GoogleService {
   }
 
   // FAQ integration methods
-  async getFAQs(businessId, spreadsheetId, range = 'Sheet1!A:B') {
+  async getFAQs(businessId, spreadsheetId, range = "Sheet1!A:B") {
     try {
       console.log(`Getting FAQs from spreadsheet: ${spreadsheetId}, range: ${range}`);
-      
+
       const sheets = await this.getSheetsService(businessId);
 
       const result = await sheets.spreadsheets.values.get({
@@ -1092,16 +1068,17 @@ class GoogleService {
       });
 
       const rows = result.data.values || [];
-      
+
       // Convert to FAQ objects (assuming first row is headers: Question | Answer)
       const faqs = [];
-      for (let i = 1; i < rows.length; i++) { // Skip header row
+      for (let i = 1; i < rows.length; i++) {
+        // Skip header row
         const row = rows[i];
         if (row.length >= 2 && row[0] && row[1]) {
           faqs.push({
             question: row[0].trim(),
             answer: row[1].trim(),
-            index: i
+            index: i,
           });
         }
       }
@@ -1114,10 +1091,10 @@ class GoogleService {
     }
   }
 
-  async searchFAQs(businessId, spreadsheetId, userQuestion, range = 'Sheet1!A:B') {
+  async searchFAQs(businessId, spreadsheetId, userQuestion, range = "Sheet1!A:B") {
     try {
       const faqs = await this.getFAQs(businessId, spreadsheetId, range);
-      
+
       if (faqs.length === 0) {
         return null;
       }
@@ -1129,21 +1106,22 @@ class GoogleService {
 
       for (const faq of faqs) {
         const questionLower = faq.question.toLowerCase();
-        
+
         // Calculate similarity score based on common words
-        const userWords = userQuestionLower.split(/\s+/).filter(word => word.length > 2);
-        const faqWords = questionLower.split(/\s+/).filter(word => word.length > 2);
-        
+        const userWords = userQuestionLower.split(/\s+/).filter((word) => word.length > 2);
+        const faqWords = questionLower.split(/\s+/).filter((word) => word.length > 2);
+
         let commonWords = 0;
         for (const userWord of userWords) {
-          if (faqWords.some(faqWord => faqWord.includes(userWord) || userWord.includes(faqWord))) {
+          if (faqWords.some((faqWord) => faqWord.includes(userWord) || userWord.includes(faqWord))) {
             commonWords++;
           }
         }
-        
+
         const score = commonWords / Math.max(userWords.length, faqWords.length);
-        
-        if (score > highestScore && score > 0.2) { // Minimum threshold
+
+        if (score > highestScore && score > 0.2) {
+          // Minimum threshold
           highestScore = score;
           bestMatch = faq;
         }
@@ -1153,7 +1131,7 @@ class GoogleService {
         console.log(`Found FAQ match with score ${highestScore}:`, bestMatch.question);
         return {
           ...bestMatch,
-          matchScore: highestScore
+          matchScore: highestScore,
         };
       }
 
