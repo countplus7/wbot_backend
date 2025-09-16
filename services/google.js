@@ -1141,6 +1141,20 @@ class GoogleService {
       throw new Error("Failed to search FAQ Google Sheet");
     }
   }
+
+  async getConfig(businessId) {
+    try {
+      const result = await pool.query(
+        "SELECT * FROM google_workspace_configs WHERE business_id = $1",
+        [businessId]
+      );
+
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } catch (error) {
+      console.error('Error getting Google config:', error);
+      throw new Error('Failed to get Google Workspace configuration');
+    }
+  }
 }
 
 module.exports = new GoogleService();

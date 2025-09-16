@@ -233,13 +233,12 @@ class BusinessService {
 
   async getGoogleWorkspaceConfig(businessId) {
     try {
-      const connection = await pool.getConnection();
-      const [rows] = await connection.execute("SELECT * FROM google_workspace_configs WHERE business_id = ?", [
-        businessId,
-      ]);
-      connection.release();
+      const result = await pool.query(
+        "SELECT * FROM google_workspace_configs WHERE business_id = $1",
+        [businessId]
+      );
 
-      return rows.length > 0 ? rows[0] : null;
+      return result.rows.length > 0 ? result.rows[0] : null;
     } catch (error) {
       console.error("Error getting Google config:", error);
       throw new Error("Failed to get Google Workspace configuration");

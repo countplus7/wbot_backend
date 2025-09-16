@@ -242,7 +242,7 @@ router.post('/webhook', async (req, res) => {
           if (googleConfig && googleConfig.faq_spreadsheet_id) {
             console.log('Searching FAQs in spreadsheet:', googleConfig.faq_spreadsheet_id);
             
-            const faqMatch = await BusinessService.searchFAQs(
+            const faqMatch = await GoogleService.searchFAQs(
               businessId, 
               googleConfig.faq_spreadsheet_id, 
               messageData.content,
