@@ -1868,4 +1868,4 @@ Guidelines:
   }
 }
 
-module.exports = OpenAIService;
+module.exports = new OpenAIService();
