@@ -227,6 +227,67 @@ router.post('/webhook', async (req, res) => {
       }
     }
 
+    // Check for FAQ intent before general AI processing
+    if (messageData.messageType === 'text' && messageData.content) {
+      try {
+        console.log('Checking for FAQ intent...');
+        const faqIntent = await OpenAIService.detectFAQIntent(messageData.content);
+        
+        if (faqIntent && faqIntent.isFAQ) {
+          console.log('FAQ intent detected:', faqIntent);
+          
+          // Get Google Workspace config to find FAQ spreadsheet
+          const googleConfig = await BusinessService.getGoogleWorkspaceConfig(businessId);
+          
+          if (googleConfig && googleConfig.faq_spreadsheet_id) {
+            console.log('Searching FAQs in spreadsheet:', googleConfig.faq_spreadsheet_id);
+            
+            const faqMatch = await BusinessService.searchFAQs(
+              businessId, 
+              googleConfig.faq_spreadsheet_id, 
+              messageData.content,
+              googleConfig.faq_range || 'Sheet1!A:B'
+            );
+            
+            if (faqMatch && faqMatch.matchScore > 0.3) {
+              console.log('FAQ answer found:', faqMatch);
+              
+              // Save the FAQ response to database
+              await DatabaseService.saveMessage({
+                businessId: businessId,
+                conversationId: conversation.id,
+                messageId: `faq_${Date.now()}`,
+                fromNumber: messageData.to, // From business
+                toNumber: messageData.from, // To user
+                messageType: 'text',
+                content: faqMatch.answer,
+                mediaUrl: null,
+                localFilePath: null,
+                isFromUser: false
+              });
+
+              // Send the FAQ response via WhatsApp
+              try {
+                const response = await WhatsAppService.sendTextMessage(messageData.from, faqMatch.answer);
+                console.log('FAQ response sent successfully:', response);
+              } catch (whatsappError) {
+                console.error('Error sending FAQ response:', whatsappError);
+              }
+              
+              return res.status(200).send('OK');
+            } else {
+              console.log('No suitable FAQ match found, continuing with AI processing');
+            }
+          } else {
+            console.log('No FAQ spreadsheet configured, continuing with AI processing');
+          }
+        }
+      } catch (faqError) {
+        console.error('Error processing FAQ:', faqError);
+        // Continue with regular AI processing if FAQ processing fails
+      }
+    }
+
     // Generate AI response (existing code)
     try {
       const conversationHistory = await DatabaseService.getConversationHistoryForAI(conversation.id);

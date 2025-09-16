@@ -1061,6 +1061,91 @@ class GoogleService {
       throw new Error("Failed to download Google Drive file");
     }
   }
+
+  // FAQ integration methods
+  async getFAQs(businessId, spreadsheetId, range = 'Sheet1!A:B') {
+    try {
+      console.log(`Getting FAQs from spreadsheet: ${spreadsheetId}, range: ${range}`);
+      
+      const sheets = await this.getSheetsService(businessId);
+
+      const result = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range,
+      });
+
+      const rows = result.data.values || [];
+      
+      // Convert to FAQ objects (assuming first row is headers: Question | Answer)
+      const faqs = [];
+      for (let i = 1; i < rows.length; i++) { // Skip header row
+        const row = rows[i];
+        if (row.length >= 2 && row[0] && row[1]) {
+          faqs.push({
+            question: row[0].trim(),
+            answer: row[1].trim(),
+            index: i
+          });
+        }
+      }
+
+      console.log(`Found ${faqs.length} FAQs in spreadsheet`);
+      return faqs;
+    } catch (error) {
+      console.error("Error reading FAQ sheet:", error);
+      throw new Error("Failed to read FAQ Google Sheet");
+    }
+  }
+
+  async searchFAQs(businessId, spreadsheetId, userQuestion, range = 'Sheet1!A:B') {
+    try {
+      const faqs = await this.getFAQs(businessId, spreadsheetId, range);
+      
+      if (faqs.length === 0) {
+        return null;
+      }
+
+      // Simple keyword matching for FAQ search
+      const userQuestionLower = userQuestion.toLowerCase();
+      let bestMatch = null;
+      let highestScore = 0;
+
+      for (const faq of faqs) {
+        const questionLower = faq.question.toLowerCase();
+        
+        // Calculate similarity score based on common words
+        const userWords = userQuestionLower.split(/\s+/).filter(word => word.length > 2);
+        const faqWords = questionLower.split(/\s+/).filter(word => word.length > 2);
+        
+        let commonWords = 0;
+        for (const userWord of userWords) {
+          if (faqWords.some(faqWord => faqWord.includes(userWord) || userWord.includes(faqWord))) {
+            commonWords++;
+          }
+        }
+        
+        const score = commonWords / Math.max(userWords.length, faqWords.length);
+        
+        if (score > highestScore && score > 0.2) { // Minimum threshold
+          highestScore = score;
+          bestMatch = faq;
+        }
+      }
+
+      if (bestMatch) {
+        console.log(`Found FAQ match with score ${highestScore}:`, bestMatch.question);
+        return {
+          ...bestMatch,
+          matchScore: highestScore
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error searching FAQs:", error);
+      throw new Error("Failed to search FAQ Google Sheet");
+    }
+  }
 }
 
 module.exports = new GoogleService();

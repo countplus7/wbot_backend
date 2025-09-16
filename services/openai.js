@@ -1866,6 +1866,80 @@ Guidelines:
       return `❌ Sorry, I encountered an error with your general request. Please try again.`;
     }
   }
+
+  /**
+   * Detect if a message is a FAQ question
+   */
+  async detectFAQIntent(message) {
+    try {
+      console.log('FAQ Intent Detection - Input message:', message);
+      
+      const systemPrompt = `You are an AI assistant that determines if a customer message is asking a Frequently Asked Question (FAQ).
+      
+Your task is to analyze the customer's message and determine if it's:
+1. A question seeking information about products, services, policies, or procedures
+2. A request for general information that could be answered by an FAQ
+3. NOT a request for specific account information, orders, or personal data
+4. NOT a complex inquiry requiring human intervention
+
+Return a JSON response with:
+- isFAQ: boolean (true if this is a FAQ-type question)
+- confidence: number (0.0 to 1.0, confidence level)
+- questionType: string ("product", "service", "policy", "procedure", "pricing", "general", or "other")
+
+Examples of FAQ questions:
+- "What are your business hours?"
+- "How do I return a product?"
+- "What payment methods do you accept?"
+- "Do you offer delivery?"
+- "What is your refund policy?"
+
+Examples of NON-FAQ questions:
+- "What's the status of my order #123?"
+- "I want to place an order for 3 pizzas"
+- "Can you update my account information?"
+- "I have a problem with my recent purchase"
+
+Return ONLY valid JSON.`;
+
+      const userPrompt = `Analyze this customer message: "${message}"
+
+Determine if this is a FAQ-type question.`;
+
+      console.log('FAQ Intent Detection - Making API call to OpenAI');
+      
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 200
+      });
+
+      console.log('FAQ Intent Detection - Raw response:', response.choices[0].message.content);
+      
+      const result = JSON.parse(response.choices[0].message.content);
+      
+      console.log('FAQ Intent Detection - Parsed result:', result);
+      
+      // Only return FAQ intent with high confidence
+      if (result.isFAQ && result.confidence >= 0.7) {
+        return {
+          ...result,
+          originalMessage: message
+        };
+      }
+      
+      console.log('FAQ Intent Detection - Not a FAQ or low confidence');
+      return null;
+    } catch (error) {
+      console.error('Error in FAQ intent detection:', error);
+      console.error('Error details:', error.message);
+      return null;
+    }
+  }
 }
 
 module.exports = new OpenAIService();
