@@ -469,6 +469,23 @@ class GoogleService {
       throw new Error("Failed to download email attachment");
     }
   }
+
+  async getConfig(businessId) {
+    try {
+      const connection = await pool.getConnection();
+      const [rows] = await connection.execute(
+        'SELECT * FROM google_workspace_configs WHERE business_id = ?',
+        [businessId]
+      );
+      connection.release();
+      
+      return rows.length > 0 ? rows[0] : null;
+    } catch (error) {
+      console.error('Error getting Google config:', error);
+      throw new Error('Failed to get Google Workspace configuration');
+    }
+  }
+  
   // Calendar integration methods
   async getCalendarService(businessId) {
     const auth = await this.getAuthenticatedClient(businessId);
