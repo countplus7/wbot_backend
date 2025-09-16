@@ -19,15 +19,23 @@ class OpenAIService {
     try {
       const latestMessage = messages[messages.length - 1];
       
-      // Enhanced AI-powered intent detection
+      // Enhanced AI-powered intent detection with better error handling
       let aiIntent = null;
       if (businessId) {
-        aiIntent = await this.detectIntentWithAI(latestMessage.content, conversationHistory, businessId);
-        console.log('AI Intent detected:', aiIntent);
+        try {
+          console.log('Attempting AI intent detection for message:', latestMessage.content);
+          aiIntent = await this.detectIntentWithAI(latestMessage.content, conversationHistory, businessId);
+          console.log('AI Intent detected:', aiIntent);
+        } catch (error) {
+          console.error('Error in AI intent detection:', error);
+          console.log('Falling back to keyword-based detection');
+          aiIntent = null;
+        }
       }
       
       // Handle AI-detected intents first
       if (aiIntent && aiIntent.confidence >= 0.7) {
+        console.log(`Routing to AI handler for intent: ${aiIntent.intent}`);
         switch (aiIntent.intent) {
           case 'GOOGLE_EMAIL':
             return await this.handleGoogleEmailWithAI(businessId, aiIntent, conversationHistory, businessTone);
@@ -48,9 +56,17 @@ class OpenAIService {
       }
       
       // Fallback to existing detection methods if AI detection fails or confidence is low
+      console.log('Using fallback keyword-based detection');
       const emailRequest = this.detectEmailRequest(latestMessage.content);
       const emailReadRequest = this.detectEmailReadRequest(latestMessage.content);
       const calendarRequest = this.detectCalendarRequest(latestMessage.content);
+      
+      console.log('Fallback detection results:', {
+        emailRequest: !!emailRequest,
+        emailReadRequest: !!emailReadRequest,
+        calendarRequest: !!calendarRequest,
+        message: latestMessage.content
+      });
       
       // Check for Odoo operations
       const odooOrderRequest = this.detectOdooOrderRequest(latestMessage.content);
@@ -950,6 +966,8 @@ class OpenAIService {
    */
   async detectIntentWithAI(message, conversationHistory = [], businessId = null) {
     try {
+      console.log('AI Intent Detection - Input message:', message);
+      
       const systemPrompt = `You are an AI assistant that analyzes customer messages to detect business intents across multiple systems.
 
 Your task is to analyze the customer's message and determine if they want to interact with:
@@ -959,14 +977,16 @@ Your task is to analyze the customer's message and determine if they want to int
 4. ODOO - ERP operations (orders, invoices, products, support)
 5. GENERAL - General conversation or unrelated requests
 
-For each detected intent, extract relevant information in JSON format.
+For email messages, extract:
+- to: email address
+- subject: email subject (from "Title:" or "Subject:")  
+- body: email content (from "Content:" or "Body:")
+- action: "send" or "read"
 
 Examples:
+- "I need to send email to john@example.com\nTitle: Meeting\nContent: Let's meet tomorrow" → {"intent": "GOOGLE_EMAIL", "action": "send", "to": "john@example.com", "subject": "Meeting", "body": "Let's meet tomorrow", "confidence": 0.95}
 - "Send an email to john@example.com about the meeting" → {"intent": "GOOGLE_EMAIL", "action": "send", "to": "john@example.com", "subject": "meeting", "confidence": 0.95}
 - "Schedule a meeting tomorrow at 2pm" → {"intent": "GOOGLE_CALENDAR", "action": "schedule", "time": "tomorrow at 2pm", "confidence": 0.9}
-- "Create a new lead for ABC Company" → {"intent": "SALESFORCE", "action": "create_lead", "company": "ABC Company", "confidence": 0.9}
-- "I want to order 3 pizzas" → {"intent": "ODOO", "action": "order", "product": "pizza", "quantity": 3, "confidence": 0.95}
-- "Hello, how are you?" → {"intent": "GENERAL", "confidence": 0.95}
 
 Return ONLY valid JSON. If no clear intent is detected, return {"intent": "GENERAL", "confidence": 0.5}.`;
 
@@ -976,17 +996,23 @@ ${conversationHistory.length > 0 ? `Previous conversation context: ${conversatio
 
 Extract the intent and relevant information.`;
 
+      console.log('AI Intent Detection - Making API call to OpenAI');
+      
       const response = await openai.chat.completions.create({
         model: this.model,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        temperature: 0.1, // Low temperature for consistent intent detection
+        temperature: 0.1,
         max_tokens: 300
       });
 
+      console.log('AI Intent Detection - Raw response:', response.choices[0].message.content);
+      
       const result = JSON.parse(response.choices[0].message.content);
+      
+      console.log('AI Intent Detection - Parsed result:', result);
       
       // Only return intents with high confidence
       if (result.confidence >= 0.7) {
@@ -996,9 +1022,11 @@ Extract the intent and relevant information.`;
         };
       }
       
+      console.log('AI Intent Detection - Low confidence, returning null');
       return null;
     } catch (error) {
       console.error('Error in AI intent detection:', error);
+      console.error('Error details:', error.message);
       // Fallback to simple keyword matching if AI fails
       return null;
     }
