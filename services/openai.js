@@ -1539,40 +1539,53 @@ Guidelines:
       
       switch (intent.action) {
         case 'send':
-          const emailResult = await GoogleService.sendEmail(businessId, {
-            to: intent.to,
-            subject: intent.subject || 'No Subject',
-            body: intent.body || 'No content'
-          });
-          
-          if (emailResult.success) {
-            return await this.generateContextualResponse(intent, {
+          try {
+            const emailResult = await GoogleService.sendEmail(businessId, {
               to: intent.to,
-              subject: intent.subject,
-              success: true
-            }, businessTone, conversationHistory);
-          } else {
-            return `❌ Sorry, I couldn't send the email. ${emailResult.error}`;
+              subject: intent.subject || 'No Subject',
+              body: intent.body || 'No content'
+            });
+            
+            // GoogleService.sendEmail returns the Gmail API response directly
+            if (emailResult && emailResult.id) {
+              return await this.generateContextualResponse(intent, {
+                to: intent.to,
+                subject: intent.subject,
+                messageId: emailResult.id,
+                success: true
+              }, businessTone, conversationHistory);
+            } else {
+              return `❌ Sorry, I couldn't send the email. The response was invalid.`;
+            }
+          } catch (error) {
+            console.error('Error sending email:', error);
+            return `❌ Sorry, I couldn't send the email. ${error.message}`;
           }
         
         case 'read':
-          const emails = await GoogleService.getEmails(businessId, {
-            type: intent.type || 'recent',
-            maxResults: intent.maxResults || 5
-          });
-          
-          if (emails.success && emails.emails.length > 0) {
-            const emailList = emails.emails.map(email => 
-              `• ${email.subject} - From: ${email.from} (${email.date})`
-            ).join('\n');
+          try {
+            const emails = await GoogleService.getEmails(businessId, {
+              type: intent.type || 'recent',
+              maxResults: intent.maxResults || 5
+            });
             
-            return await this.generateContextualResponse(intent, {
-              type: intent.type,
-              count: emails.emails.length,
-              emails: emailList
-            }, businessTone, conversationHistory);
-          } else {
-            return `📧 No ${intent.type || 'recent'} emails found.`;
+            // GoogleService.getEmails returns the emails array directly
+            if (emails && emails.length > 0) {
+              const emailList = emails.map(email => 
+                `• ${email.subject} - From: ${email.from} (${email.date})`
+              ).join('\n');
+              
+              return await this.generateContextualResponse(intent, {
+                type: intent.type,
+                count: emails.length,
+                emails: emailList
+              }, businessTone, conversationHistory);
+            } else {
+              return `📧 No ${intent.type || 'recent'} emails found.`;
+            }
+          } catch (error) {
+            console.error('Error reading emails:', error);
+            return `❌ Sorry, I couldn't retrieve your emails. ${error.message}`;
           }
         
         default:
@@ -1666,6 +1679,53 @@ Guidelines:
             return `❌ Sorry, I couldn't create the lead. ${leadResult.error}`;
           }
         
+        case 'update_lead':
+          const updatedLeadResult = await SalesforceService.updateLead(businessId, {
+            leadId: intent.leadId,
+            company: intent.company,
+            lastName: intent.lastName || 'Unknown',
+            email: intent.email,
+            phone: intent.phone
+          });
+          if (updatedLeadResult.success) {
+            return await this.generateContextualResponse(intent, {
+              leadId: intent.leadId,
+              company: intent.company,
+              success: true
+            }, businessTone, conversationHistory);
+          } else {
+            return `❌ Sorry, I couldn't update the lead. ${updatedLeadResult.error}`;
+          }
+        
+        case 'search_lead':
+          const searchLeadResult = await SalesforceService.searchLead(businessId, intent.query);
+          if (searchLeadResult.success) {
+            return await this.generateContextualResponse(intent, {
+              query: intent.query,
+              leads: searchLeadResult.leads,
+              success: true
+            }, businessTone, conversationHistory);
+          } else {
+            return `❌ Sorry, I couldn't search for leads. ${searchLeadResult.error}`;
+          }
+        
+        case 'convert_lead':
+          const convertedLeadResult = await SalesforceService.convertLead(businessId, {
+            leadId: intent.leadId,
+            opportunityName: intent.opportunityName,
+            stage: intent.stage
+          });
+          if (convertedLeadResult.success) {
+            return await this.generateContextualResponse(intent, {
+              leadId: intent.leadId,
+              opportunityName: intent.opportunityName,
+              stage: intent.stage,
+              success: true
+            }, businessTone, conversationHistory);
+          } else {
+            return `❌ Sorry, I couldn't convert the lead. ${convertedLeadResult.error}`;
+          }
+        
         case 'search_contact':
           const contacts = await SalesforceService.searchContacts(businessId, {
             name: intent.name,
@@ -1704,59 +1764,17 @@ Guidelines:
       
       switch (intent.action) {
         case 'order':
-          // Enhanced product matching with AI
-          const products = await OdooService.getProducts(businessId);
-          let product = null;
-          
-          if (products.length > 0) {
-            // Use AI to find the best product match
-            const productMatch = await this.findBestProductMatch(intent.product, products);
-            if (productMatch) {
-              product = productMatch;
-            }
-          }
-          
-          if (!product) {
-            const availableProducts = products.map(p => p.name).join(', ');
-            return `❌ Sorry, I couldn't find "${intent.product}" in our system. Available products: ${availableProducts}`;
-          }
-          
-          // Create the order
-          const orderResult = await OdooService.createSaleOrder(businessId, {
-            partner_id: await this.getOrCreateCustomer(businessId, phoneNumber),
-            order_lines: [{
-              product_id: product.id,
-              quantity: intent.quantity || 1,
-              price_unit: product.list_price || 0
-            }]
-          });
-          
-          if (orderResult.success) {
-            return await this.generateContextualResponse(intent, {
-              product: product.name,
-              quantity: intent.quantity || 1,
-              price: product.list_price,
-              orderId: orderResult.id,
-              success: true
-            }, businessTone, conversationHistory);
-          } else {
-            return `❌ Sorry, I couldn't process your order. ${orderResult.error}`;
-          }
-        
+          const orderResult = await this.handleOdooOrder(businessId, intent.extractedData, phoneNumber);
+          return orderResult;
         case 'invoice':
-          const invoice = await OdooService.getInvoice(businessId, intent.invoice_number);
-          
-          if (invoice) {
-            return await this.generateContextualResponse(intent, {
-              invoice_number: intent.invoice_number,
-              status: invoice.payment_state,
-              amount: invoice.amount_total,
-              success: true
-            }, businessTone, conversationHistory);
-          } else {
-            return `📄 Invoice ${intent.invoice_number} not found.`;
-          }
-        
+          const invoiceResult = await this.handleOdooInvoice(businessId, intent.extractedData);
+          return invoiceResult;
+        case 'lead':
+          const leadResult = await this.handleOdooLead(businessId, intent.extractedData, phoneNumber);
+          return leadResult;
+        case 'ticket':
+          const ticketResult = await this.handleOdooTicket(businessId, intent.extractedData, phoneNumber);
+          return ticketResult;
         default:
           return `I understand you want to work with Odoo, but I'm not sure what specific action you'd like to take.`;
       }
@@ -1767,72 +1785,59 @@ Guidelines:
   }
 
   /**
-   * AI-powered product matching
+   * Handle General Intent
    */
-  async findBestProductMatch(productName, availableProducts) {
+  async handleGeneralIntent(intent, conversationHistory, businessTone) {
     try {
-      const productNames = availableProducts.map(p => p.name).join(', ');
+      const systemPrompt = `You are a helpful AI assistant. Generate a response based on the intent and data.
+
+Guidelines:
+- Be conversational and helpful
+- Use emojis appropriately
+- Provide clear next steps when possible
+- Keep responses concise but informative
+- Match the business tone
+- Reference conversation context when relevant
+- Be specific about what was accomplished`;
+
+      let userPrompt = '';
       
-      const systemPrompt = `You are an AI assistant that finds the best product match from a list of available products.
-
-Available products: ${productNames}
-
-Your task is to find the best match for: "${productName}"
-
-Return JSON format:
-{
-  "matched_product": "exact product name from the list or null",
-  "confidence": 0.0-1.0,
-  "reasoning": "brief explanation of the match"
-}`;
+      switch (intent.intent) {
+        case 'GENERAL':
+          userPrompt = `Generate a general helpful response.`;
+          break;
+        case 'GOOGLE_EMAIL':
+          userPrompt = `Generate a response for working with emails.`;
+          break;
+        case 'GOOGLE_CALENDAR':
+          userPrompt = `Generate a response for working with your calendar.`;
+          break;
+        case 'SALESFORCE':
+          userPrompt = `Generate a response for working with Salesforce.`;
+          break;
+        case 'ODOO':
+          userPrompt = `Generate a response for working with Odoo.`;
+          break;
+        default:
+          userPrompt = `Generate a general helpful response.`;
+      }
 
       const response = await openai.chat.completions.create({
         model: this.model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Find the best match for: "${productName}"` }
+          { role: "user", content: userPrompt }
         ],
-        temperature: 0.1,
-        max_tokens: 150
+        temperature: 0.7,
+        max_tokens: 300
       });
 
-      const result = JSON.parse(response.choices[0].message.content);
-      
-      if (result.confidence >= 0.7 && result.matched_product) {
-        return availableProducts.find(p => p.name === result.matched_product);
-      }
-      
-      return null;
+      return response.choices[0].message.content;
     } catch (error) {
-      console.error('Error in AI product matching:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Get or create customer for Odoo
-   */
-  async getOrCreateCustomer(businessId, phoneNumber) {
-    try {
-      const OdooService = require('./odoo');
-      
-      let customer = await OdooService.searchCustomer(businessId, phoneNumber);
-      
-      if (!customer) {
-        const customerResult = await OdooService.createCustomer(businessId, {
-          name: `Customer ${phoneNumber}`,
-          phone: phoneNumber,
-          email: null
-        });
-        customer = { id: customerResult.id };
-      }
-      
-      return customer.id;
-    } catch (error) {
-      console.error('Error getting/creating customer:', error);
-      throw error;
+      console.error('Error handling General Intent:', error);
+      return `❌ Sorry, I encountered an error with your general request. Please try again.`;
     }
   }
 }
 
-module.exports = new OpenAIService();
+module.exports = OpenAIService;
