@@ -17,8 +17,37 @@ class OpenAIService {
 
   async chatCompletion(messages, conversationHistory = [], businessTone = null, businessId = null, phoneNumber = null) {
     try {
-      // Check if the latest message contains an email request
       const latestMessage = messages[messages.length - 1];
+      
+      // Enhanced AI-powered intent detection
+      let aiIntent = null;
+      if (businessId) {
+        aiIntent = await this.detectIntentWithAI(latestMessage.content, conversationHistory, businessId);
+        console.log('AI Intent detected:', aiIntent);
+      }
+      
+      // Handle AI-detected intents first
+      if (aiIntent && aiIntent.confidence >= 0.7) {
+        switch (aiIntent.intent) {
+          case 'GOOGLE_EMAIL':
+            return await this.handleGoogleEmailWithAI(businessId, aiIntent, conversationHistory, businessTone);
+          
+          case 'GOOGLE_CALENDAR':
+            return await this.handleGoogleCalendarWithAI(businessId, aiIntent, conversationHistory, businessTone);
+          
+          case 'SALESFORCE':
+            return await this.handleSalesforceWithAI(businessId, aiIntent, conversationHistory, businessTone);
+          
+          case 'ODOO':
+            return await this.handleOdooWithAI(businessId, aiIntent, phoneNumber, conversationHistory, businessTone);
+          
+          case 'GENERAL':
+            // Fall through to regular chat completion
+            break;
+        }
+      }
+      
+      // Fallback to existing detection methods if AI detection fails or confidence is low
       const emailRequest = this.detectEmailRequest(latestMessage.content);
       const emailReadRequest = this.detectEmailReadRequest(latestMessage.content);
       const calendarRequest = this.detectCalendarRequest(latestMessage.content);
@@ -915,6 +944,345 @@ class OpenAIService {
     return null;
   }
 
+  /**
+   * AI-Powered Universal Intent Detection
+   * This replaces simple keyword matching with sophisticated NLP analysis
+   */
+  async detectIntentWithAI(message, conversationHistory = [], businessId = null) {
+    try {
+      const systemPrompt = `You are an AI assistant that analyzes customer messages to detect business intents across multiple systems.
+
+Your task is to analyze the customer's message and determine if they want to interact with:
+1. GOOGLE_EMAIL - Send, read, search emails via Gmail
+2. GOOGLE_CALENDAR - Schedule, check availability, create events
+3. SALESFORCE - CRM operations (leads, contacts, opportunities, cases)
+4. ODOO - ERP operations (orders, invoices, products, support)
+5. GENERAL - General conversation or unrelated requests
+
+For each detected intent, extract relevant information in JSON format.
+
+Examples:
+- "Send an email to john@example.com about the meeting" → {"intent": "GOOGLE_EMAIL", "action": "send", "to": "john@example.com", "subject": "meeting", "confidence": 0.95}
+- "Schedule a meeting tomorrow at 2pm" → {"intent": "GOOGLE_CALENDAR", "action": "schedule", "time": "tomorrow at 2pm", "confidence": 0.9}
+- "Create a new lead for ABC Company" → {"intent": "SALESFORCE", "action": "create_lead", "company": "ABC Company", "confidence": 0.9}
+- "I want to order 3 pizzas" → {"intent": "ODOO", "action": "order", "product": "pizza", "quantity": 3, "confidence": 0.95}
+- "Hello, how are you?" → {"intent": "GENERAL", "confidence": 0.95}
+
+Return ONLY valid JSON. If no clear intent is detected, return {"intent": "GENERAL", "confidence": 0.5}.`;
+
+      const userPrompt = `Analyze this customer message: "${message}"
+
+${conversationHistory.length > 0 ? `Previous conversation context: ${conversationHistory.slice(-3).map(msg => `${msg.role}: ${msg.content}`).join('\n')}` : ''}
+
+Extract the intent and relevant information.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1, // Low temperature for consistent intent detection
+        max_tokens: 300
+      });
+
+      const result = JSON.parse(response.choices[0].message.content);
+      
+      // Only return intents with high confidence
+      if (result.confidence >= 0.7) {
+        return {
+          ...result,
+          originalMessage: message
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error in AI intent detection:', error);
+      // Fallback to simple keyword matching if AI fails
+      return null;
+    }
+  }
+
+  /**
+   * Enhanced Google Workspace Intent Detection
+   */
+  async detectGoogleWorkspaceIntentWithAI(message, conversationHistory = []) {
+    try {
+      const systemPrompt = `You are an AI assistant specialized in Google Workspace operations.
+
+Analyze the customer's message to detect Google Workspace intents:
+
+EMAIL OPERATIONS:
+- SEND_EMAIL: Send new emails
+- READ_EMAIL: Read, check, show emails
+- SEARCH_EMAIL: Search emails by content, sender, subject
+- REPLY_EMAIL: Reply to existing emails
+
+CALENDAR OPERATIONS:
+- SCHEDULE_EVENT: Create new calendar events, meetings, appointments
+- CHECK_AVAILABILITY: Check free time, availability
+- LIST_EVENTS: Show upcoming events, schedule, agenda
+- UPDATE_EVENT: Modify existing events
+
+Extract detailed information in JSON format:
+
+Examples:
+- "Send email to john@example.com about the project update" → {"intent": "SEND_EMAIL", "to": "john@example.com", "subject": "project update", "confidence": 0.95}
+- "Check my unread emails" → {"intent": "READ_EMAIL", "type": "unread", "confidence": 0.9}
+- "Schedule a meeting tomorrow at 2pm with the team" → {"intent": "SCHEDULE_EVENT", "time": "tomorrow at 2pm", "attendees": "team", "confidence": 0.95}
+- "What's on my calendar today?" → {"intent": "LIST_EVENTS", "timeframe": "today", "confidence": 0.9}
+
+Return ONLY valid JSON.`;
+
+      const userPrompt = `Analyze this Google Workspace request: "${message}"
+
+${conversationHistory.length > 0 ? `Context: ${conversationHistory.slice(-2).map(msg => `${msg.role}: ${msg.content}`).join('\n')}` : ''}
+
+Extract the Google Workspace intent and details.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 250
+      });
+
+      const result = JSON.parse(response.choices[0].message.content);
+      
+      if (result.confidence >= 0.7) {
+        return {
+          ...result,
+          originalMessage: message
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error in Google Workspace AI intent detection:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Enhanced Salesforce Intent Detection
+   */
+  async detectSalesforceIntentWithAI(message, conversationHistory = []) {
+    try {
+      const systemPrompt = `You are an AI assistant specialized in Salesforce CRM operations.
+
+Analyze the customer's message to detect Salesforce intents:
+
+LEAD OPERATIONS:
+- CREATE_LEAD: Create new leads, prospects
+- UPDATE_LEAD: Modify existing leads
+- SEARCH_LEAD: Find leads by name, company, email
+- CONVERT_LEAD: Convert leads to opportunities
+
+CONTACT OPERATIONS:
+- CREATE_CONTACT: Add new contacts
+- UPDATE_CONTACT: Modify contact information
+- SEARCH_CONTACT: Find contacts
+- DELETE_CONTACT: Remove contacts
+
+OPPORTUNITY OPERATIONS:
+- CREATE_OPPORTUNITY: Create sales opportunities
+- UPDATE_OPPORTUNITY: Modify opportunities
+- SEARCH_OPPORTUNITY: Find opportunities
+- CLOSE_OPPORTUNITY: Close won/lost opportunities
+
+CASE OPERATIONS:
+- CREATE_CASE: Create support cases
+- UPDATE_CASE: Modify cases
+- SEARCH_CASE: Find cases
+- CLOSE_CASE: Resolve cases
+
+Extract detailed information in JSON format:
+
+Examples:
+- "Create a new lead for ABC Company" → {"intent": "CREATE_LEAD", "company": "ABC Company", "confidence": 0.95}
+- "Find contact John Smith" → {"intent": "SEARCH_CONTACT", "name": "John Smith", "confidence": 0.9}
+- "Update opportunity for XYZ Corp to closed-won" → {"intent": "CLOSE_OPPORTUNITY", "company": "XYZ Corp", "stage": "closed-won", "confidence": 0.95}
+- "Create a support case for billing issue" → {"intent": "CREATE_CASE", "subject": "billing issue", "confidence": 0.9}
+
+Return ONLY valid JSON.`;
+
+      const userPrompt = `Analyze this Salesforce request: "${message}"
+
+${conversationHistory.length > 0 ? `Context: ${conversationHistory.slice(-2).map(msg => `${msg.role}: ${msg.content}`).join('\n')}` : ''}
+
+Extract the Salesforce intent and details.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 250
+      });
+
+      const result = JSON.parse(response.choices[0].message.content);
+      
+      if (result.confidence >= 0.7) {
+        return {
+          ...result,
+          originalMessage: message
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error in Salesforce AI intent detection:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Enhanced Odoo Intent Detection
+   */
+  async detectOdooIntentWithAI(message, conversationHistory = []) {
+    try {
+      const systemPrompt = `You are an AI assistant specialized in Odoo ERP operations.
+
+Analyze the customer's message to detect Odoo intents:
+
+SALES OPERATIONS:
+- CREATE_ORDER: Create sales orders, purchase orders
+- SEARCH_PRODUCT: Find products, check availability
+- UPDATE_ORDER: Modify existing orders
+- CANCEL_ORDER: Cancel orders
+
+INVOICE OPERATIONS:
+- CHECK_INVOICE: Check invoice status, payment status
+- CREATE_INVOICE: Generate new invoices
+- PAY_INVOICE: Process payments
+
+CRM OPERATIONS:
+- CREATE_LEAD: Create new leads, prospects
+- UPDATE_LEAD: Modify leads
+- CONVERT_LEAD: Convert leads to opportunities
+
+SUPPORT OPERATIONS:
+- CREATE_TICKET: Create support tickets
+- UPDATE_TICKET: Modify tickets
+- CHECK_TICKET: Check ticket status
+
+Extract detailed information in JSON format:
+
+Examples:
+- "I want to order 3 pizzas" → {"intent": "CREATE_ORDER", "product": "pizza", "quantity": 3, "confidence": 0.95}
+- "What's the status of invoice #INV123?" → {"intent": "CHECK_INVOICE", "invoice_number": "INV123", "confidence": 0.9}
+- "Create a lead for ABC Company" → {"intent": "CREATE_LEAD", "company": "ABC Company", "confidence": 0.95}
+- "I have a problem with my order" → {"intent": "CREATE_TICKET", "issue_type": "order_problem", "confidence": 0.9}
+
+Return ONLY valid JSON.`;
+
+      const userPrompt = `Analyze this Odoo request: "${message}"
+
+${conversationHistory.length > 0 ? `Context: ${conversationHistory.slice(-2).map(msg => `${msg.role}: ${msg.content}`).join('\n')}` : ''}
+
+Extract the Odoo intent and details.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 250
+      });
+
+      const result = JSON.parse(response.choices[0].message.content);
+      
+      if (result.confidence >= 0.7) {
+        return {
+          ...result,
+          originalMessage: message
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error in Odoo AI intent detection:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Enhanced Response Generation with Context
+   */
+  async generateContextualResponse(intent, data, businessTone = null, conversationHistory = []) {
+    try {
+      const systemPrompt = `You are a helpful customer service assistant. Generate natural, contextual responses based on the detected intent and data.
+
+Business tone: ${businessTone || 'Professional and friendly'}
+
+Guidelines:
+- Be conversational and helpful
+- Use emojis appropriately
+- Provide clear next steps when possible
+- Keep responses concise but informative
+- Match the business tone
+- Reference conversation context when relevant
+- Be specific about what was accomplished`;
+
+      let userPrompt = '';
+      
+      switch (intent.intent) {
+        case 'GOOGLE_EMAIL':
+          if (intent.action === 'send') {
+            userPrompt = `Generate a response for successfully sending an email. To: ${data.to}, Subject: ${data.subject || 'No subject'}`;
+          } else if (intent.action === 'read') {
+            userPrompt = `Generate a response for reading emails. Type: ${data.type || 'recent'}, Count: ${data.count || 'several'}`;
+          }
+          break;
+        case 'GOOGLE_CALENDAR':
+          if (intent.action === 'schedule') {
+            userPrompt = `Generate a response for scheduling an event. Time: ${data.time}, Title: ${data.title || 'Meeting'}`;
+          } else if (intent.action === 'list') {
+            userPrompt = `Generate a response for showing calendar events. Timeframe: ${data.timeframe || 'upcoming'}`;
+          }
+          break;
+        case 'SALESFORCE':
+          userPrompt = `Generate a response for Salesforce ${intent.action}. Details: ${JSON.stringify(data)}`;
+          break;
+        case 'ODOO':
+          if (intent.action === 'order') {
+            userPrompt = `Generate a response for processing an order. Product: ${data.product}, Quantity: ${data.quantity}`;
+          } else if (intent.action === 'invoice') {
+            userPrompt = `Generate a response for invoice inquiry. Invoice: ${data.invoice_number}, Status: ${data.status}`;
+          }
+          break;
+        default:
+          userPrompt = `Generate a general helpful response.`;
+      }
+
+      const contextInfo = conversationHistory.length > 0 ? 
+        `\n\nPrevious conversation context: ${conversationHistory.slice(-2).map(msg => `${msg.role}: ${msg.content}`).join('\n')}` : '';
+
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt + contextInfo }
+        ],
+        temperature: 0.7,
+        max_tokens: 300
+      });
+
+      return response.choices[0].message.content;
+    } catch (error) {
+      console.error('Error in AI response generation:', error);
+      return null;
+    }
+  }
+
   // Odoo intent detection methods
   detectOdooOrderRequest(message) {
     const orderKeywords = ['order', 'buy', 'purchase', 'pizza', 'food', 'delivery', 'quantity'];
@@ -1158,6 +1526,310 @@ class OpenAIService {
       return `✅ Support ticket created successfully!\n\n🎫 Ticket Details:\n• Subject: ${ticketRequest.subject}\n• Description: ${ticketRequest.description}\n• Ticket ID: ${ticketResult.id}\n• Priority: Normal\n\nOur support team will review your ticket and get back to you as soon as possible. Thank you for contacting us!`;
     } catch (error) {
       console.error('Error handling Odoo ticket:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Handle Google Email operations with AI
+   */
+  async handleGoogleEmailWithAI(businessId, intent, conversationHistory, businessTone) {
+    try {
+      const GoogleService = require('./google');
+      
+      switch (intent.action) {
+        case 'send':
+          const emailResult = await GoogleService.sendEmail(businessId, {
+            to: intent.to,
+            subject: intent.subject || 'No Subject',
+            body: intent.body || 'No content'
+          });
+          
+          if (emailResult.success) {
+            return await this.generateContextualResponse(intent, {
+              to: intent.to,
+              subject: intent.subject,
+              success: true
+            }, businessTone, conversationHistory);
+          } else {
+            return `❌ Sorry, I couldn't send the email. ${emailResult.error}`;
+          }
+        
+        case 'read':
+          const emails = await GoogleService.getEmails(businessId, {
+            type: intent.type || 'recent',
+            maxResults: intent.maxResults || 5
+          });
+          
+          if (emails.success && emails.emails.length > 0) {
+            const emailList = emails.emails.map(email => 
+              `• ${email.subject} - From: ${email.from} (${email.date})`
+            ).join('\n');
+            
+            return await this.generateContextualResponse(intent, {
+              type: intent.type,
+              count: emails.emails.length,
+              emails: emailList
+            }, businessTone, conversationHistory);
+          } else {
+            return `📧 No ${intent.type || 'recent'} emails found.`;
+          }
+        
+        default:
+          return `I understand you want to work with emails, but I'm not sure what specific action you'd like to take.`;
+      }
+    } catch (error) {
+      console.error('Error handling Google Email with AI:', error);
+      return `❌ Sorry, I encountered an error with your email request. Please try again.`;
+    }
+  }
+
+  /**
+   * Handle Google Calendar operations with AI
+   */
+  async handleGoogleCalendarWithAI(businessId, intent, conversationHistory, businessTone) {
+    try {
+      const GoogleService = require('./google');
+      
+      switch (intent.action) {
+        case 'schedule':
+          const eventResult = await GoogleService.createEvent(businessId, {
+            summary: intent.title || 'Meeting',
+            start: intent.start_time,
+            end: intent.end_time,
+            attendees: intent.attendees ? intent.attendees.split(',').map(email => email.trim()) : []
+          });
+          
+          if (eventResult.success) {
+            return await this.generateContextualResponse(intent, {
+              title: intent.title || 'Meeting',
+              time: intent.start_time,
+              success: true
+            }, businessTone, conversationHistory);
+          } else {
+            return `❌ Sorry, I couldn't schedule the event. ${eventResult.error}`;
+          }
+        
+        case 'list':
+          const events = await GoogleService.getEvents(businessId, {
+            timeMin: intent.timeMin,
+            timeMax: intent.timeMax,
+            maxResults: intent.maxResults || 10
+          });
+          
+          if (events.success && events.events.length > 0) {
+            const eventList = events.events.map(event => 
+              `• ${event.summary} - ${event.start}`
+            ).join('\n');
+            
+            return await this.generateContextualResponse(intent, {
+              timeframe: intent.timeframe || 'upcoming',
+              count: events.events.length,
+              events: eventList
+            }, businessTone, conversationHistory);
+          } else {
+            return `📅 No events found for the requested time period.`;
+          }
+        
+        default:
+          return `I understand you want to work with your calendar, but I'm not sure what specific action you'd like to take.`;
+      }
+    } catch (error) {
+      console.error('Error handling Google Calendar with AI:', error);
+      return `❌ Sorry, I encountered an error with your calendar request. Please try again.`;
+    }
+  }
+
+  /**
+   * Handle Salesforce operations with AI
+   */
+  async handleSalesforceWithAI(businessId, intent, conversationHistory, businessTone) {
+    try {
+      const SalesforceService = require('./salesforce');
+      
+      switch (intent.action) {
+        case 'create_lead':
+          const leadResult = await SalesforceService.createLead(businessId, {
+            company: intent.company,
+            lastName: intent.lastName || 'Unknown',
+            email: intent.email,
+            phone: intent.phone
+          });
+          
+          if (leadResult.success) {
+            return await this.generateContextualResponse(intent, {
+              company: intent.company,
+              leadId: leadResult.id,
+              success: true
+            }, businessTone, conversationHistory);
+          } else {
+            return `❌ Sorry, I couldn't create the lead. ${leadResult.error}`;
+          }
+        
+        case 'search_contact':
+          const contacts = await SalesforceService.searchContacts(businessId, {
+            name: intent.name,
+            email: intent.email
+          });
+          
+          if (contacts.success && contacts.contacts.length > 0) {
+            const contactList = contacts.contacts.map(contact => 
+              `• ${contact.Name} - ${contact.Email || 'No email'} (${contact.Phone || 'No phone'})`
+            ).join('\n');
+            
+            return await this.generateContextualResponse(intent, {
+              name: intent.name,
+              count: contacts.contacts.length,
+              contacts: contactList
+            }, businessTone, conversationHistory);
+          } else {
+            return `👤 No contacts found matching "${intent.name}".`;
+          }
+        
+        default:
+          return `I understand you want to work with Salesforce, but I'm not sure what specific action you'd like to take.`;
+      }
+    } catch (error) {
+      console.error('Error handling Salesforce with AI:', error);
+      return `❌ Sorry, I encountered an error with your Salesforce request. Please try again.`;
+    }
+  }
+
+  /**
+   * Handle Odoo operations with AI
+   */
+  async handleOdooWithAI(businessId, intent, phoneNumber, conversationHistory, businessTone) {
+    try {
+      const OdooService = require('./odoo');
+      
+      switch (intent.action) {
+        case 'order':
+          // Enhanced product matching with AI
+          const products = await OdooService.getProducts(businessId);
+          let product = null;
+          
+          if (products.length > 0) {
+            // Use AI to find the best product match
+            const productMatch = await this.findBestProductMatch(intent.product, products);
+            if (productMatch) {
+              product = productMatch;
+            }
+          }
+          
+          if (!product) {
+            const availableProducts = products.map(p => p.name).join(', ');
+            return `❌ Sorry, I couldn't find "${intent.product}" in our system. Available products: ${availableProducts}`;
+          }
+          
+          // Create the order
+          const orderResult = await OdooService.createSaleOrder(businessId, {
+            partner_id: await this.getOrCreateCustomer(businessId, phoneNumber),
+            order_lines: [{
+              product_id: product.id,
+              quantity: intent.quantity || 1,
+              price_unit: product.list_price || 0
+            }]
+          });
+          
+          if (orderResult.success) {
+            return await this.generateContextualResponse(intent, {
+              product: product.name,
+              quantity: intent.quantity || 1,
+              price: product.list_price,
+              orderId: orderResult.id,
+              success: true
+            }, businessTone, conversationHistory);
+          } else {
+            return `❌ Sorry, I couldn't process your order. ${orderResult.error}`;
+          }
+        
+        case 'invoice':
+          const invoice = await OdooService.getInvoice(businessId, intent.invoice_number);
+          
+          if (invoice) {
+            return await this.generateContextualResponse(intent, {
+              invoice_number: intent.invoice_number,
+              status: invoice.payment_state,
+              amount: invoice.amount_total,
+              success: true
+            }, businessTone, conversationHistory);
+          } else {
+            return `📄 Invoice ${intent.invoice_number} not found.`;
+          }
+        
+        default:
+          return `I understand you want to work with Odoo, but I'm not sure what specific action you'd like to take.`;
+      }
+    } catch (error) {
+      console.error('Error handling Odoo with AI:', error);
+      return `❌ Sorry, I encountered an error with your Odoo request. Please try again.`;
+    }
+  }
+
+  /**
+   * AI-powered product matching
+   */
+  async findBestProductMatch(productName, availableProducts) {
+    try {
+      const productNames = availableProducts.map(p => p.name).join(', ');
+      
+      const systemPrompt = `You are an AI assistant that finds the best product match from a list of available products.
+
+Available products: ${productNames}
+
+Your task is to find the best match for: "${productName}"
+
+Return JSON format:
+{
+  "matched_product": "exact product name from the list or null",
+  "confidence": 0.0-1.0,
+  "reasoning": "brief explanation of the match"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Find the best match for: "${productName}"` }
+        ],
+        temperature: 0.1,
+        max_tokens: 150
+      });
+
+      const result = JSON.parse(response.choices[0].message.content);
+      
+      if (result.confidence >= 0.7 && result.matched_product) {
+        return availableProducts.find(p => p.name === result.matched_product);
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error in AI product matching:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get or create customer for Odoo
+   */
+  async getOrCreateCustomer(businessId, phoneNumber) {
+    try {
+      const OdooService = require('./odoo');
+      
+      let customer = await OdooService.searchCustomer(businessId, phoneNumber);
+      
+      if (!customer) {
+        const customerResult = await OdooService.createCustomer(businessId, {
+          name: `Customer ${phoneNumber}`,
+          phone: phoneNumber,
+          email: null
+        });
+        customer = { id: customerResult.id };
+      }
+      
+      return customer.id;
+    } catch (error) {
+      console.error('Error getting/creating customer:', error);
       throw error;
     }
   }
