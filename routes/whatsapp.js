@@ -5,6 +5,7 @@ const OpenAIService = require('../services/openai');
 const DatabaseService = require('../services/database');
 const BusinessService = require('../services/business');
 const CalendarHandler = require('../services/calendar-handler');
+const AirtableService = require('../services/airtable');
 const path = require('path');
 const fs = require('fs-extra');
 
@@ -236,50 +237,37 @@ router.post('/webhook', async (req, res) => {
         if (faqIntent && faqIntent.isFAQ) {
           console.log('FAQ intent detected:', faqIntent);
           
-          // Get Google Workspace config to find FAQ spreadsheet
-          const googleConfig = await BusinessService.getGoogleWorkspaceConfig(businessId);
+          // Search FAQs in Airtable
+          const faqMatch = await AirtableService.searchFAQs(businessId, messageData.content);
           
-          if (googleConfig && googleConfig.faq_spreadsheet_id) {
-            console.log('Searching FAQs in spreadsheet:', googleConfig.faq_spreadsheet_id);
+          if (faqMatch && faqMatch.matchScore > 0.3) {
+            console.log('FAQ answer found:', faqMatch);
             
-            const faqMatch = await GoogleService.searchFAQs(
-              businessId, 
-              googleConfig.faq_spreadsheet_id, 
-              messageData.content,
-              googleConfig.faq_range || 'Sheet1!A:B'
-            );
-            
-            if (faqMatch && faqMatch.matchScore > 0.3) {
-              console.log('FAQ answer found:', faqMatch);
-              
-              // Save the FAQ response to database
-              await DatabaseService.saveMessage({
-                businessId: businessId,
-                conversationId: conversation.id,
-                messageId: `faq_${Date.now()}`,
-                fromNumber: messageData.to, // From business
-                toNumber: messageData.from, // To user
-                messageType: 'text',
-                content: faqMatch.answer,
-                mediaUrl: null,
-                localFilePath: null,
-                isFromUser: false
-              });
+            // Save the FAQ response to database
+            await DatabaseService.saveMessage({
+              businessId: businessId,
+              conversationId: conversation.id,
+              messageId: `faq_${Date.now()}`,
+              fromNumber: messageData.to, // From business
+              toNumber: messageData.from, // To user
+              messageType: 'text',
+              content: faqMatch.answer,
+              mediaUrl: null,
+              localFilePath: null,
+              isFromUser: false
+            });
 
-              // Send the FAQ response via WhatsApp
-              try {
-                const response = await WhatsAppService.sendTextMessage(messageData.from, faqMatch.answer);
-                console.log('FAQ response sent successfully:', response);
-              } catch (whatsappError) {
-                console.error('Error sending FAQ response:', whatsappError);
-              }
-              
-              return res.status(200).send('OK');
-            } else {
-              console.log('No suitable FAQ match found, continuing with AI processing');
+            // Send the FAQ response via WhatsApp
+            try {
+              const response = await WhatsAppService.sendTextMessage(messageData.from, faqMatch.answer);
+              console.log('FAQ response sent successfully:', response);
+            } catch (whatsappError) {
+              console.error('Error sending FAQ response:', whatsappError);
             }
+            
+            return res.status(200).send('OK');
           } else {
-            console.log('No FAQ spreadsheet configured, continuing with AI processing');
+            console.log('No suitable FAQ match found, continuing with AI processing');
           }
         }
       } catch (faqError) {

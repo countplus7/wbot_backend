@@ -16,7 +16,8 @@ const whatsappRoutes = require("./routes/whatsapp");
 const businessRoutes = require("./routes/business");
 const googleRoutes = require("./routes/google");
 const salesforceRoutes = require("./routes/salesforce");
-const odooRoutes = require("./routes/odoo"); // Add this line
+const odooRoutes = require("./routes/odoo");
+const airtableRoutes = require("./routes/airtable");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -250,10 +251,11 @@ app.get("/test", (req, res) => {
 // API routes with proper prefixes
 app.use("/api/", whatsappRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/basic", businessRoutes);
+app.use("/api/business", businessRoutes);
 app.use("/api/google", googleRoutes);
 app.use("/api/salesforce", salesforceRoutes);
 app.use("/api/odoo", odooRoutes);
+app.use("/api/airtable", airtableRoutes);
 
 // ===== ERROR HANDLING =====
 

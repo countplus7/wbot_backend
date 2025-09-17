@@ -13,7 +13,8 @@ const dropAllTables = async () => {
       "whatsapp_configs",
       "google_workspace_integrations",
       "salesforce_integrations",
-      "odoo_integrations", // Add this line
+      "odoo_integrations",
+      "airtable_integrations",
       "businesses",
       "users",
     ];
@@ -205,6 +206,22 @@ const createTables = async () => {
       )
     `);
     console.log("Created table: odoo_integrations");
+
+    // Create Airtable integrations table
+    await pool.query(`
+      CREATE TABLE airtable_integrations (
+        id SERIAL PRIMARY KEY,
+        business_id INTEGER NOT NULL,
+        access_token TEXT NOT NULL,
+        base_id VARCHAR(255) NOT NULL,
+        table_name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+        UNIQUE(business_id)
+      )
+    `);
+    console.log("Created table: airtable_integrations");
 
     console.log("Database tables created successfully");
 

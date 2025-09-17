@@ -200,6 +200,34 @@ const migrateDatabase = async () => {
       console.log("Odoo integrations table already exists");
     }
 
+    // Check if airtable_integrations table exists
+    const airtableIntegrationsExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'airtable_integrations'
+      );
+    `);
+
+    if (!airtableIntegrationsExists.rows[0].exists) {
+      console.log("Creating airtable_integrations table...");
+      await pool.query(`
+        CREATE TABLE airtable_integrations (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          access_token TEXT NOT NULL,
+          base_id VARCHAR(255) NOT NULL,
+          table_name VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          UNIQUE(business_id)
+        )
+      `);
+      console.log("Airtable integrations table created successfully");
+    } else {
+      console.log("Airtable integrations table already exists");
+    }
+
     // Check if conversations table has business_id column
     const conversationsExists = await pool.query(`
       SELECT EXISTS (
@@ -452,6 +480,11 @@ const migrateDatabase = async () => {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_odoo_integrations_username
       ON odoo_integrations(username)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_airtable_integrations_business_id 
+      ON airtable_integrations(business_id)
     `);
 
     await pool.query(`
