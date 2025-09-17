@@ -406,6 +406,7 @@ class OpenAIService {
       console.log(`OpenAI: File exists: ${filePath ? fs.existsSync(filePath) : 'N/A'}`);
       
       let aiResponse = '';
+      let intent = null; // Initialize intent variable
 
       switch (messageType) {
         case 'text':
@@ -2107,6 +2108,7 @@ Determine if this is a FAQ-type question.`;
       console.log(`Enhanced OpenAI Processing - Content: ${content}`);
       
       let aiResponse = '';
+      let intent = null; // Initialize intent variable
 
       // Analyze conversation context if we have history
       let contextAnalysis = null;
