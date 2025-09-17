@@ -1,12 +1,12 @@
-const { OpenAI } = require('openai');
-const pool = require('../config/database');
+const { OpenAI } = require("openai");
+const pool = require("../config/database");
 
 class EmbeddingsService {
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
-    this.embeddingModel = 'text-embedding-3-large'; // Latest and most capable embedding model
+    this.embeddingModel = "text-embedding-3-large"; // Latest and most capable embedding model
     this.dimensions = 3072; // Maximum dimensions for better performance
   }
 
@@ -15,8 +15,8 @@ class EmbeddingsService {
    */
   async generateEmbedding(text) {
     try {
-      console.log('Generating embedding for text:', text.substring(0, 100) + '...');
-      
+      console.log("Generating embedding for text:", text.substring(0, 100) + "...");
+
       const response = await this.openai.embeddings.create({
         model: this.embeddingModel,
         input: text,
@@ -24,12 +24,12 @@ class EmbeddingsService {
       });
 
       const embedding = response.data[0].embedding;
-      console.log('Generated embedding with dimensions:', embedding.length);
-      
+      console.log("Generated embedding with dimensions:", embedding.length);
+
       return embedding;
     } catch (error) {
-      console.error('Error generating embedding:', error);
-      throw new Error('Failed to generate embedding');
+      console.error("Error generating embedding:", error);
+      throw new Error("Failed to generate embedding");
     }
   }
 
@@ -39,20 +39,20 @@ class EmbeddingsService {
   async generateEmbeddingsBatch(texts) {
     try {
       console.log(`Generating embeddings for ${texts.length} texts`);
-      
+
       const response = await this.openai.embeddings.create({
         model: this.embeddingModel,
         input: texts,
         dimensions: this.dimensions,
       });
 
-      const embeddings = response.data.map(item => item.embedding);
+      const embeddings = response.data.map((item) => item.embedding);
       console.log(`Generated ${embeddings.length} embeddings`);
-      
+
       return embeddings;
     } catch (error) {
-      console.error('Error generating batch embeddings:', error);
-      throw new Error('Failed to generate batch embeddings');
+      console.error("Error generating batch embeddings:", error);
+      throw new Error("Failed to generate batch embeddings");
     }
   }
 
@@ -61,11 +61,12 @@ class EmbeddingsService {
    */
   calculateCosineSimilarity(embedding1, embedding2) {
     if (!embedding1 || !embedding2) {
-      console.warn("One or both embeddings are undefined, returning 0 similarity");
+      // Change from console.warn to console.debug to reduce noise
+      console.debug("One or both embeddings are undefined, returning 0 similarity");
       return 0;
     }
     if (embedding1.length !== embedding2.length) {
-      throw new Error('Embeddings must have the same dimensions');
+      throw new Error("Embeddings must have the same dimensions");
     }
 
     let dotProduct = 0;
@@ -98,22 +99,22 @@ class EmbeddingsService {
 
       // Generate embedding for query
       const queryEmbedding = await this.generateEmbedding(queryText);
-      
+
       // Generate embeddings for all candidates
       const candidateEmbeddings = await this.generateEmbeddingsBatch(candidateTexts);
-      
+
       let bestMatch = null;
       let highestSimilarity = 0;
 
       for (let i = 0; i < candidateTexts.length; i++) {
         const similarity = this.calculateCosineSimilarity(queryEmbedding, candidateEmbeddings[i]);
-        
+
         if (similarity > highestSimilarity && similarity >= threshold) {
           highestSimilarity = similarity;
           bestMatch = {
             text: candidateTexts[i],
             similarity: similarity,
-            index: i
+            index: i,
           };
         }
       }
@@ -121,8 +122,8 @@ class EmbeddingsService {
       console.log(`Best match found with similarity: ${highestSimilarity}`);
       return bestMatch;
     } catch (error) {
-      console.error('Error finding most similar text:', error);
-      throw new Error('Failed to find most similar text');
+      console.error("Error finding most similar text:", error);
+      throw new Error("Failed to find most similar text");
     }
   }
 
@@ -139,27 +140,27 @@ class EmbeddingsService {
       }
 
       // Extract questions from FAQs
-      const questions = faqs.map(faq => faq.question);
-      
+      const questions = faqs.map((faq) => faq.question);
+
       // Find most similar question
       const bestMatch = await this.findMostSimilar(userQuestion, questions, threshold);
-      
+
       if (bestMatch) {
         const matchedFAQ = faqs[bestMatch.index];
         console.log(`Found semantic FAQ match: "${matchedFAQ.question}" (similarity: ${bestMatch.similarity})`);
-        
+
         return {
           ...matchedFAQ,
           semanticSimilarity: bestMatch.similarity,
-          matchType: 'semantic'
+          matchType: "semantic",
         };
       }
 
-      console.log('No semantic FAQ match found above threshold');
+      console.log("No semantic FAQ match found above threshold");
       return null;
     } catch (error) {
-      console.error('Error in semantic FAQ matching:', error);
-      throw new Error('Failed to perform semantic FAQ matching');
+      console.error("Error in semantic FAQ matching:", error);
+      throw new Error("Failed to perform semantic FAQ matching");
     }
   }
 
@@ -168,64 +169,59 @@ class EmbeddingsService {
    */
   async detectIntentWithEmbeddings(message, intentExamples = {}) {
     try {
-      console.log('Enhanced intent detection with embeddings for:', message);
+      console.log("Enhanced intent detection with embeddings for:", message);
 
       // Default intent examples if none provided
       const defaultExamples = {
-        'FAQ': [
-          'What are your business hours?',
-          'How do I return a product?',
-          'What payment methods do you accept?',
-          'Do you offer delivery?',
-          'What is your refund policy?',
-          'How can I contact support?',
-          'What are your shipping options?'
+        FAQ: [
+          "What are your business hours?",
+          "How do I return a product?",
+          "What payment methods do you accept?",
+          "Do you offer delivery?",
+          "What is your refund policy?",
+          "How can I contact support?",
+          "What are your shipping options?",
         ],
-        'EMAIL': [
-          'Send an email to john@example.com',
-          'I need to email the client about the project',
-          'Can you send a message to the team?',
-          'Email the invoice to the customer'
+        EMAIL: [
+          "Send an email to john@example.com",
+          "I need to email the client about the project",
+          "Can you send a message to the team?",
+          "Email the invoice to the customer",
         ],
-        'CALENDAR': [
-          'Schedule a meeting for tomorrow',
-          'Book an appointment next week',
-          'Check my availability',
-          'Create a calendar event',
-          'What meetings do I have today?'
+        CALENDAR: [
+          "Schedule a meeting for tomorrow",
+          "Book an appointment next week",
+          "Check my availability",
+          "Create a calendar event",
+          "What meetings do I have today?",
         ],
-        'SALESFORCE': [
-          'Create a new lead',
-          'Update the contact information',
-          'Check the opportunity status',
-          'Create a new case',
-          'View my sales pipeline'
+        SALESFORCE: [
+          "Create a new lead",
+          "Update the contact information",
+          "Check the opportunity status",
+          "Create a new case",
+          "View my sales pipeline",
         ],
-        'ODOO': [
-          'Create a new order',
-          'Generate an invoice',
-          'Check inventory levels',
-          'Update product information',
-          'Process a return'
+        ODOO: [
+          "Create a new order",
+          "Generate an invoice",
+          "Check inventory levels",
+          "Update product information",
+          "Process a return",
         ],
-        'GENERAL': [
-          'Hello, how are you?',
-          'Thank you for your help',
-          'I have a question',
-          'Can you help me?'
-        ]
+        GENERAL: ["Hello, how are you?", "Thank you for your help", "I have a question", "Can you help me?"],
       };
 
       const examples = { ...defaultExamples, ...intentExamples };
       const intentCategories = Object.keys(examples);
-      
+
       // Find the most similar intent category
-      let bestIntent = 'GENERAL';
+      let bestIntent = "GENERAL";
       let highestSimilarity = 0;
 
       for (const intent of intentCategories) {
         const bestMatch = await this.findMostSimilar(message, examples[intent], 0.3);
-        
+
         if (bestMatch && bestMatch.similarity > highestSimilarity) {
           highestSimilarity = bestMatch.similarity;
           bestIntent = intent;
@@ -237,15 +233,15 @@ class EmbeddingsService {
       return {
         intent: bestIntent,
         confidence: highestSimilarity,
-        method: 'embeddings'
+        method: "embeddings",
       };
     } catch (error) {
-      console.error('Error in enhanced intent detection:', error);
+      console.error("Error in enhanced intent detection:", error);
       // Fallback to general intent
       return {
-        intent: 'GENERAL',
+        intent: "GENERAL",
         confidence: 0.5,
-        method: 'fallback'
+        method: "fallback",
       };
     }
   }
@@ -259,7 +255,7 @@ class EmbeddingsService {
 
       // Get all stored FAQ embeddings for this specific business
       const result = await pool.query(
-        'SELECT faq_id, question, answer, embedding FROM faq_embeddings WHERE business_id = $1',
+        "SELECT faq_id, question, answer, embedding FROM faq_embeddings WHERE business_id = $1",
         [businessId]
       );
 
@@ -278,27 +274,27 @@ class EmbeddingsService {
       for (const row of result.rows) {
         try {
           let storedEmbedding;
-          
+
           // Handle different embedding storage formats
-          if (typeof row.embedding === 'string') {
+          if (typeof row.embedding === "string") {
             storedEmbedding = JSON.parse(row.embedding);
           } else if (Array.isArray(row.embedding)) {
             storedEmbedding = row.embedding;
-          } else if (row.embedding && typeof row.embedding === 'object') {
+          } else if (row.embedding && typeof row.embedding === "object") {
             storedEmbedding = row.embedding;
           } else {
             console.warn(`Invalid embedding format for FAQ ${row.faq_id}:`, typeof row.embedding);
             continue;
           }
-          
+
           // Validate that the embedding is an array of numbers
           if (!Array.isArray(storedEmbedding) || storedEmbedding.length === 0) {
             console.warn(`Invalid embedding array for FAQ ${row.faq_id}`);
             continue;
           }
-          
+
           const similarity = this.calculateCosineSimilarity(queryEmbedding, storedEmbedding);
-          
+
           if (similarity > highestSimilarity && similarity >= threshold) {
             highestSimilarity = similarity;
             bestMatch = {
@@ -306,7 +302,7 @@ class EmbeddingsService {
               question: row.question,
               answer: row.answer,
               businessId: businessId,
-              similarity: similarity
+              similarity: similarity,
             };
           }
         } catch (parseError) {
@@ -317,13 +313,15 @@ class EmbeddingsService {
       }
 
       if (bestMatch) {
-        console.log(`Found FAQ match in database for business ${businessId}: "${bestMatch.question}" (similarity: ${bestMatch.similarity})`);
+        console.log(
+          `Found FAQ match in database for business ${businessId}: "${bestMatch.question}" (similarity: ${bestMatch.similarity})`
+        );
       }
 
       return bestMatch;
     } catch (error) {
-      console.error('Error searching FAQ embeddings for business', businessId, ':', error);
-      throw new Error('Failed to search FAQ embeddings');
+      console.error("Error searching FAQ embeddings for business", businessId, ":", error);
+      throw new Error("Failed to search FAQ embeddings");
     }
   }
 
@@ -335,7 +333,7 @@ class EmbeddingsService {
       console.log(`Storing embeddings for ${faqs.length} FAQs for business ${businessId}`);
 
       // Generate embeddings for all FAQ questions
-      const questions = faqs.map(faq => faq.question);
+      const questions = faqs.map((faq) => faq.question);
       const embeddings = await this.generateEmbeddingsBatch(questions);
 
       // Store in database with business-specific tracking
@@ -351,8 +349,8 @@ class EmbeddingsService {
 
       console.log(`FAQ embeddings stored successfully for business ${businessId}`);
     } catch (error) {
-      console.error('Error storing FAQ embeddings for business', businessId, ':', error);
-      throw new Error('Failed to store FAQ embeddings');
+      console.error("Error storing FAQ embeddings for business", businessId, ":", error);
+      throw new Error("Failed to store FAQ embeddings");
     }
   }
 
@@ -361,32 +359,35 @@ class EmbeddingsService {
    */
   async analyzeConversationContext(conversationHistory, currentMessage) {
     try {
-      console.log('Analyzing conversation context with embeddings');
+      console.log("Analyzing conversation context with embeddings");
 
       if (conversationHistory.length === 0) {
         return {
-          context: 'new_conversation',
+          context: "new_conversation",
           confidence: 1.0,
-          relevantHistory: []
+          relevantHistory: [],
         };
       }
 
       // Generate embedding for current message
       const currentEmbedding = await this.generateEmbedding(currentMessage);
-      
+
       // Find most relevant previous messages
       const relevantHistory = [];
-      const historyTexts = conversationHistory.map(msg => msg.content || msg.message).filter(text => text && text.trim().length > 0);
+      const historyTexts = conversationHistory
+        .map((msg) => msg.content || msg.message)
+        .filter((text) => text && text.trim().length > 0 && text !== 'undefined' && text !== 'null');
       const historyEmbeddings = await this.generateEmbeddingsBatch(historyTexts);
 
-      for (let i = 0; i < conversationHistory.length; i++) {
-        const similarity = this.calculateCosineSimilarity(currentEmbedding, historyEmbeddings[i]);
-        
-        if (similarity > 0.6) { // Threshold for relevant context
-          relevantHistory.push({
-            ...conversationHistory[i],
-            relevance: similarity
-          });
+      for (let i = 0; i < conversationHistory.length && i < historyEmbeddings.length; i++) {
+        if (historyEmbeddings[i]) { // Additional safety check
+          const similarity = this.calculateCosineSimilarity(currentEmbedding, historyEmbeddings[i]);
+          if (similarity > 0.6) {
+            relevantHistory.push({
+              ...conversationHistory[i],
+              relevance: similarity,
+            });
+          }
         }
       }
 
@@ -394,12 +395,12 @@ class EmbeddingsService {
       relevantHistory.sort((a, b) => b.relevance - a.relevance);
 
       // Determine context type
-      let context = 'new_topic';
+      let context = "new_topic";
       if (relevantHistory.length > 0) {
         if (relevantHistory[0].relevance > 0.8) {
-          context = 'continuation';
+          context = "continuation";
         } else if (relevantHistory[0].relevance > 0.6) {
-          context = 'related_topic';
+          context = "related_topic";
         }
       }
 
@@ -408,14 +409,14 @@ class EmbeddingsService {
       return {
         context,
         confidence: relevantHistory.length > 0 ? relevantHistory[0].relevance : 0,
-        relevantHistory: relevantHistory.slice(0, 3) // Top 3 most relevant
+        relevantHistory: relevantHistory.slice(0, 3), // Top 3 most relevant
       };
     } catch (error) {
-      console.error('Error analyzing conversation context:', error);
+      console.error("Error analyzing conversation context:", error);
       return {
-        context: 'unknown',
+        context: "unknown",
         confidence: 0,
-        relevantHistory: []
+        relevantHistory: [],
       };
     }
   }
@@ -423,7 +424,14 @@ class EmbeddingsService {
   /**
    * Store conversation embedding for context analysis
    */
-  async storeConversationEmbedding(businessId, conversationId, messageId, messageContent, messageType = 'text', role = 'user') {
+  async storeConversationEmbedding(
+    businessId,
+    conversationId,
+    messageId,
+    messageContent,
+    messageType = "text",
+    role = "user"
+  ) {
     try {
       console.log(`Storing conversation embedding for business ${businessId}, conversation ${conversationId}`);
 
@@ -437,9 +445,9 @@ class EmbeddingsService {
         [businessId, conversationId, messageId, messageContent, JSON.stringify(embedding), messageType]
       );
 
-      console.log('Conversation embedding stored successfully');
+      console.log("Conversation embedding stored successfully");
     } catch (error) {
-      console.error('Error storing conversation embedding:', error);
+      console.error("Error storing conversation embedding:", error);
       // Don't throw error as this is a background operation
     }
   }
@@ -449,48 +457,44 @@ class EmbeddingsService {
    */
   async cleanupMalformedEmbeddings(businessId = null) {
     try {
-      console.log('Cleaning up malformed embeddings...');
-      
-      let query = 'SELECT id, business_id, faq_id, embedding FROM faq_embeddings';
+      console.log("Cleaning up malformed embeddings...");
+
+      let query = "SELECT id, business_id, faq_id, embedding FROM faq_embeddings";
       let params = [];
-      
+
       if (businessId) {
-        query += ' WHERE business_id = $1';
+        query += " WHERE business_id = $1";
         params = [businessId];
       }
-      
+
       const result = await pool.query(query, params);
-      
+
       for (const row of result.rows) {
         try {
           // Try to parse the embedding
           let embedding;
-          if (typeof row.embedding === 'string') {
+          if (typeof row.embedding === "string") {
             embedding = JSON.parse(row.embedding);
           } else {
             embedding = row.embedding;
           }
-          
+
           // Validate the embedding
           if (!Array.isArray(embedding) || embedding.length === 0) {
             console.log(`Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id})`);
-            await pool.query(
-              'DELETE FROM faq_embeddings WHERE id = $1',
-              [row.id]
-            );
+            await pool.query("DELETE FROM faq_embeddings WHERE id = $1", [row.id]);
           }
         } catch (error) {
-          console.log(`Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id}): ${error.message}`);
-          await pool.query(
-            'DELETE FROM faq_embeddings WHERE id = $1',
-            [row.id]
+          console.log(
+            `Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id}): ${error.message}`
           );
+          await pool.query("DELETE FROM faq_embeddings WHERE id = $1", [row.id]);
         }
       }
-      
-      console.log('Malformed embeddings cleanup completed');
+
+      console.log("Malformed embeddings cleanup completed");
     } catch (error) {
-      console.error('Error cleaning up malformed embeddings:', error);
+      console.error("Error cleaning up malformed embeddings:", error);
       throw error;
     }
   }

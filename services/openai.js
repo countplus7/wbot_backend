@@ -1,10 +1,10 @@
-require('dotenv').config();
-const { OpenAI } = require('openai');
-const fs = require('fs-extra');
-const path = require('path');
-const GoogleService = require('./google');
-const OdooService = require('./odoo');
-const EmbeddingsService = require('./embeddings');
+require("dotenv").config();
+const { OpenAI } = require("openai");
+const fs = require("fs-extra");
+const path = require("path");
+const GoogleService = require("./google");
+const OdooService = require("./odoo");
+const EmbeddingsService = require("./embeddings");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -12,77 +12,77 @@ const openai = new OpenAI({
 
 class OpenAIService {
   constructor() {
-    this.model = 'gpt-4';
-    this.visionModel = 'gpt-4o'; // Updated from deprecated gpt-4-vision-preview
+    this.model = "gpt-4";
+    this.visionModel = "gpt-4o"; // Updated from deprecated gpt-4-vision-preview
     this.embeddingsService = EmbeddingsService;
   }
 
   async chatCompletion(messages, conversationHistory = [], businessTone = null, businessId = null, phoneNumber = null) {
     try {
       const latestMessage = messages[messages.length - 1];
-      
+
       // Enhanced AI-powered intent detection with better error handling
       let aiIntent = null;
       if (businessId) {
         try {
-          console.log('Attempting AI intent detection for message:', latestMessage.content);
+          console.log("Attempting AI intent detection for message:", latestMessage.content);
           aiIntent = await this.detectIntentWithAI(latestMessage.content, conversationHistory, businessId);
-          console.log('AI Intent detected:', aiIntent);
+          console.log("AI Intent detected:", aiIntent);
         } catch (error) {
-          console.error('Error in AI intent detection:', error);
-          console.log('Falling back to keyword-based detection');
+          console.error("Error in AI intent detection:", error);
+          console.log("Falling back to keyword-based detection");
           aiIntent = null;
         }
       }
-      
+
       // Handle AI-detected intents first
       if (aiIntent && aiIntent.confidence >= 0.7) {
         console.log(`Routing to AI handler for intent: ${aiIntent.intent}`);
         switch (aiIntent.intent) {
-          case 'GOOGLE_EMAIL':
+          case "GOOGLE_EMAIL":
             return await this.handleGoogleEmailWithAI(businessId, aiIntent, conversationHistory, businessTone);
-          
-          case 'GOOGLE_CALENDAR':
+
+          case "GOOGLE_CALENDAR":
             return await this.handleGoogleCalendarWithAI(businessId, aiIntent, conversationHistory, businessTone);
-          
-          case 'SALESFORCE':
+
+          case "SALESFORCE":
             return await this.handleSalesforceWithAI(businessId, aiIntent, conversationHistory, businessTone);
-          
-          case 'ODOO':
+
+          case "ODOO":
             return await this.handleOdooWithAI(businessId, aiIntent, phoneNumber, conversationHistory, businessTone);
-          
-          case 'GENERAL':
+
+          case "GENERAL":
             // Fall through to regular chat completion
             break;
         }
       }
-      
+
       // Fallback to existing detection methods if AI detection fails or confidence is low
-      console.log('Using fallback keyword-based detection');
+      console.log("Using fallback keyword-based detection");
       const emailRequest = this.detectEmailRequest(latestMessage.content);
       const emailReadRequest = this.detectEmailReadRequest(latestMessage.content);
       const calendarRequest = this.detectCalendarRequest(latestMessage.content);
-      
-      console.log('Fallback detection results:', {
+
+      console.log("Fallback detection results:", {
         emailRequest: !!emailRequest,
         emailReadRequest: !!emailReadRequest,
         calendarRequest: !!calendarRequest,
-        message: latestMessage.content
+        message: latestMessage.content,
       });
-      
+
       // Check for Odoo operations
       const odooOrderRequest = this.detectOdooOrderRequest(latestMessage.content);
       const odooInvoiceRequest = this.detectOdooInvoiceRequest(latestMessage.content);
       const odooLeadRequest = this.detectOdooLeadRequest(latestMessage.content);
       const odooTicketRequest = this.detectOdooTicketRequest(latestMessage.content);
-      
+
       // Handle Odoo order request
       if (odooOrderRequest && businessId && phoneNumber) {
         try {
           const result = await this.handleOdooOrder(businessId, odooOrderRequest, phoneNumber);
           return result;
         } catch (error) {
-          console.error('Error processing Odoo order:', error);
+          console.error("Error processing Odoo order:", error);
           return `❌ Sorry, I couldn't process your order. Please make sure Odoo integration is properly configured. Error: ${error.message}`;
         }
       }
@@ -93,7 +93,7 @@ class OpenAIService {
           const result = await this.handleOdooInvoice(businessId, odooInvoiceRequest);
           return result;
         } catch (error) {
-          console.error('Error processing Odoo invoice request:', error);
+          console.error("Error processing Odoo invoice request:", error);
           return `❌ Sorry, I couldn't check your invoice. Please make sure Odoo integration is properly configured. Error: ${error.message}`;
         }
       }
@@ -104,7 +104,7 @@ class OpenAIService {
           const result = await this.handleOdooLead(businessId, odooLeadRequest, phoneNumber);
           return result;
         } catch (error) {
-          console.error('Error processing Odoo lead:', error);
+          console.error("Error processing Odoo lead:", error);
           return `❌ Sorry, I couldn't create the lead. Please make sure Odoo integration is properly configured. Error: ${error.message}`;
         }
       }
@@ -115,7 +115,7 @@ class OpenAIService {
           const result = await this.handleOdooTicket(businessId, odooTicketRequest, phoneNumber);
           return result;
         } catch (error) {
-          console.error('Error processing Odoo ticket:', error);
+          console.error("Error processing Odoo ticket:", error);
           return `❌ Sorry, I couldn't create the support ticket. Please make sure Odoo integration is properly configured. Error: ${error.message}`;
         }
       }
@@ -126,12 +126,12 @@ class OpenAIService {
           const result = await GoogleService.sendEmail(businessId, {
             to: emailRequest.to,
             subject: emailRequest.subject,
-            body: emailRequest.body
+            body: emailRequest.body,
           });
-          
+
           return `✅ Email sent successfully to ${emailRequest.to}!\n\nSubject: ${emailRequest.subject}\n\nMessage: ${emailRequest.body}`;
         } catch (error) {
-          console.error('Error sending email:', error);
+          console.error("Error sending email:", error);
           return `❌ Sorry, I couldn't send the email. Please make sure Google Workspace integration is properly configured. Error: ${error.message}`;
         }
       }
@@ -140,23 +140,31 @@ class OpenAIService {
       if (emailReadRequest && businessId) {
         try {
           let emails = [];
-          let response = '';
+          let response = "";
 
           switch (emailReadRequest.type) {
-            case 'unread':
+            case "unread":
               emails = await GoogleService.getUnreadEmails(businessId, emailReadRequest.maxResults || 5);
               response = `📧 Here are your unread emails (${emails.length} found):\n\n`;
               break;
-            case 'recent':
+            case "recent":
               emails = await GoogleService.getEmails(businessId, { maxResults: emailReadRequest.maxResults || 5 });
               response = `📧 Here are your recent emails (${emails.length} found):\n\n`;
               break;
-            case 'search':
-              emails = await GoogleService.searchEmails(businessId, emailReadRequest.query, emailReadRequest.maxResults || 5);
+            case "search":
+              emails = await GoogleService.searchEmails(
+                businessId,
+                emailReadRequest.query,
+                emailReadRequest.maxResults || 5
+              );
               response = `📧 Search results for "${emailReadRequest.query}" (${emails.length} found):\n\n`;
               break;
-            case 'label':
-              emails = await GoogleService.getEmailsByLabel(businessId, emailReadRequest.label, emailReadRequest.maxResults || 5);
+            case "label":
+              emails = await GoogleService.getEmailsByLabel(
+                businessId,
+                emailReadRequest.label,
+                emailReadRequest.maxResults || 5
+              );
               response = `📧 Emails from "${emailReadRequest.label}" (${emails.length} found):\n\n`;
               break;
             default:
@@ -171,18 +179,22 @@ class OpenAIService {
           // Format emails for display
           emails.forEach((email, index) => {
             const date = new Date(email.internalDate).toLocaleString();
-            const isUnread = email.labelIds && email.labelIds.includes('UNREAD') ? '🔵 ' : '';
-            const attachmentInfo = email.attachments && email.attachments.length > 0 ? ` 📎 (${email.attachments.length} attachments)` : '';
-            
-            response += `${index + 1}. ${isUnread}**${email.subject || 'No Subject'}**\n`;
-            response += `   📤 From: ${email.from || 'Unknown'}\n`;
+            const isUnread = email.labelIds && email.labelIds.includes("UNREAD") ? "🔵 " : "";
+            const attachmentInfo =
+              email.attachments && email.attachments.length > 0 ? ` 📎 (${email.attachments.length} attachments)` : "";
+
+            response += `${index + 1}. ${isUnread}**${email.subject || "No Subject"}**\n`;
+            response += `   📤 From: ${email.from || "Unknown"}\n`;
             response += `   📅 Date: ${date}\n`;
-            response += `   💬 Preview: ${(email.snippet || email.body || '').substring(0, 100)}...${attachmentInfo}\n\n`;
+            response += `   💬 Preview: ${(email.snippet || email.body || "").substring(
+              0,
+              100
+            )}...${attachmentInfo}\n\n`;
           });
 
           return response;
         } catch (error) {
-          console.error('Error reading emails:', error);
+          console.error("Error reading emails:", error);
           return `❌ Sorry, I couldn't read your emails. Please make sure Google Workspace integration is properly configured. Error: ${error.message}`;
         }
       }
@@ -191,22 +203,31 @@ class OpenAIService {
       if (calendarRequest && businessId) {
         try {
           let events = [];
-          let response = '';
+          let response = "";
 
           switch (calendarRequest.type) {
-            case 'upcoming':
+            case "upcoming":
               events = await GoogleService.getUpcomingEvents(businessId, calendarRequest.maxResults || 5);
               response = `📅 Here are your upcoming events (${events.length} found):\n\n`;
               break;
-            case 'today':
+            case "today":
               const today = new Date();
               const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
               const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
-              events = await GoogleService.getEventsByDateRange(businessId, startOfDay, endOfDay, calendarRequest.maxResults || 10);
+              events = await GoogleService.getEventsByDateRange(
+                businessId,
+                startOfDay,
+                endOfDay,
+                calendarRequest.maxResults || 10
+              );
               response = `📅 Here are your events for today (${events.length} found):\n\n`;
               break;
-            case 'search':
-              events = await GoogleService.searchCalendarEvents(businessId, calendarRequest.query, calendarRequest.maxResults || 5);
+            case "search":
+              events = await GoogleService.searchCalendarEvents(
+                businessId,
+                calendarRequest.query,
+                calendarRequest.maxResults || 5
+              );
               response = `📅 Search results for "${calendarRequest.query}" (${events.length} found):\n\n`;
               break;
             default:
@@ -220,26 +241,26 @@ class OpenAIService {
 
           // Format events for display
           events.forEach((event, index) => {
-            const startTime = event.start?.dateTime ? new Date(event.start.dateTime).toLocaleString() : 'All day';
-            const attendees = event.attendees && event.attendees.length > 0 ? 
-              `\n   👥 Attendees: ${event.attendees.map(a => a.email).join(', ')}` : '';
-            
-            response += `${index + 1}. **${event.summary || 'No Title'}**\n`;
+            const startTime = event.start?.dateTime ? new Date(event.start.dateTime).toLocaleString() : "All day";
+            const attendees =
+              event.attendees && event.attendees.length > 0
+                ? `\n   👥 Attendees: ${event.attendees.map((a) => a.email).join(", ")}`
+                : "";
+
+            response += `${index + 1}. **${event.summary || "No Title"}**\n`;
             response += `   🕐 Time: ${startTime}\n`;
             if (event.description) {
               response += `   📝 Description: ${event.description.substring(0, 100)}...\n`;
-            response += `${attendees}\n\n`;
+              response += `${attendees}\n\n`;
             }
           });
 
           return response;
         } catch (error) {
-          console.error('Error handling calendar request:', error);
+          console.error("Error handling calendar request:", error);
           return `❌ Sorry, I couldn't access your calendar. Please make sure Google Workspace integration is properly configured. Error: ${error.message}`;
         }
       }
-
-
 
       let systemContent = `You are a helpful AI assistant integrated with WhatsApp and Google Workspace. 
       You can send and read emails through Gmail when users request it. Be conversational, friendly, and helpful. 
@@ -259,13 +280,13 @@ class OpenAIService {
       }
 
       const systemMessage = {
-        role: 'system',
-        content: systemContent
+        role: "system",
+        content: systemContent,
       };
 
       // Validate and filter messages to ensure they have required properties
-      const validHistory = conversationHistory.filter(msg => msg && msg.role && msg.content);
-      const validMessages = messages.filter(msg => msg && msg.role && msg.content);
+      const validHistory = conversationHistory.filter((msg) => msg && msg.role && msg.content);
+      const validMessages = messages.filter((msg) => msg && msg.role && msg.content);
       const allMessages = [systemMessage, ...validHistory, ...validMessages];
 
       const response = await openai.chat.completions.create({
@@ -277,8 +298,8 @@ class OpenAIService {
 
       return response.choices[0].message.content;
     } catch (error) {
-      console.error('OpenAI chat completion error:', error);
-      throw new Error('Failed to generate AI response');
+      console.error("OpenAI chat completion error:", error);
+      throw new Error("Failed to generate AI response");
     }
   }
 
@@ -298,19 +319,19 @@ class OpenAIService {
     - "show me recent emails" or "get my latest emails"
     - "search emails for [query]" or "find emails about [topic]"
     - "show emails from [label]" (like Important, Promotions, etc.)`;
-    
+
     // Apply business-specific tone if provided
     if (businessTone && businessTone.tone_instructions) {
       systemContent += `\n\n${businessTone.tone_instructions}`;
     }
-    
+
     return systemContent;
   }
 
-  async analyzeImage(imagePath, userMessage = '', businessTone = null) {
+  async analyzeImage(imagePath, userMessage = "", businessTone = null) {
     try {
       console.log(`OpenAI: Analyzing image at path: ${imagePath}`);
-      
+
       // Check if file exists
       if (!fs.existsSync(imagePath)) {
         console.error(`OpenAI: Image file not found: ${imagePath}`);
@@ -318,18 +339,19 @@ class OpenAIService {
       }
 
       const imageBuffer = fs.readFileSync(imagePath);
-      const base64Image = imageBuffer.toString('base64');
-      
+      const base64Image = imageBuffer.toString("base64");
+
       console.log(`OpenAI: Image file size: ${imageBuffer.length} bytes`);
       console.log(`OpenAI: Base64 length: ${base64Image.length} characters`);
 
-      let promptText = 'Please analyze this image and describe what you see in detail. Include any text, objects, people, colors, or important details. Be specific and helpful in your description.';
-      
+      let promptText =
+        "Please analyze this image and describe what you see in detail. Include any text, objects, people, colors, or important details. Be specific and helpful in your description.";
+
       // If user sent a message with the image, include it in the analysis
-      if (userMessage && userMessage.trim() !== '' && userMessage !== 'User sent a image message') {
+      if (userMessage && userMessage.trim() !== "" && userMessage !== "User sent a image message") {
         promptText += ` The user also sent this message with the image: "${userMessage}". Please consider this context in your analysis.`;
       }
-      
+
       // Apply business-specific tone if provided
       if (businessTone && businessTone.tone_instructions) {
         promptText += `\n\n${businessTone.tone_instructions}`;
@@ -339,14 +361,14 @@ class OpenAIService {
 
       const messages = [
         {
-          role: 'user',
+          role: "user",
           content: [
             {
-              type: 'text',
-              text: promptText
+              type: "text",
+              text: promptText,
             },
             {
-              type: 'image_url',
+              type: "image_url",
               image_url: {
                 url: `data:image/jpeg;base64,${base64Image}`,
               },
@@ -367,9 +389,9 @@ class OpenAIService {
       console.log(`OpenAI: Received response: ${response.choices[0].message.content}`);
       return response.choices[0].message.content;
     } catch (error) {
-      console.error('OpenAI image analysis error:', error);
-      console.error('OpenAI error details:', error.message);
-      console.error('OpenAI error stack:', error.stack);
+      console.error("OpenAI image analysis error:", error);
+      console.error("OpenAI error details:", error.message);
+      console.error("OpenAI error stack:", error.stack);
       throw new Error(`Failed to analyze image: ${error.message}`);
     }
   }
@@ -382,45 +404,57 @@ class OpenAIService {
       }
 
       const audioFile = fs.createReadStream(audioPath);
-      
+
       const response = await openai.audio.transcriptions.create({
         file: audioFile,
-        model: 'whisper-1',
-        response_format: 'text',
-        language: 'en',
+        model: "whisper-1",
+        response_format: "text",
+        language: "en",
         temperature: 0.2, // Lower temperature for more accurate transcription
       });
 
       return response;
     } catch (error) {
-      console.error('OpenAI transcription error:', error);
+      console.error("OpenAI transcription error:", error);
       throw error;
     }
   }
 
-  async processMessage(messageType, content, filePath = null, conversationHistory = [], businessTone = null, businessId = null, phoneNumber = null) {
+  async processMessage(
+    messageType,
+    content,
+    filePath = null,
+    conversationHistory = [],
+    businessTone = null,
+    businessId = null,
+    phoneNumber = null
+  ) {
     try {
       console.log(`OpenAI: Processing message type: ${messageType}`);
       console.log(`OpenAI: Content: ${content}`);
       console.log(`OpenAI: File path: ${filePath}`);
-      console.log(`OpenAI: File exists: ${filePath ? fs.existsSync(filePath) : 'N/A'}`);
-      
-      let aiResponse = '';
+      console.log(`OpenAI: File exists: ${filePath ? fs.existsSync(filePath) : "N/A"}`);
+
+      let aiResponse = "";
       let intent = null; // Initialize intent variable
 
       switch (messageType) {
-        case 'text':
-          console.log('OpenAI: Processing text message');
-          aiResponse = await this.chatCompletion([
-            { role: 'user', content: content }
-          ], conversationHistory, businessTone, businessId, phoneNumber);
+        case "text":
+          console.log("OpenAI: Processing text message");
+          aiResponse = await this.chatCompletion(
+            [{ role: "user", content: content }],
+            conversationHistory,
+            businessTone,
+            businessId,
+            phoneNumber
+          );
           break;
 
-        case 'image':
-          console.log('OpenAI: Processing image message');
+        case "image":
+          console.log("OpenAI: Processing image message");
           if (!filePath) {
-            console.error('OpenAI: Image file path is required for image analysis');
-            throw new Error('Image file path is required for image analysis');
+            console.error("OpenAI: Image file path is required for image analysis");
+            throw new Error("Image file path is required for image analysis");
           }
           if (!fs.existsSync(filePath)) {
             console.error(`OpenAI: Image file does not exist: ${filePath}`);
@@ -428,34 +462,61 @@ class OpenAIService {
           }
           // For images, analyze directly and provide a conversational response
           const imageAnalysis = await this.analyzeImage(filePath, content, businessTone);
-          
+
           // If there's user text with the image, combine it with the analysis
-          if (content && content.trim() !== '' && content !== `User sent a ${messageType} message`) {
-            aiResponse = await this.chatCompletion([
-              { role: 'user', content: `User sent an image with this message: "${content}". Here's what I see in the image: ${imageAnalysis}. Please respond to both the image and the user's message.` }
-            ], conversationHistory, businessTone, businessId, phoneNumber);
+          if (content && content.trim() !== "" && content !== `User sent a ${messageType} message`) {
+            aiResponse = await this.chatCompletion(
+              [
+                {
+                  role: "user",
+                  content: `User sent an image with this message: "${content}". Here's what I see in the image: ${imageAnalysis}. Please respond to both the image and the user's message.`,
+                },
+              ],
+              conversationHistory,
+              businessTone,
+              businessId,
+              phoneNumber
+            );
           } else {
             // Just respond to the image analysis
-            aiResponse = await this.chatCompletion([
-              { role: 'user', content: `I analyzed this image and here's what I see: ${imageAnalysis}. Please provide a helpful response about what's in the image.` }
-            ], conversationHistory, businessTone, businessId, phoneNumber);
+            aiResponse = await this.chatCompletion(
+              [
+                {
+                  role: "user",
+                  content: `I analyzed this image and here's what I see: ${imageAnalysis}. Please provide a helpful response about what's in the image.`,
+                },
+              ],
+              conversationHistory,
+              businessTone,
+              businessId,
+              phoneNumber
+            );
           }
           break;
 
-        case 'audio':
-          console.log('OpenAI: Processing audio message');
+        case "audio":
+          console.log("OpenAI: Processing audio message");
           if (!filePath) {
-            console.error('OpenAI: Audio file path is required for transcription');
-            throw new Error('Audio file path is required for transcription');
+            console.error("OpenAI: Audio file path is required for transcription");
+            throw new Error("Audio file path is required for transcription");
           }
           if (!fs.existsSync(filePath)) {
             console.error(`OpenAI: Audio file does not exist: ${filePath}`);
             throw new Error(`Audio file does not exist: ${filePath}`);
           }
           const transcription = await this.transcribeAudio(filePath);
-          aiResponse = await this.chatCompletion([
-            { role: 'user', content: `Transcribed audio: "${transcription}". Please respond to this message naturally and conversationally.` }
-          ], conversationHistory, businessTone, businessId, phoneNumber);
+          aiResponse = await this.chatCompletion(
+            [
+              {
+                role: "user",
+                content: `Transcribed audio: "${transcription}". Please respond to this message naturally and conversationally.`,
+              },
+            ],
+            conversationHistory,
+            businessTone,
+            businessId,
+            phoneNumber
+          );
           break;
 
         default:
@@ -466,53 +527,54 @@ class OpenAIService {
       console.log(`OpenAI: Generated response: ${aiResponse}`);
       return aiResponse;
     } catch (error) {
-      console.error('OpenAI: Error processing message:', error);
-      console.error('OpenAI: Error details:', error.message);
-      console.error('OpenAI: Error stack:', error.stack);
+      console.error("OpenAI: Error processing message:", error);
+      console.error("OpenAI: Error details:", error.message);
+      console.error("OpenAI: Error stack:", error.stack);
       throw error;
     }
   }
-
-
 
   detectEmailRequest(message) {
     // Format 1: "send email to [email] with subject [subject] and body [body]"
     let emailRegex = /send\s+email\s+to\s+([^\s]+@[^\s]+)\s+with\s+subject\s+([^and]+?)\s+and\s+body\s+(.+)/i;
     let match = message.match(emailRegex);
-    
+
     if (match) {
       return {
         to: match[1].trim(),
         subject: match[2].trim(),
-        body: match[3].trim()
+        body: match[3].trim(),
       };
     }
 
     // Format 2: "send message to [email]\nSubject: [subject]\nContent: [body]"
-    const lines = message.split('\n').map(line => line.trim()).filter(line => line);
+    const lines = message
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line);
     if (lines.length >= 3) {
       const firstLine = lines[0].toLowerCase();
-      if (firstLine.includes('send') && firstLine.includes('to') && firstLine.includes('@')) {
+      if (firstLine.includes("send") && firstLine.includes("to") && firstLine.includes("@")) {
         const emailMatch = firstLine.match(/([^\s]+@[^\s]+)/);
         if (emailMatch) {
-          let subject = '';
-          let body = '';
-          
+          let subject = "";
+          let body = "";
+
           // Look for Subject: and Content: lines
           for (let i = 1; i < lines.length; i++) {
             const line = lines[i];
-            if (line.toLowerCase().startsWith('subject:')) {
+            if (line.toLowerCase().startsWith("subject:")) {
               subject = line.substring(8).trim();
-            } else if (line.toLowerCase().startsWith('content:')) {
+            } else if (line.toLowerCase().startsWith("content:")) {
               body = line.substring(8).trim();
             }
           }
-          
+
           if (subject && body) {
             return {
               to: emailMatch[1].trim(),
               subject: subject,
-              body: body
+              body: body,
             };
           }
         }
@@ -522,85 +584,94 @@ class OpenAIService {
     // Format 3: "send message to [email]\nSubject: [subject]\nBody: [body]"
     if (lines.length >= 3) {
       const firstLine = lines[0].toLowerCase();
-      if (firstLine.includes('send') && firstLine.includes('to') && firstLine.includes('@')) {
+      if (firstLine.includes("send") && firstLine.includes("to") && firstLine.includes("@")) {
         const emailMatch = firstLine.match(/([^\s]+@[^\s]+)/);
         if (emailMatch) {
-          let subject = '';
-          let body = '';
-          
+          let subject = "";
+          let body = "";
+
           // Look for Subject: and Body: lines
           for (let i = 1; i < lines.length; i++) {
             const line = lines[i];
-            if (line.toLowerCase().startsWith('subject:')) {
+            if (line.toLowerCase().startsWith("subject:")) {
               subject = line.substring(8).trim();
-            } else if (line.toLowerCase().startsWith('body:')) {
+            } else if (line.toLowerCase().startsWith("body:")) {
               body = line.substring(5).trim();
             }
           }
-          
+
           if (subject && body) {
             return {
               to: emailMatch[1].trim(),
               subject: subject,
-              body: body
+              body: body,
             };
           }
         }
       }
     }
-    
+
     return null;
   }
 
-
   detectEmailReadRequest(message) {
     const lowercaseMessage = message.toLowerCase();
-    
+
     // Check for unread emails - more flexible patterns
-    if (lowercaseMessage.includes('unread') && 
-        (lowercaseMessage.includes('email') || lowercaseMessage.includes('message'))) {
-      return { type: 'unread', maxResults: this.extractNumber(message) || 5 };
+    if (
+      lowercaseMessage.includes("unread") &&
+      (lowercaseMessage.includes("email") || lowercaseMessage.includes("message"))
+    ) {
+      return { type: "unread", maxResults: this.extractNumber(message) || 5 };
     }
-    
+
     // Check for recent/latest emails - more flexible patterns
-    if ((lowercaseMessage.includes('recent') || lowercaseMessage.includes('latest') || lowercaseMessage.includes('new')) && 
-        (lowercaseMessage.includes('email') || lowercaseMessage.includes('message'))) {
-      return { type: 'recent', maxResults: this.extractNumber(message) || 5 };
+    if (
+      (lowercaseMessage.includes("recent") ||
+        lowercaseMessage.includes("latest") ||
+        lowercaseMessage.includes("new")) &&
+      (lowercaseMessage.includes("email") || lowercaseMessage.includes("message"))
+    ) {
+      return { type: "recent", maxResults: this.extractNumber(message) || 5 };
     }
-    
+
     // Check for general email reading requests
-    if ((lowercaseMessage.includes('read') || lowercaseMessage.includes('show') || lowercaseMessage.includes('get')) && 
-        (lowercaseMessage.includes('email') || lowercaseMessage.includes('message'))) {
+    if (
+      (lowercaseMessage.includes("read") || lowercaseMessage.includes("show") || lowercaseMessage.includes("get")) &&
+      (lowercaseMessage.includes("email") || lowercaseMessage.includes("message"))
+    ) {
       // If it mentions unread, prioritize unread
-      if (lowercaseMessage.includes('unread')) {
-        return { type: 'unread', maxResults: this.extractNumber(message) || 5 };
+      if (lowercaseMessage.includes("unread")) {
+        return { type: "unread", maxResults: this.extractNumber(message) || 5 };
       }
       // Otherwise, get recent emails
-      return { type: 'recent', maxResults: this.extractNumber(message) || 5 };
+      return { type: "recent", maxResults: this.extractNumber(message) || 5 };
     }
-    
+
     // Check for email search
-    const searchMatch = message.match(/search\s+(?:emails?|messages?)\s+for\s+(.+)|find\s+(?:emails?|messages?)\s+about\s+(.+)|(?:emails?|messages?)\s+about\s+(.+)/i);
+    const searchMatch = message.match(
+      /search\s+(?:emails?|messages?)\s+for\s+(.+)|find\s+(?:emails?|messages?)\s+about\s+(.+)|(?:emails?|messages?)\s+about\s+(.+)/i
+    );
     if (searchMatch) {
       const query = searchMatch[1] || searchMatch[2] || searchMatch[3];
-      return { 
-        type: 'search', 
+      return {
+        type: "search",
         query: query.trim(),
-        maxResults: this.extractNumber(message) || 5 
+        maxResults: this.extractNumber(message) || 5,
       };
     }
-    
+
     // Check for emails by label
     const labelMatch = message.match(/emails?\s+from\s+(\w+)|show\s+(\w+)\s+emails?/i);
     if (labelMatch) {
       const label = labelMatch[1] || labelMatch[2];
-      return { 
-        type: 'label', 
+      return {
+        type: "label",
         label: label.trim(),
-        maxResults: this.extractNumber(message) || 5 
+        maxResults: this.extractNumber(message) || 5,
       };
     }
-    
+
     return null;
   }
 
@@ -611,25 +682,37 @@ class OpenAIService {
 
   detectCalendarRequest(message) {
     const lowercaseMessage = message.toLowerCase();
-    
+
     // Check for upcoming events / schedule
-    if (lowercaseMessage.includes('upcoming') && 
-        (lowercaseMessage.includes('event') || lowercaseMessage.includes('meeting') || lowercaseMessage.includes('schedule'))) {
-      return { type: 'upcoming', maxResults: this.extractNumber(message) || 5 };
+    if (
+      lowercaseMessage.includes("upcoming") &&
+      (lowercaseMessage.includes("event") ||
+        lowercaseMessage.includes("meeting") ||
+        lowercaseMessage.includes("schedule"))
+    ) {
+      return { type: "upcoming", maxResults: this.extractNumber(message) || 5 };
     }
-    
+
     // Check for today's events
-    if (lowercaseMessage.includes('today') && 
-        (lowercaseMessage.includes('event') || lowercaseMessage.includes('meeting') || lowercaseMessage.includes('schedule'))) {
-      return { type: 'today', maxResults: this.extractNumber(message) || 10 };
+    if (
+      lowercaseMessage.includes("today") &&
+      (lowercaseMessage.includes("event") ||
+        lowercaseMessage.includes("meeting") ||
+        lowercaseMessage.includes("schedule"))
+    ) {
+      return { type: "today", maxResults: this.extractNumber(message) || 10 };
     }
-    
+
     // Check for general schedule/calendar requests
-    if ((lowercaseMessage.includes('schedule') || lowercaseMessage.includes('calendar') || lowercaseMessage.includes('agenda')) &&
-        (lowercaseMessage.includes('show') || lowercaseMessage.includes('check') || lowercaseMessage.includes('what'))) {
-      return { type: 'upcoming', maxResults: this.extractNumber(message) || 5 };
+    if (
+      (lowercaseMessage.includes("schedule") ||
+        lowercaseMessage.includes("calendar") ||
+        lowercaseMessage.includes("agenda")) &&
+      (lowercaseMessage.includes("show") || lowercaseMessage.includes("check") || lowercaseMessage.includes("what"))
+    ) {
+      return { type: "upcoming", maxResults: this.extractNumber(message) || 5 };
     }
-    
+
     return null;
   }
 
@@ -645,31 +728,56 @@ class OpenAIService {
    */
   detectCalendarBookingIntent(message) {
     const lowercaseMessage = message.toLowerCase();
-    
+
     // Booking keywords
     const bookingKeywords = [
-      'book', 'schedule', 'appointment', 'meeting', 'reserve', 'set up',
-      'arrange', 'plan', 'organize', 'fix', 'make an appointment'
+      "book",
+      "schedule",
+      "appointment",
+      "meeting",
+      "reserve",
+      "set up",
+      "arrange",
+      "plan",
+      "organize",
+      "fix",
+      "make an appointment",
     ];
-    
+
     // Time indicators
     const timeKeywords = [
-      'tomorrow', 'today', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
-      'am', 'pm', 'morning', 'afternoon', 'evening', 'night', 'at', 'on', 'for'
+      "tomorrow",
+      "today",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday",
+      "am",
+      "pm",
+      "morning",
+      "afternoon",
+      "evening",
+      "night",
+      "at",
+      "on",
+      "for",
     ];
-    
+
     // Check if message contains booking intent
-    const hasBookingIntent = bookingKeywords.some(keyword => lowercaseMessage.includes(keyword));
-    const hasTimeIntent = timeKeywords.some(keyword => lowercaseMessage.includes(keyword));
-    
+    const hasBookingIntent = bookingKeywords.some((keyword) => lowercaseMessage.includes(keyword));
+    const hasTimeIntent = timeKeywords.some((keyword) => lowercaseMessage.includes(keyword));
+
     if (hasBookingIntent && hasTimeIntent) {
       return {
-        intent: 'book_appointment',
+        intent: "book_appointment",
         confidence: 0.8,
-        extractedData: this.extractBookingData(message)
+        extractedData: this.extractBookingData(message),
       };
     }
-    
+
     return null;
   }
 
@@ -678,24 +786,29 @@ class OpenAIService {
    */
   detectAvailabilityIntent(message) {
     const lowercaseMessage = message.toLowerCase();
-    
+
     const availabilityKeywords = [
-      'available', 'free', 'busy', 'open', 'check', 'are you free',
-      'do you have time', 'when are you available', 'what time'
+      "available",
+      "free",
+      "busy",
+      "open",
+      "check",
+      "are you free",
+      "do you have time",
+      "when are you available",
+      "what time",
     ];
-    
-    const hasAvailabilityIntent = availabilityKeywords.some(keyword => 
-      lowercaseMessage.includes(keyword)
-    );
-    
+
+    const hasAvailabilityIntent = availabilityKeywords.some((keyword) => lowercaseMessage.includes(keyword));
+
     if (hasAvailabilityIntent) {
       return {
-        intent: 'check_availability',
+        intent: "check_availability",
         confidence: 0.7,
-        extractedData: this.extractTimeData(message)
+        extractedData: this.extractTimeData(message),
       };
     }
-    
+
     return null;
   }
 
@@ -704,24 +817,19 @@ class OpenAIService {
    */
   detectReminderIntent(message) {
     const lowercaseMessage = message.toLowerCase();
-    
-    const reminderKeywords = [
-      'remind', 'reminder', 'remember', 'don\'t forget', 'call me',
-      'notify', 'alert', 'ping'
-    ];
-    
-    const hasReminderIntent = reminderKeywords.some(keyword => 
-      lowercaseMessage.includes(keyword)
-    );
-    
+
+    const reminderKeywords = ["remind", "reminder", "remember", "don't forget", "call me", "notify", "alert", "ping"];
+
+    const hasReminderIntent = reminderKeywords.some((keyword) => lowercaseMessage.includes(keyword));
+
     if (hasReminderIntent) {
       return {
-        intent: 'create_reminder',
+        intent: "create_reminder",
         confidence: 0.8,
-        extractedData: this.extractReminderData(message)
+        extractedData: this.extractReminderData(message),
       };
     }
-    
+
     return null;
   }
 
@@ -730,31 +838,33 @@ class OpenAIService {
    */
   detectMeetingIntent(message) {
     const lowercaseMessage = message.toLowerCase();
-    
+
     const meetingKeywords = [
-      'meeting', 'call', 'conference', 'video call', 'zoom', 'teams',
-      'discuss', 'talk', 'chat', 'conversation'
+      "meeting",
+      "call",
+      "conference",
+      "video call",
+      "zoom",
+      "teams",
+      "discuss",
+      "talk",
+      "chat",
+      "conversation",
     ];
-    
-    const participantKeywords = [
-      'with', 'and', 'include', 'invite', 'add'
-    ];
-    
-    const hasMeetingIntent = meetingKeywords.some(keyword => 
-      lowercaseMessage.includes(keyword)
-    );
-    const hasParticipants = participantKeywords.some(keyword => 
-      lowercaseMessage.includes(keyword)
-    );
-    
+
+    const participantKeywords = ["with", "and", "include", "invite", "add"];
+
+    const hasMeetingIntent = meetingKeywords.some((keyword) => lowercaseMessage.includes(keyword));
+    const hasParticipants = participantKeywords.some((keyword) => lowercaseMessage.includes(keyword));
+
     if (hasMeetingIntent) {
       return {
-        intent: 'schedule_meeting',
+        intent: "schedule_meeting",
         confidence: 0.8,
-        extractedData: this.extractMeetingData(message)
+        extractedData: this.extractMeetingData(message),
       };
     }
-    
+
     return null;
   }
 
@@ -763,36 +873,36 @@ class OpenAIService {
    */
   extractBookingData(message) {
     const data = {
-      title: '',
+      title: "",
       time: null,
       date: null,
       duration: 60, // default 1 hour
-      description: ''
+      description: "",
     };
-    
+
     // Extract time
     const timeMatch = message.match(/(\d{1,2}):?(\d{0,2})\s*(am|pm|AM|PM)?/i);
     if (timeMatch) {
       let hours = parseInt(timeMatch[1]);
       const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
-      
-      if (period === 'pm' && hours !== 12) hours += 12;
-      if (period === 'am' && hours === 12) hours = 0;
-      
-      data.time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : "";
+
+      if (period === "pm" && hours !== 12) hours += 12;
+      if (period === "am" && hours === 12) hours = 0;
+
+      data.time = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
     }
-    
+
     // Extract date - FIXED VERSION
     const tomorrowMatch = message.match(/tomorrow/i);
     const todayMatch = message.match(/today/i);
-    
+
     if (tomorrowMatch) {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      data.date = tomorrow.toISOString().split('T')[0];
+      data.date = tomorrow.toISOString().split("T")[0];
     } else if (todayMatch) {
-      data.date = new Date().toISOString().split('T')[0];
+      data.date = new Date().toISOString().split("T")[0];
     } else {
       // Check for day names
       const dayMatch = message.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
@@ -800,15 +910,17 @@ class OpenAIService {
         data.date = this.getNextDayOfWeek(dayMatch[1].toLowerCase());
       }
     }
-    
+
     // Extract title/description - IMPROVED VERSION
-    const titleMatch = message.match(/(?:book|schedule|appointment)\s+(?:for\s+)?(.+?)(?:\s+tomorrow|\s+today|\s+at|\s+on|\s+next|\s+monday|\s+tuesday|\s+wednesday|\s+thursday|\s+friday|\s+saturday|\s+sunday|$)/i);
+    const titleMatch = message.match(
+      /(?:book|schedule|appointment)\s+(?:for\s+)?(.+?)(?:\s+tomorrow|\s+today|\s+at|\s+on|\s+next|\s+monday|\s+tuesday|\s+wednesday|\s+thursday|\s+friday|\s+saturday|\s+sunday|$)/i
+    );
     if (titleMatch) {
       data.title = titleMatch[1].trim();
     }
-    
-    console.log('Extracted booking data:', data); // Debug log
-    
+
+    console.log("Extracted booking data:", data); // Debug log
+
     return data;
   }
 
@@ -818,37 +930,37 @@ class OpenAIService {
   extractTimeData(message) {
     const data = {
       date: null,
-      time: null
+      time: null,
     };
-    
+
     // Extract date
     const tomorrowMatch = message.match(/tomorrow/i);
     const todayMatch = message.match(/today/i);
     const fridayMatch = message.match(/friday/i);
-    
+
     if (tomorrowMatch) {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      data.date = tomorrow.toISOString().split('T')[0];
+      data.date = tomorrow.toISOString().split("T")[0];
     } else if (todayMatch) {
-      data.date = new Date().toISOString().split('T')[0];
+      data.date = new Date().toISOString().split("T")[0];
     } else if (fridayMatch) {
-      data.date = this.getNextDayOfWeek('friday');
+      data.date = this.getNextDayOfWeek("friday");
     }
-    
+
     // Extract time
     const timeMatch = message.match(/(\d{1,2}):?(\d{0,2})\s*(am|pm|AM|PM)?/i);
     if (timeMatch) {
       let hours = parseInt(timeMatch[1]);
       const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
-      
-      if (period === 'pm' && hours !== 12) hours += 12;
-      if (period === 'am' && hours === 12) hours = 0;
-      
-      data.time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : "";
+
+      if (period === "pm" && hours !== 12) hours += 12;
+      if (period === "am" && hours === 12) hours = 0;
+
+      data.time = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
     }
-    
+
     return data;
   }
 
@@ -857,43 +969,45 @@ class OpenAIService {
    */
   extractReminderData(message) {
     const data = {
-      title: '',
+      title: "",
       time: null,
       date: null,
-      description: ''
+      description: "",
     };
-    
+
     // Extract reminder text
-    const reminderMatch = message.match(/(?:remind|reminder)\s+(?:me\s+to\s+)?(.+?)(?:\s+at|\s+on|\s+tomorrow|\s+today|$)/i);
+    const reminderMatch = message.match(
+      /(?:remind|reminder)\s+(?:me\s+to\s+)?(.+?)(?:\s+at|\s+on|\s+tomorrow|\s+today|$)/i
+    );
     if (reminderMatch) {
       data.title = reminderMatch[1].trim();
     }
-    
+
     // Extract time
     const timeMatch = message.match(/(\d{1,2}):?(\d{0,2})\s*(am|pm|AM|PM)?/i);
     if (timeMatch) {
       let hours = parseInt(timeMatch[1]);
       const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
-      
-      if (period === 'pm' && hours !== 12) hours += 12;
-      if (period === 'am' && hours === 12) hours = 0;
-      
-      data.time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : "";
+
+      if (period === "pm" && hours !== 12) hours += 12;
+      if (period === "am" && hours === 12) hours = 0;
+
+      data.time = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
     }
-    
+
     // Extract date
     const tomorrowMatch = message.match(/tomorrow/i);
     const todayMatch = message.match(/today/i);
-    
+
     if (tomorrowMatch) {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      data.date = tomorrow.toISOString().split('T')[0];
+      data.date = tomorrow.toISOString().split("T")[0];
     } else if (todayMatch) {
-      data.date = new Date().toISOString().split('T')[0];
+      data.date = new Date().toISOString().split("T")[0];
     }
-    
+
     return data;
   }
 
@@ -902,48 +1016,48 @@ class OpenAIService {
    */
   extractMeetingData(message) {
     const data = {
-      title: '',
+      title: "",
       time: null,
       date: null,
       participants: [],
-      duration: 60
+      duration: 60,
     };
-    
+
     // Extract participants
     const withMatch = message.match(/with\s+([^at]+?)(?:\s+at|\s+on|\s+tomorrow|\s+today|$)/i);
     if (withMatch) {
-      const participants = withMatch[1].split(/[,\s]+/).filter(p => p.trim());
-      data.participants = participants.map(p => p.trim());
+      const participants = withMatch[1].split(/[,\s]+/).filter((p) => p.trim());
+      data.participants = participants.map((p) => p.trim());
     }
-    
+
     // Extract time
     const timeMatch = message.match(/(\d{1,2}):?(\d{0,2})\s*(am|pm|AM|PM)?/i);
     if (timeMatch) {
       let hours = parseInt(timeMatch[1]);
       const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
-      
-      if (period === 'pm' && hours !== 12) hours += 12;
-      if (period === 'am' && hours === 12) hours = 0;
-      
-      data.time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : "";
+
+      if (period === "pm" && hours !== 12) hours += 12;
+      if (period === "am" && hours === 12) hours = 0;
+
+      data.time = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
     }
-    
+
     // Extract date
     const tomorrowMatch = message.match(/tomorrow/i);
     const todayMatch = message.match(/today/i);
     const mondayMatch = message.match(/monday/i);
-    
+
     if (tomorrowMatch) {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      data.date = tomorrow.toISOString().split('T')[0];
+      data.date = tomorrow.toISOString().split("T")[0];
     } else if (todayMatch) {
-      data.date = new Date().toISOString().split('T')[0];
+      data.date = new Date().toISOString().split("T")[0];
     } else if (mondayMatch) {
-      data.date = this.getNextDayOfWeek('monday');
+      data.date = this.getNextDayOfWeek("monday");
     }
-    
+
     return data;
   }
 
@@ -952,23 +1066,28 @@ class OpenAIService {
    */
   getNextDayOfWeek(dayName) {
     const days = {
-      'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
-      'thursday': 4, 'friday': 5, 'saturday': 6
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
     };
-    
+
     const targetDay = days[dayName.toLowerCase()];
     const today = new Date();
     const currentDay = today.getDay();
-    
+
     let daysUntilTarget = targetDay - currentDay;
     if (daysUntilTarget <= 0) {
       daysUntilTarget += 7;
     }
-    
+
     const targetDate = new Date(today);
     targetDate.setDate(today.getDate() + daysUntilTarget);
-    
-    return targetDate.toISOString().split('T')[0];
+
+    return targetDate.toISOString().split("T")[0];
   }
 
   /**
@@ -978,16 +1097,16 @@ class OpenAIService {
     // Try different intent detectors
     const bookingIntent = this.detectCalendarBookingIntent(message);
     if (bookingIntent) return bookingIntent;
-    
+
     const availabilityIntent = this.detectAvailabilityIntent(message);
     if (availabilityIntent) return availabilityIntent;
-    
+
     const reminderIntent = this.detectReminderIntent(message);
     if (reminderIntent) return reminderIntent;
-    
+
     const meetingIntent = this.detectMeetingIntent(message);
     if (meetingIntent) return meetingIntent;
-    
+
     return null;
   }
 
@@ -997,8 +1116,8 @@ class OpenAIService {
    */
   async detectIntentWithAI(message, conversationHistory = [], businessId = null) {
     try {
-      console.log('AI Intent Detection - Input message:', message);
-      
+      console.log("AI Intent Detection - Input message:", message);
+
       const systemPrompt = `You are an AI assistant that analyzes customer messages to detect business intents across multiple systems.
 
 Your task is to analyze the customer's message and determine if they want to interact with:
@@ -1023,41 +1142,48 @@ Return ONLY valid JSON. If no clear intent is detected, return {"intent": "GENER
 
       const userPrompt = `Analyze this customer message: "${message}"
 
-${conversationHistory.length > 0 ? `Previous conversation context: ${conversationHistory.slice(-3).map(msg => `${msg.role}: ${msg.content}`).join('\n')}` : ''}
+${
+  conversationHistory.length > 0
+    ? `Previous conversation context: ${conversationHistory
+        .slice(-3)
+        .map((msg) => `${msg.role}: ${msg.content}`)
+        .join("\n")}`
+    : ""
+}
 
 Extract the intent and relevant information.`;
 
-      console.log('AI Intent Detection - Making API call to OpenAI');
-      
+      console.log("AI Intent Detection - Making API call to OpenAI");
+
       const response = await openai.chat.completions.create({
         model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 300
+        max_tokens: 300,
       });
 
-      console.log('AI Intent Detection - Raw response:', response.choices[0].message.content);
-      
+      console.log("AI Intent Detection - Raw response:", response.choices[0].message.content);
+
       const result = JSON.parse(response.choices[0].message.content);
-      
-      console.log('AI Intent Detection - Parsed result:', result);
-      
+
+      console.log("AI Intent Detection - Parsed result:", result);
+
       // Only return intents with high confidence
       if (result.confidence >= 0.7) {
         return {
           ...result,
-          originalMessage: message
+          originalMessage: message,
         };
       }
-      
-      console.log('AI Intent Detection - Low confidence, returning null');
+
+      console.log("AI Intent Detection - Low confidence, returning null");
       return null;
     } catch (error) {
-      console.error('Error in AI intent detection:', error);
-      console.error('Error details:', error.message);
+      console.error("Error in AI intent detection:", error);
+      console.error("Error details:", error.message);
       // Fallback to simple keyword matching if AI fails
       return null;
     }
@@ -1096,7 +1222,14 @@ Return ONLY valid JSON.`;
 
       const userPrompt = `Analyze this Google Workspace request: "${message}"
 
-${conversationHistory.length > 0 ? `Context: ${conversationHistory.slice(-2).map(msg => `${msg.role}: ${msg.content}`).join('\n')}` : ''}
+${
+  conversationHistory.length > 0
+    ? `Context: ${conversationHistory
+        .slice(-2)
+        .map((msg) => `${msg.role}: ${msg.content}`)
+        .join("\n")}`
+    : ""
+}
 
 Extract the Google Workspace intent and details.`;
 
@@ -1104,24 +1237,24 @@ Extract the Google Workspace intent and details.`;
         model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 250
+        max_tokens: 250,
       });
 
       const result = JSON.parse(response.choices[0].message.content);
-      
+
       if (result.confidence >= 0.7) {
         return {
           ...result,
-          originalMessage: message
+          originalMessage: message,
         };
       }
-      
+
       return null;
     } catch (error) {
-      console.error('Error in Google Workspace AI intent detection:', error);
+      console.error("Error in Google Workspace AI intent detection:", error);
       return null;
     }
   }
@@ -1171,7 +1304,14 @@ Return ONLY valid JSON.`;
 
       const userPrompt = `Analyze this Salesforce request: "${message}"
 
-${conversationHistory.length > 0 ? `Context: ${conversationHistory.slice(-2).map(msg => `${msg.role}: ${msg.content}`).join('\n')}` : ''}
+${
+  conversationHistory.length > 0
+    ? `Context: ${conversationHistory
+        .slice(-2)
+        .map((msg) => `${msg.role}: ${msg.content}`)
+        .join("\n")}`
+    : ""
+}
 
 Extract the Salesforce intent and details.`;
 
@@ -1179,24 +1319,24 @@ Extract the Salesforce intent and details.`;
         model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 250
+        max_tokens: 250,
       });
 
       const result = JSON.parse(response.choices[0].message.content);
-      
+
       if (result.confidence >= 0.7) {
         return {
           ...result,
-          originalMessage: message
+          originalMessage: message,
         };
       }
-      
+
       return null;
     } catch (error) {
-      console.error('Error in Salesforce AI intent detection:', error);
+      console.error("Error in Salesforce AI intent detection:", error);
       return null;
     }
   }
@@ -1243,7 +1383,14 @@ Return ONLY valid JSON.`;
 
       const userPrompt = `Analyze this Odoo request: "${message}"
 
-${conversationHistory.length > 0 ? `Context: ${conversationHistory.slice(-2).map(msg => `${msg.role}: ${msg.content}`).join('\n')}` : ''}
+${
+  conversationHistory.length > 0
+    ? `Context: ${conversationHistory
+        .slice(-2)
+        .map((msg) => `${msg.role}: ${msg.content}`)
+        .join("\n")}`
+    : ""
+}
 
 Extract the Odoo intent and details.`;
 
@@ -1251,24 +1398,24 @@ Extract the Odoo intent and details.`;
         model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 250
+        max_tokens: 250,
       });
 
       const result = JSON.parse(response.choices[0].message.content);
-      
+
       if (result.confidence >= 0.7) {
         return {
           ...result,
-          originalMessage: message
+          originalMessage: message,
         };
       }
-      
+
       return null;
     } catch (error) {
-      console.error('Error in Odoo AI intent detection:', error);
+      console.error("Error in Odoo AI intent detection:", error);
       return null;
     }
   }
@@ -1280,7 +1427,7 @@ Extract the Odoo intent and details.`;
     try {
       const systemPrompt = `You are a helpful customer service assistant. Generate natural, contextual responses based on the detected intent and data.
 
-Business tone: ${businessTone || 'Professional and friendly'}
+Business tone: ${businessTone || "Professional and friendly"}
 
 Guidelines:
 - Be conversational and helpful
@@ -1291,30 +1438,36 @@ Guidelines:
 - Reference conversation context when relevant
 - Be specific about what was accomplished`;
 
-      let userPrompt = '';
-      
+      let userPrompt = "";
+
       switch (intent.intent) {
-        case 'GOOGLE_EMAIL':
-          if (intent.action === 'send') {
-            userPrompt = `Generate a response for successfully sending an email. To: ${data.to}, Subject: ${data.subject || 'No subject'}`;
-          } else if (intent.action === 'read') {
-            userPrompt = `Generate a response for reading emails. Type: ${data.type || 'recent'}, Count: ${data.count || 'several'}`;
+        case "GOOGLE_EMAIL":
+          if (intent.action === "send") {
+            userPrompt = `Generate a response for successfully sending an email. To: ${data.to}, Subject: ${
+              data.subject || "No subject"
+            }`;
+          } else if (intent.action === "read") {
+            userPrompt = `Generate a response for reading emails. Type: ${data.type || "recent"}, Count: ${
+              data.count || "several"
+            }`;
           }
           break;
-        case 'GOOGLE_CALENDAR':
-          if (intent.action === 'schedule') {
-            userPrompt = `Generate a response for scheduling an event. Time: ${data.time}, Title: ${data.title || 'Meeting'}`;
-          } else if (intent.action === 'list') {
-            userPrompt = `Generate a response for showing calendar events. Timeframe: ${data.timeframe || 'upcoming'}`;
+        case "GOOGLE_CALENDAR":
+          if (intent.action === "schedule") {
+            userPrompt = `Generate a response for scheduling an event. Time: ${data.time}, Title: ${
+              data.title || "Meeting"
+            }`;
+          } else if (intent.action === "list") {
+            userPrompt = `Generate a response for showing calendar events. Timeframe: ${data.timeframe || "upcoming"}`;
           }
           break;
-        case 'SALESFORCE':
+        case "SALESFORCE":
           userPrompt = `Generate a response for Salesforce ${intent.action}. Details: ${JSON.stringify(data)}`;
           break;
-        case 'ODOO':
-          if (intent.action === 'order') {
+        case "ODOO":
+          if (intent.action === "order") {
             userPrompt = `Generate a response for processing an order. Product: ${data.product}, Quantity: ${data.quantity}`;
-          } else if (intent.action === 'invoice') {
+          } else if (intent.action === "invoice") {
             userPrompt = `Generate a response for invoice inquiry. Invoice: ${data.invoice_number}, Status: ${data.status}`;
           }
           break;
@@ -1322,112 +1475,109 @@ Guidelines:
           userPrompt = `Generate a general helpful response.`;
       }
 
-      const contextInfo = conversationHistory.length > 0 ? 
-        `\n\nPrevious conversation context: ${conversationHistory.slice(-2).map(msg => `${msg.role}: ${msg.content}`).join('\n')}` : '';
+      const contextInfo =
+        conversationHistory.length > 0
+          ? `\n\nPrevious conversation context: ${conversationHistory
+              .slice(-2)
+              .map((msg) => `${msg.role}: ${msg.content}`)
+              .join("\n")}`
+          : "";
 
       const response = await openai.chat.completions.create({
         model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt + contextInfo }
+          { role: "user", content: userPrompt + contextInfo },
         ],
         temperature: 0.7,
-        max_tokens: 300
+        max_tokens: 300,
       });
 
       return response.choices[0].message.content;
     } catch (error) {
-      console.error('Error in AI response generation:', error);
+      console.error("Error in AI response generation:", error);
       return null;
     }
   }
 
   // Odoo intent detection methods
   detectOdooOrderRequest(message) {
-    const orderKeywords = ['order', 'buy', 'purchase', 'pizza', 'food', 'delivery', 'quantity'];
+    const orderKeywords = ["order", "buy", "purchase", "pizza", "food", "delivery", "quantity"];
     const quantityRegex = /(\d+)\s+(pizzas?|items?|products?)/i;
     const orderRegex = /(?:i\s+want\s+to\s+)?(?:order|buy|purchase)\s+(\d+)\s+(.+)/i;
-    
-    const hasOrderIntent = orderKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword)
-    );
-    
+
+    const hasOrderIntent = orderKeywords.some((keyword) => message.toLowerCase().includes(keyword));
+
     if (hasOrderIntent) {
       const quantityMatch = message.match(quantityRegex);
       const orderMatch = message.match(orderRegex);
-      
+
       if (quantityMatch) {
         return {
-          type: 'order',
+          type: "order",
           quantity: parseInt(quantityMatch[1]),
           product: quantityMatch[2],
-          originalMessage: message
+          originalMessage: message,
         };
       } else if (orderMatch) {
         return {
-          type: 'order',
+          type: "order",
           quantity: parseInt(orderMatch[1]),
           product: orderMatch[2],
-          originalMessage: message
+          originalMessage: message,
         };
       }
     }
-    
+
     return null;
   }
 
   detectOdooInvoiceRequest(message) {
-    const invoiceKeywords = ['invoice', 'payment', 'bill', 'amount due', 'status'];
+    const invoiceKeywords = ["invoice", "payment", "bill", "amount due", "status"];
     const invoiceRegex = /(?:invoice|bill)\s*#?([A-Z0-9]+)/i;
-    
-    const hasInvoiceIntent = invoiceKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword)
-    );
-    
+
+    const hasInvoiceIntent = invoiceKeywords.some((keyword) => message.toLowerCase().includes(keyword));
+
     if (hasInvoiceIntent) {
       const invoiceMatch = message.match(invoiceRegex);
       return {
-        type: 'invoice',
+        type: "invoice",
         invoiceNumber: invoiceMatch ? invoiceMatch[1] : null,
-        originalMessage: message
+        originalMessage: message,
       };
     }
-    
+
     return null;
   }
 
   detectOdooLeadRequest(message) {
-    const leadKeywords = ['lead', 'inquiry', 'interested', 'quote', 'information'];
-    const hasLeadIntent = leadKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword)
-    );
-    
+    const leadKeywords = ["lead", "inquiry", "interested", "quote", "information"];
+    const hasLeadIntent = leadKeywords.some((keyword) => message.toLowerCase().includes(keyword));
+
     if (hasLeadIntent) {
       return {
-        type: 'lead',
+        type: "lead",
         description: message,
-        originalMessage: message
+        originalMessage: message,
       };
     }
-    
+
     return null;
   }
 
   detectOdooTicketRequest(message) {
-    const ticketKeywords = ['support', 'help', 'issue', 'problem', 'ticket'];
-    const hasTicketIntent = ticketKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword)
-    );
-    
+    const ticketKeywords = ["support", "help", "issue", "problem", "ticket"];
+    const hasTicketIntent = ticketKeywords.some((keyword) => message.toLowerCase().includes(keyword));
+
     if (hasTicketIntent) {
       return {
-        type: 'ticket',
+        type: "ticket",
         subject: message.substring(0, 100),
         description: message,
-        originalMessage: message
+        originalMessage: message,
       };
     }
-    
+
     return null;
   }
 
@@ -1436,9 +1586,11 @@ Guidelines:
     try {
       // First, check what modules are available
       const modules = await OdooService.checkAvailableModules(businessId);
-      
+
       if (!modules.hasProducts) {
-        return `❌ Sorry, the Sales module is not installed in this Odoo instance. To process orders, please install the Sales module in your Odoo system.\n\nAvailable modules: ${modules.availableModels.join(', ') || 'None detected'}`;
+        return `❌ Sorry, the Sales module is not installed in this Odoo instance. To process orders, please install the Sales module in your Odoo system.\n\nAvailable modules: ${
+          modules.availableModels.join(", ") || "None detected"
+        }`;
       }
 
       if (!modules.hasPartners) {
@@ -1447,13 +1599,13 @@ Guidelines:
 
       // First, search for or create customer
       let customer = await OdooService.searchCustomer(businessId, phoneNumber);
-      
+
       if (!customer) {
         // Create new customer
         const customerData = {
           name: `Customer ${phoneNumber}`,
           phone: phoneNumber,
-          email: null
+          email: null,
         };
         const customerResult = await OdooService.createCustomer(businessId, customerData);
         customer = { id: customerResult.id };
@@ -1461,31 +1613,34 @@ Guidelines:
 
       // Get products to find the right product
       const products = await OdooService.getProducts(businessId);
-      const product = products.find(p => 
-        p.name.toLowerCase().includes(orderRequest.product.toLowerCase())
-      );
+      const product = products.find((p) => p.name.toLowerCase().includes(orderRequest.product.toLowerCase()));
 
       if (!product) {
-        return `❌ Sorry, I couldn't find "${orderRequest.product}" in our system. Available products: ${products.map(p => p.name).join(', ')}`;
+        return `❌ Sorry, I couldn't find "${orderRequest.product}" in our system. Available products: ${products
+          .map((p) => p.name)
+          .join(", ")}`;
       }
 
       // Check if sales module is available for creating orders
       if (!modules.hasSales) {
-        const quantityInfo = product.qty_available !== undefined ? 
-          `\n• Available quantity: ${product.qty_available}` : 
-          `\n• Quantity info: Not available (Inventory module not installed)`;
-        
+        const quantityInfo =
+          product.qty_available !== undefined
+            ? `\n• Available quantity: ${product.qty_available}`
+            : `\n• Quantity info: Not available (Inventory module not installed)`;
+
         return `✅ Product found: ${product.name} ($${product.list_price})\n\n❌ However, the Sales module is not installed, so I cannot create an order. Please install the Sales module in your Odoo system to enable order processing.\n\nProduct details:\n• Name: ${product.name}\n• Price: $${product.list_price}${quantityInfo}`;
       }
 
       // Create sale order
       const orderData = {
         partner_id: customer.id,
-        order_lines: [{
-          product_id: product.id,
-          quantity: orderRequest.quantity,
-          price_unit: product.list_price
-        }]
+        order_lines: [
+          {
+            product_id: product.id,
+            quantity: orderRequest.quantity,
+            price_unit: product.list_price,
+          },
+        ],
       };
 
       const orderResult = await OdooService.createSaleOrder(businessId, orderData);
@@ -1493,12 +1648,12 @@ Guidelines:
 
       return `✅ Order created successfully!\n\n📋 Order Details:\n• Product: ${product.name}\n• Quantity: ${orderRequest.quantity}\n• Unit Price: $${product.list_price}\n• Total: $${total}\n• Order ID: ${orderResult.id}\n\n🚚 Your order will be processed shortly. Thank you for your business!`;
     } catch (error) {
-      console.error('Error handling Odoo order:', error);
-      
+      console.error("Error handling Odoo order:", error);
+
       if (error.message.includes("Sales module is not installed")) {
         return `❌ ${error.message}\n\nTo enable order processing, please:\n1. Go to your Odoo Apps menu\n2. Search for "Sales"\n3. Install the Sales module\n4. Configure your products\n\nThen try your order again!`;
       }
-      
+
       throw error;
     }
   }
@@ -1507,9 +1662,15 @@ Guidelines:
     try {
       if (invoiceRequest.invoiceNumber) {
         const invoice = await OdooService.getInvoice(businessId, invoiceRequest.invoiceNumber);
-        
+
         if (invoice) {
-          return `📄 Invoice ${invoice.name}\n\n💰 Amount: $${invoice.amount_total}\n📊 Status: ${invoice.payment_state}\n State: ${invoice.state}\n\n${invoice.payment_state === 'paid' ? '✅ This invoice has been paid.' : '⏳ This invoice is still pending payment.'}`;
+          return `📄 Invoice ${invoice.name}\n\n💰 Amount: $${invoice.amount_total}\n📊 Status: ${
+            invoice.payment_state
+          }\n State: ${invoice.state}\n\n${
+            invoice.payment_state === "paid"
+              ? "✅ This invoice has been paid."
+              : "⏳ This invoice is still pending payment."
+          }`;
         } else {
           return `❌ Invoice ${invoiceRequest.invoiceNumber} not found. Please check the invoice number and try again.`;
         }
@@ -1517,7 +1678,7 @@ Guidelines:
         return `❌ Please provide an invoice number to check the status. For example: "What's the status of invoice INV123?"`;
       }
     } catch (error) {
-      console.error('Error handling Odoo invoice:', error);
+      console.error("Error handling Odoo invoice:", error);
       throw error;
     }
   }
@@ -1526,13 +1687,13 @@ Guidelines:
     try {
       // Search for existing customer
       let customer = await OdooService.searchCustomer(businessId, phoneNumber);
-      
+
       if (!customer) {
         // Create new customer
         const customerData = {
           name: `Customer ${phoneNumber}`,
           phone: phoneNumber,
-          email: null
+          email: null,
         };
         const customerResult = await OdooService.createCustomer(businessId, customerData);
         customer = { id: customerResult.id };
@@ -1544,14 +1705,14 @@ Guidelines:
         partner_name: customer.name,
         email: customer.email,
         phone: phoneNumber,
-        description: leadRequest.description
+        description: leadRequest.description,
       };
 
       const leadResult = await OdooService.createLead(businessId, leadData);
 
       return `✅ Lead created successfully!\n\n📋 Lead Details:\n• Name: ${leadData.name}\n• Contact: ${phoneNumber}\n• Description: ${leadRequest.description}\n• Lead ID: ${leadResult.id}\n\nOur sales team will follow up with you shortly. Thank you for your interest!`;
     } catch (error) {
-      console.error('Error handling Odoo lead:', error);
+      console.error("Error handling Odoo lead:", error);
       throw error;
     }
   }
@@ -1560,13 +1721,13 @@ Guidelines:
     try {
       // Search for existing customer
       let customer = await OdooService.searchCustomer(businessId, phoneNumber);
-      
+
       if (!customer) {
         // Create new customer
         const customerData = {
           name: `Customer ${phoneNumber}`,
           phone: phoneNumber,
-          email: null
+          email: null,
         };
         const customerResult = await OdooService.createCustomer(businessId, customerData);
         customer = { id: customerResult.id };
@@ -1577,14 +1738,14 @@ Guidelines:
         subject: ticketRequest.subject,
         description: ticketRequest.description,
         partner_id: customer.id,
-        priority: '1' // Normal priority
+        priority: "1", // Normal priority
       };
 
       const ticketResult = await OdooService.createTicket(businessId, ticketData);
 
       return `✅ Support ticket created successfully!\n\n🎫 Ticket Details:\n• Subject: ${ticketRequest.subject}\n• Description: ${ticketRequest.description}\n• Ticket ID: ${ticketResult.id}\n• Priority: Normal\n\nOur support team will review your ticket and get back to you as soon as possible. Thank you for contacting us!`;
     } catch (error) {
-      console.error('Error handling Odoo ticket:', error);
+      console.error("Error handling Odoo ticket:", error);
       throw error;
     }
   }
@@ -1594,64 +1755,74 @@ Guidelines:
    */
   async handleGoogleEmailWithAI(businessId, intent, conversationHistory, businessTone) {
     try {
-      const GoogleService = require('./google');
-      
+      const GoogleService = require("./google");
+
       switch (intent.action) {
-        case 'send':
+        case "send":
           try {
             const emailResult = await GoogleService.sendEmail(businessId, {
               to: intent.to,
-              subject: intent.subject || 'No Subject',
-              body: intent.body || 'No content'
+              subject: intent.subject || "No Subject",
+              body: intent.body || "No content",
             });
-            
+
             // GoogleService.sendEmail returns the Gmail API response directly
             if (emailResult && emailResult.id) {
-              return await this.generateContextualResponse(intent, {
-                to: intent.to,
-                subject: intent.subject,
-                messageId: emailResult.id,
-                success: true
-              }, businessTone, conversationHistory);
+              return await this.generateContextualResponse(
+                intent,
+                {
+                  to: intent.to,
+                  subject: intent.subject,
+                  messageId: emailResult.id,
+                  success: true,
+                },
+                businessTone,
+                conversationHistory
+              );
             } else {
               return `❌ Sorry, I couldn't send the email. The response was invalid.`;
             }
           } catch (error) {
-            console.error('Error sending email:', error);
+            console.error("Error sending email:", error);
             return `❌ Sorry, I couldn't send the email. ${error.message}`;
           }
-        
-        case 'read':
+
+        case "read":
           try {
             const emails = await GoogleService.getEmails(businessId, {
-              type: intent.type || 'recent',
-              maxResults: intent.maxResults || 5
+              type: intent.type || "recent",
+              maxResults: intent.maxResults || 5,
             });
-            
+
             // GoogleService.getEmails returns the emails array directly
             if (emails && emails.length > 0) {
-              const emailList = emails.map(email => 
-                `• ${email.subject} - From: ${email.from} (${email.date})`
-              ).join('\n');
-              
-              return await this.generateContextualResponse(intent, {
-                type: intent.type,
-                count: emails.length,
-                emails: emailList
-              }, businessTone, conversationHistory);
+              const emailList = emails
+                .map((email) => `• ${email.subject} - From: ${email.from} (${email.date})`)
+                .join("\n");
+
+              return await this.generateContextualResponse(
+                intent,
+                {
+                  type: intent.type,
+                  count: emails.length,
+                  emails: emailList,
+                },
+                businessTone,
+                conversationHistory
+              );
             } else {
-              return `📧 No ${intent.type || 'recent'} emails found.`;
+              return `📧 No ${intent.type || "recent"} emails found.`;
             }
           } catch (error) {
-            console.error('Error reading emails:', error);
+            console.error("Error reading emails:", error);
             return `❌ Sorry, I couldn't retrieve your emails. ${error.message}`;
           }
-        
+
         default:
           return `I understand you want to work with emails, but I'm not sure what specific action you'd like to take.`;
       }
     } catch (error) {
-      console.error('Error handling Google Email with AI:', error);
+      console.error("Error handling Google Email with AI:", error);
       return `❌ Sorry, I encountered an error with your email request. Please try again.`;
     }
   }
@@ -1661,53 +1832,61 @@ Guidelines:
    */
   async handleGoogleCalendarWithAI(businessId, intent, conversationHistory, businessTone) {
     try {
-      const GoogleService = require('./google');
-      
+      const GoogleService = require("./google");
+
       switch (intent.action) {
-        case 'schedule':
+        case "schedule":
           const eventResult = await GoogleService.createEvent(businessId, {
-            summary: intent.title || 'Meeting',
+            summary: intent.title || "Meeting",
             start: intent.start_time,
             end: intent.end_time,
-            attendees: intent.attendees ? intent.attendees.split(',').map(email => email.trim()) : []
+            attendees: intent.attendees ? intent.attendees.split(",").map((email) => email.trim()) : [],
           });
-          
+
           if (eventResult.success) {
-            return await this.generateContextualResponse(intent, {
-              title: intent.title || 'Meeting',
-              time: intent.start_time,
-              success: true
-            }, businessTone, conversationHistory);
+            return await this.generateContextualResponse(
+              intent,
+              {
+                title: intent.title || "Meeting",
+                time: intent.start_time,
+                success: true,
+              },
+              businessTone,
+              conversationHistory
+            );
           } else {
             return `❌ Sorry, I couldn't schedule the event. ${eventResult.error}`;
           }
-        
-        case 'list':
+
+        case "list":
           const events = await GoogleService.getEvents(businessId, {
             timeMin: intent.timeMin,
             timeMax: intent.timeMax,
-            maxResults: intent.maxResults || 10
+            maxResults: intent.maxResults || 10,
           });
-          
+
           if (events.success && events.events.length > 0) {
-            const eventList = events.events.map(event => 
-              `• ${event.summary} - ${event.start}`
-            ).join('\n');
-            
-            return await this.generateContextualResponse(intent, {
-              timeframe: intent.timeframe || 'upcoming',
-              count: events.events.length,
-              events: eventList
-            }, businessTone, conversationHistory);
+            const eventList = events.events.map((event) => `• ${event.summary} - ${event.start}`).join("\n");
+
+            return await this.generateContextualResponse(
+              intent,
+              {
+                timeframe: intent.timeframe || "upcoming",
+                count: events.events.length,
+                events: eventList,
+              },
+              businessTone,
+              conversationHistory
+            );
           } else {
             return `📅 No events found for the requested time period.`;
           }
-        
+
         default:
           return `I understand you want to work with your calendar, but I'm not sure what specific action you'd like to take.`;
       }
     } catch (error) {
-      console.error('Error handling Google Calendar with AI:', error);
+      console.error("Error handling Google Calendar with AI:", error);
       return `❌ Sorry, I encountered an error with your calendar request. Please try again.`;
     }
   }
@@ -1717,99 +1896,124 @@ Guidelines:
    */
   async handleSalesforceWithAI(businessId, intent, conversationHistory, businessTone) {
     try {
-      const SalesforceService = require('./salesforce');
-      
+      const SalesforceService = require("./salesforce");
+
       switch (intent.action) {
-        case 'create_lead':
+        case "create_lead":
           const leadResult = await SalesforceService.createLead(businessId, {
             company: intent.company,
-            lastName: intent.lastName || 'Unknown',
+            lastName: intent.lastName || "Unknown",
             email: intent.email,
-            phone: intent.phone
+            phone: intent.phone,
           });
-          
+
           if (leadResult.success) {
-            return await this.generateContextualResponse(intent, {
-              company: intent.company,
-              leadId: leadResult.id,
-              success: true
-            }, businessTone, conversationHistory);
+            return await this.generateContextualResponse(
+              intent,
+              {
+                company: intent.company,
+                leadId: leadResult.id,
+                success: true,
+              },
+              businessTone,
+              conversationHistory
+            );
           } else {
             return `❌ Sorry, I couldn't create the lead. ${leadResult.error}`;
           }
-        
-        case 'update_lead':
+
+        case "update_lead":
           const updatedLeadResult = await SalesforceService.updateLead(businessId, {
             leadId: intent.leadId,
             company: intent.company,
-            lastName: intent.lastName || 'Unknown',
+            lastName: intent.lastName || "Unknown",
             email: intent.email,
-            phone: intent.phone
+            phone: intent.phone,
           });
           if (updatedLeadResult.success) {
-            return await this.generateContextualResponse(intent, {
-              leadId: intent.leadId,
-              company: intent.company,
-              success: true
-            }, businessTone, conversationHistory);
+            return await this.generateContextualResponse(
+              intent,
+              {
+                leadId: intent.leadId,
+                company: intent.company,
+                success: true,
+              },
+              businessTone,
+              conversationHistory
+            );
           } else {
             return `❌ Sorry, I couldn't update the lead. ${updatedLeadResult.error}`;
           }
-        
-        case 'search_lead':
+
+        case "search_lead":
           const searchLeadResult = await SalesforceService.searchLead(businessId, intent.query);
           if (searchLeadResult.success) {
-            return await this.generateContextualResponse(intent, {
-              query: intent.query,
-              leads: searchLeadResult.leads,
-              success: true
-            }, businessTone, conversationHistory);
+            return await this.generateContextualResponse(
+              intent,
+              {
+                query: intent.query,
+                leads: searchLeadResult.leads,
+                success: true,
+              },
+              businessTone,
+              conversationHistory
+            );
           } else {
             return `❌ Sorry, I couldn't search for leads. ${searchLeadResult.error}`;
           }
-        
-        case 'convert_lead':
+
+        case "convert_lead":
           const convertedLeadResult = await SalesforceService.convertLead(businessId, {
             leadId: intent.leadId,
             opportunityName: intent.opportunityName,
-            stage: intent.stage
+            stage: intent.stage,
           });
           if (convertedLeadResult.success) {
-            return await this.generateContextualResponse(intent, {
-              leadId: intent.leadId,
-              opportunityName: intent.opportunityName,
-              stage: intent.stage,
-              success: true
-            }, businessTone, conversationHistory);
+            return await this.generateContextualResponse(
+              intent,
+              {
+                leadId: intent.leadId,
+                opportunityName: intent.opportunityName,
+                stage: intent.stage,
+                success: true,
+              },
+              businessTone,
+              conversationHistory
+            );
           } else {
             return `❌ Sorry, I couldn't convert the lead. ${convertedLeadResult.error}`;
           }
-        
-        case 'search_contact':
+
+        case "search_contact":
           const contacts = await SalesforceService.searchContacts(businessId, {
             name: intent.name,
-            email: intent.email
+            email: intent.email,
           });
-          
+
           if (contacts.success && contacts.contacts.length > 0) {
-            const contactList = contacts.contacts.map(contact => 
-              `• ${contact.Name} - ${contact.Email || 'No email'} (${contact.Phone || 'No phone'})`
-            ).join('\n');
-            
-            return await this.generateContextualResponse(intent, {
-              name: intent.name,
-              count: contacts.contacts.length,
-              contacts: contactList
-            }, businessTone, conversationHistory);
+            const contactList = contacts.contacts
+              .map((contact) => `• ${contact.Name} - ${contact.Email || "No email"} (${contact.Phone || "No phone"})`)
+              .join("\n");
+
+            return await this.generateContextualResponse(
+              intent,
+              {
+                name: intent.name,
+                count: contacts.contacts.length,
+                contacts: contactList,
+              },
+              businessTone,
+              conversationHistory
+            );
           } else {
             return `👤 No contacts found matching "${intent.name}".`;
           }
-        
+
         default:
           return `I understand you want to work with Salesforce, but I'm not sure what specific action you'd like to take.`;
       }
     } catch (error) {
-      console.error('Error handling Salesforce with AI:', error);
+      console.error("Error handling Salesforce with AI:", error);
       return `❌ Sorry, I encountered an error with your Salesforce request. Please try again.`;
     }
   }
@@ -1819,26 +2023,26 @@ Guidelines:
    */
   async handleOdooWithAI(businessId, intent, phoneNumber, conversationHistory, businessTone) {
     try {
-      const OdooService = require('./odoo');
-      
+      const OdooService = require("./odoo");
+
       switch (intent.action) {
-        case 'order':
+        case "order":
           const orderResult = await this.handleOdooOrder(businessId, intent.extractedData, phoneNumber);
           return orderResult;
-        case 'invoice':
+        case "invoice":
           const invoiceResult = await this.handleOdooInvoice(businessId, intent.extractedData);
           return invoiceResult;
-        case 'lead':
+        case "lead":
           const leadResult = await this.handleOdooLead(businessId, intent.extractedData, phoneNumber);
           return leadResult;
-        case 'ticket':
+        case "ticket":
           const ticketResult = await this.handleOdooTicket(businessId, intent.extractedData, phoneNumber);
           return ticketResult;
         default:
           return `I understand you want to work with Odoo, but I'm not sure what specific action you'd like to take.`;
       }
     } catch (error) {
-      console.error('Error handling Odoo with AI:', error);
+      console.error("Error handling Odoo with AI:", error);
       return `❌ Sorry, I encountered an error with your Odoo request. Please try again.`;
     }
   }
@@ -1859,22 +2063,22 @@ Guidelines:
 - Reference conversation context when relevant
 - Be specific about what was accomplished`;
 
-      let userPrompt = '';
-      
+      let userPrompt = "";
+
       switch (intent.intent) {
-        case 'GENERAL':
+        case "GENERAL":
           userPrompt = `Generate a general helpful response.`;
           break;
-        case 'GOOGLE_EMAIL':
+        case "GOOGLE_EMAIL":
           userPrompt = `Generate a response for working with emails.`;
           break;
-        case 'GOOGLE_CALENDAR':
+        case "GOOGLE_CALENDAR":
           userPrompt = `Generate a response for working with your calendar.`;
           break;
-        case 'SALESFORCE':
+        case "SALESFORCE":
           userPrompt = `Generate a response for working with Salesforce.`;
           break;
-        case 'ODOO':
+        case "ODOO":
           userPrompt = `Generate a response for working with Odoo.`;
           break;
         default:
@@ -1885,15 +2089,15 @@ Guidelines:
         model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userPrompt },
         ],
         temperature: 0.7,
-        max_tokens: 300
+        max_tokens: 300,
       });
 
       return response.choices[0].message.content;
     } catch (error) {
-      console.error('Error handling General Intent:', error);
+      console.error("Error handling General Intent:", error);
       return `❌ Sorry, I encountered an error with your general request. Please try again.`;
     }
   }
@@ -1903,8 +2107,8 @@ Guidelines:
    */
   async detectFAQIntent(message) {
     try {
-      console.log('FAQ Intent Detection - Input message:', message);
-      
+      console.log("FAQ Intent Detection - Input message:", message);
+
       const systemPrompt = `You are an AI assistant that determines if a customer message is asking a Frequently Asked Question (FAQ).
       
 Your task is to analyze the customer's message and determine if it's:
@@ -1937,37 +2141,37 @@ Return ONLY valid JSON.`;
 
 Determine if this is a FAQ-type question.`;
 
-      console.log('FAQ Intent Detection - Making API call to OpenAI');
-      
+      console.log("FAQ Intent Detection - Making API call to OpenAI");
+
       const response = await openai.chat.completions.create({
         model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 200
+        max_tokens: 200,
       });
 
-      console.log('FAQ Intent Detection - Raw response:', response.choices[0].message.content);
-      
+      console.log("FAQ Intent Detection - Raw response:", response.choices[0].message.content);
+
       const result = JSON.parse(response.choices[0].message.content);
-      
-      console.log('FAQ Intent Detection - Parsed result:', result);
-      
+
+      console.log("FAQ Intent Detection - Parsed result:", result);
+
       // Only return FAQ intent with high confidence
       if (result.isFAQ && result.confidence >= 0.7) {
         return {
           ...result,
-          originalMessage: message
+          originalMessage: message,
         };
       }
-      
-      console.log('FAQ Intent Detection - Not a FAQ or low confidence');
+
+      console.log("FAQ Intent Detection - Not a FAQ or low confidence");
       return null;
     } catch (error) {
-      console.error('Error in FAQ intent detection:', error);
-      console.error('Error details:', error.message);
+      console.error("Error in FAQ intent detection:", error);
+      console.error("Error details:", error.message);
       return null;
     }
   }
@@ -1977,70 +2181,66 @@ Determine if this is a FAQ-type question.`;
    */
   async detectFAQIntentWithEmbeddings(message) {
     try {
-      console.log('Enhanced FAQ Intent Detection - Input message:', message);
-      
+      console.log("Enhanced FAQ Intent Detection - Input message:", message);
+
       // Use embeddings for more accurate FAQ detection
       const intentResult = await this.embeddingsService.detectIntentWithEmbeddings(message, {
-        'FAQ': [
-          'What are your business hours?',
-          'How do I return a product?',
-          'What payment methods do you accept?',
-          'Do you offer delivery?',
-          'What is your refund policy?',
-          'How can I contact support?',
-          'What are your shipping options?',
-          'What is your return policy?',
-          'How long does shipping take?',
-          'Do you have a mobile app?',
-          'What are your store locations?',
-          'How do I track my order?',
-          'What is your warranty policy?',
-          'How do I cancel my subscription?',
-          'What payment methods do you accept?'
-        ]
+        FAQ: [
+          "What are your business hours?",
+          "How do I return a product?",
+          "What payment methods do you accept?",
+          "Do you offer delivery?",
+          "What is your refund policy?",
+          "How can I contact support?",
+          "What are your shipping options?",
+          "What is your return policy?",
+          "How long does shipping take?",
+          "Do you have a mobile app?",
+          "What are your store locations?",
+          "How do I track my order?",
+          "What is your warranty policy?",
+          "How do I cancel my subscription?",
+          "What payment methods do you accept?",
+        ],
       });
 
       // If embeddings detect FAQ with high confidence, use that
-      if (intentResult.intent === 'FAQ' && intentResult.confidence >= 0.7) {
-        console.log('FAQ Intent Detection - Embeddings result:', intentResult);
-        
+      if (intentResult.intent === "FAQ" && intentResult.confidence >= 0.7) {
+        console.log("FAQ Intent Detection - Embeddings result:", intentResult);
+
         // Determine question type using embeddings
         const questionTypeResult = await this.embeddingsService.detectIntentWithEmbeddings(message, {
-          'product': [
-            'What products do you sell?',
-            'Do you have this item in stock?',
-            'What are your best sellers?',
-            'How much does this cost?'
+          product: [
+            "What products do you sell?",
+            "Do you have this item in stock?",
+            "What are your best sellers?",
+            "How much does this cost?",
           ],
-          'service': [
-            'What services do you offer?',
-            'How can you help me?',
-            'What support do you provide?'
+          service: ["What services do you offer?", "How can you help me?", "What support do you provide?"],
+          policy: [
+            "What is your refund policy?",
+            "What is your return policy?",
+            "What is your warranty policy?",
+            "What are your terms of service?",
           ],
-          'policy': [
-            'What is your refund policy?',
-            'What is your return policy?',
-            'What is your warranty policy?',
-            'What are your terms of service?'
+          procedure: [
+            "How do I return a product?",
+            "How do I track my order?",
+            "How do I cancel my subscription?",
+            "How do I update my account?",
           ],
-          'procedure': [
-            'How do I return a product?',
-            'How do I track my order?',
-            'How do I cancel my subscription?',
-            'How do I update my account?'
+          pricing: [
+            "How much does this cost?",
+            "What are your prices?",
+            "Do you offer discounts?",
+            "What payment plans do you have?",
           ],
-          'pricing': [
-            'How much does this cost?',
-            'What are your prices?',
-            'Do you offer discounts?',
-            'What payment plans do you have?'
+          general: [
+            "What are your business hours?",
+            "How can I contact you?",
+            "Where are you located?",
+            "What is your phone number?",
           ],
-          'general': [
-            'What are your business hours?',
-            'How can I contact you?',
-            'Where are you located?',
-            'What is your phone number?'
-          ]
         });
 
         return {
@@ -2048,15 +2248,15 @@ Determine if this is a FAQ-type question.`;
           confidence: intentResult.confidence,
           questionType: questionTypeResult.intent,
           originalMessage: message,
-          method: 'embeddings'
+          method: "embeddings",
         };
       }
 
       // Fallback to original chat completions method
-      console.log('FAQ Intent Detection - Falling back to chat completions');
+      console.log("FAQ Intent Detection - Falling back to chat completions");
       return await this.detectFAQIntent(message);
     } catch (error) {
-      console.error('Error in enhanced FAQ intent detection:', error);
+      console.error("Error in enhanced FAQ intent detection:", error);
       // Fallback to original method
       return await this.detectFAQIntent(message);
     }
@@ -2067,20 +2267,20 @@ Determine if this is a FAQ-type question.`;
    */
   async detectIntentWithEmbeddings(message, conversationHistory = [], businessId = null) {
     try {
-      console.log('Enhanced Intent Detection - Input message:', message);
-      
+      console.log("Enhanced Intent Detection - Input message:", message);
+
       // Use embeddings for intent detection
       const intentResult = await this.embeddingsService.detectIntentWithEmbeddings(message);
-      
-      console.log('Enhanced Intent Detection - Embeddings result:', intentResult);
-      
+
+      console.log("Enhanced Intent Detection - Embeddings result:", intentResult);
+
       // If we have conversation history, analyze context
       if (conversationHistory.length > 0) {
         const contextAnalysis = await this.embeddingsService.analyzeConversationContext(conversationHistory, message);
-        console.log('Conversation context analysis:', contextAnalysis);
-        
+        console.log("Conversation context analysis:", contextAnalysis);
+
         // Adjust confidence based on context
-        if (contextAnalysis.context === 'continuation' && contextAnalysis.confidence > 0.8) {
+        if (contextAnalysis.context === "continuation" && contextAnalysis.confidence > 0.8) {
           // If this is a continuation of a previous topic, maintain the same intent
           const lastMessage = conversationHistory[conversationHistory.length - 1];
           if (lastMessage.intent) {
@@ -2093,7 +2293,7 @@ Determine if this is a FAQ-type question.`;
 
       return intentResult;
     } catch (error) {
-      console.error('Error in enhanced intent detection:', error);
+      console.error("Error in enhanced intent detection:", error);
       // Fallback to original method
       return await this.detectIntentWithAI(message, conversationHistory, businessId);
     }
@@ -2102,91 +2302,104 @@ Determine if this is a FAQ-type question.`;
   /**
    * Enhanced message processing with embeddings
    */
-  async processMessageWithEmbeddings(messageType, content, filePath = null, conversationHistory = [], businessTone = null, businessId = null) {
+  async processMessageWithEmbeddings(
+    messageType,
+    content,
+    filePath = null,
+    conversationHistory = [],
+    businessTone = null,
+    businessId = null
+  ) {
     try {
       console.log(`Enhanced OpenAI Processing - Message type: ${messageType}`);
       console.log(`Enhanced OpenAI Processing - Content: ${content}`);
-      
-      let aiResponse = '';
+
+      let aiResponse = "";
       let intent = null; // Initialize intent variable
 
       // Analyze conversation context if we have history
       let contextAnalysis = null;
       if (conversationHistory.length > 0) {
         contextAnalysis = await this.embeddingsService.analyzeConversationContext(conversationHistory, content);
-        console.log('Conversation context for processing:', contextAnalysis);
+        console.log("Conversation context for processing:", contextAnalysis);
       }
 
       switch (messageType) {
-        case 'text':
-          console.log('Enhanced OpenAI Processing - Processing text message');
-          
+        case "text":
+          console.log("Enhanced OpenAI Processing - Processing text message");
+
           // Enhanced intent detection
-          const intent = await this.detectIntentWithEmbeddings(content, conversationHistory, businessId);
-          console.log('Enhanced intent detection result:', intent);
-          
+          intent = await this.detectIntentWithEmbeddings(content, conversationHistory, businessId);
+          console.log("Enhanced intent detection result:", intent);
+
           // Process based on detected intent
-          if (intent.intent === 'FAQ' && intent.confidence >= 0.7) {
+          if (intent.intent === "FAQ" && intent.confidence >= 0.7) {
             // This will be handled by the FAQ system
             return {
-              intent: 'FAQ',
+              intent: "FAQ",
               confidence: intent.confidence,
-              method: 'embeddings'
+              method: "embeddings",
             };
           }
-          
+
           // Enhanced chat completion with context
-          aiResponse = await this.chatCompletionWithContext([
-            { role: 'user', content: content }
-          ], conversationHistory, businessTone, contextAnalysis);
+          aiResponse = await this.chatCompletionWithContext(
+            [{ role: "user", content: content }],
+            conversationHistory,
+            businessTone,
+            contextAnalysis
+          );
           break;
 
-        case 'image':
-          console.log('Enhanced OpenAI Processing - Processing image message');
+        case "image":
+          console.log("Enhanced OpenAI Processing - Processing image message");
           if (!filePath) {
-            throw new Error('Image file path is required for image analysis');
+            throw new Error("Image file path is required for image analysis");
           }
           if (!fs.existsSync(filePath)) {
             throw new Error(`Image file does not exist: ${filePath}`);
           }
-          
+
           // Enhanced intent detection for image
           intent = await this.detectIntentWithEmbeddings(content, conversationHistory, businessId);
-          
+
           // Enhanced image analysis with context
           const imageAnalysis = await this.analyzeImageWithContext(filePath, content, businessTone, contextAnalysis);
           aiResponse = imageAnalysis;
           break;
 
-        case 'audio':
-          console.log('Enhanced OpenAI Processing - Processing audio message');
+        case "audio":
+          console.log("Enhanced OpenAI Processing - Processing audio message");
           if (!filePath) {
-            throw new Error('Audio file path is required for audio transcription');
+            throw new Error("Audio file path is required for audio transcription");
           }
           if (!fs.existsSync(filePath)) {
             throw new Error(`Audio file does not exist: ${filePath}`);
           }
-          
+
           const transcription = await this.transcribeAudio(filePath);
-          console.log('Audio transcription:', transcription);
-          
+          console.log("Audio transcription:", transcription);
+
           // Process transcribed text with enhanced intent detection
           const audioIntent = await this.detectIntentWithEmbeddings(transcription, conversationHistory, businessId);
-          console.log('Audio intent detection result:', audioIntent);
-          
-          if (audioIntent.intent === 'FAQ' && audioIntent.confidence >= 0.7) {
+          console.log("Audio intent detection result:", audioIntent);
+
+          if (audioIntent.intent === "FAQ" && audioIntent.confidence >= 0.7) {
             return {
-              intent: 'FAQ',
+              intent: "FAQ",
               confidence: audioIntent.confidence,
-              method: 'embeddings',
-              transcription: transcription
+              method: "embeddings",
+              transcription: transcription,
             };
           }
-          
+
           // Enhanced chat completion for transcribed audio
-          aiResponse = await this.chatCompletionWithContext([
-            { role: 'user', content: `[Audio transcription] ${transcription}` }
-          ], conversationHistory, businessTone, contextAnalysis);
+          aiResponse = await this.chatCompletionWithContext(
+            [{ role: "user", content: `[Audio transcription] ${transcription}` }],
+            conversationHistory,
+            businessTone,
+            contextAnalysis
+          );
           break;
 
         default:
@@ -2195,13 +2408,13 @@ Determine if this is a FAQ-type question.`;
 
       return {
         response: aiResponse,
-        intent: intent?.intent || 'GENERAL',
+        intent: intent?.intent || "GENERAL",
         confidence: intent?.confidence || 0.5,
-        method: 'embeddings',
-        context: contextAnalysis
+        method: "embeddings",
+        context: contextAnalysis,
       };
     } catch (error) {
-      console.error('Error in enhanced message processing:', error);
+      console.error("Error in enhanced message processing:", error);
       // Fallback to original processing
       return await this.processMessage(messageType, content, filePath, conversationHistory, businessTone);
     }
@@ -2212,47 +2425,45 @@ Determine if this is a FAQ-type question.`;
    */
   async chatCompletionWithContext(messages, conversationHistory = [], businessTone = null, contextAnalysis = null) {
     try {
-      console.log('Enhanced Chat Completion - Processing with context');
-      
+      console.log("Enhanced Chat Completion - Processing with context");
+
       let systemPrompt = this.buildSystemPrompt(businessTone);
-      
+
       // Add context information to system prompt
       if (contextAnalysis && contextAnalysis.relevantHistory.length > 0) {
         systemPrompt += `\n\nConversation Context:
 The user is continuing a conversation. Here are the most relevant previous messages:
-${contextAnalysis.relevantHistory.map(msg => `- ${msg.content || msg.message} (relevance: ${msg.relevance.toFixed(2)})`).join('\n')}
+${contextAnalysis.relevantHistory
+  .map((msg) => `- ${msg.content || msg.message} (relevance: ${msg.relevance.toFixed(2)})`)
+  .join("\n")}
 
 Use this context to provide more relevant and coherent responses.`;
       }
 
       // Build conversation history with embeddings-based relevance
       const relevantHistory = contextAnalysis?.relevantHistory || conversationHistory.slice(-5);
-      const historyMessages = relevantHistory.map(msg => ({
-        role: msg.role || 'user',
-        content: msg.content || msg.message
+      const historyMessages = relevantHistory.map((msg) => ({
+        role: msg.role || "user",
+        content: msg.content || msg.message,
       }));
 
-      const allMessages = [
-        { role: 'system', content: systemPrompt },
-        ...historyMessages,
-        ...messages
-      ];
+      const allMessages = [{ role: "system", content: systemPrompt }, ...historyMessages, ...messages];
 
-      console.log('Enhanced Chat Completion - Making API call with context');
-      
+      console.log("Enhanced Chat Completion - Making API call with context");
+
       const response = await openai.chat.completions.create({
         model: this.visionModel,
         messages: allMessages,
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: 1000,
       });
 
       const aiResponse = response.choices[0].message.content;
-      console.log('Enhanced Chat Completion - Response generated');
-      
+      console.log("Enhanced Chat Completion - Response generated");
+
       return aiResponse;
     } catch (error) {
-      console.error('Error in enhanced chat completion:', error);
+      console.error("Error in enhanced chat completion:", error);
       // Fallback to original method
       return await this.chatCompletion(messages, conversationHistory, businessTone);
     }
@@ -2261,17 +2472,19 @@ Use this context to provide more relevant and coherent responses.`;
   /**
    * Enhanced image analysis with context
    */
-  async analyzeImageWithContext(imagePath, userMessage = '', businessTone = null, contextAnalysis = null) {
+  async analyzeImageWithContext(imagePath, userMessage = "", businessTone = null, contextAnalysis = null) {
     try {
-      console.log('Enhanced Image Analysis - Processing with context');
-      
+      console.log("Enhanced Image Analysis - Processing with context");
+
       let systemPrompt = this.buildSystemPrompt(businessTone);
-      
+
       // Add context information for image analysis
       if (contextAnalysis && contextAnalysis.relevantHistory.length > 0) {
         systemPrompt += `\n\nConversation Context:
 The user is continuing a conversation. Here are the most relevant previous messages:
-${contextAnalysis.relevantHistory.map(msg => `- ${msg.content || msg.message} (relevance: ${msg.relevance.toFixed(2)})`).join('\n')}
+${contextAnalysis.relevantHistory
+  .map((msg) => `- ${msg.content || msg.message} (relevance: ${msg.relevance.toFixed(2)})`)
+  .join("\n")}
 
 Use this context to provide more relevant analysis of the image.`;
       }
@@ -2279,34 +2492,36 @@ Use this context to provide more relevant analysis of the image.`;
       const response = await openai.chat.completions.create({
         model: this.visionModel,
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: "system", content: systemPrompt },
           {
-            role: 'user',
+            role: "user",
             content: [
               {
-                type: 'text',
-                text: userMessage ? `User message: "${userMessage}"\n\nPlease analyze this image and respond appropriately.` : 'Please analyze this image and provide a helpful response.'
+                type: "text",
+                text: userMessage
+                  ? `User message: "${userMessage}"\n\nPlease analyze this image and respond appropriately.`
+                  : "Please analyze this image and provide a helpful response.",
               },
               {
-                type: 'image_url',
+                type: "image_url",
                 image_url: {
-                  url: `data:image/jpeg;base64,${fs.readFileSync(imagePath, 'base64')}`,
-                  detail: 'high'
-                }
-              }
-            ]
-          }
+                  url: `data:image/jpeg;base64,${fs.readFileSync(imagePath, "base64")}`,
+                  detail: "high",
+                },
+              },
+            ],
+          },
         ],
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: 1000,
       });
 
       const analysis = response.choices[0].message.content;
-      console.log('Enhanced Image Analysis - Analysis completed');
-      
+      console.log("Enhanced Image Analysis - Analysis completed");
+
       return analysis;
     } catch (error) {
-      console.error('Error in enhanced image analysis:', error);
+      console.error("Error in enhanced image analysis:", error);
       // Fallback to original method
       return await this.analyzeImage(imagePath, userMessage, businessTone);
     }
