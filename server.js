@@ -251,7 +251,7 @@ app.get("/test", (req, res) => {
 // API routes with proper prefixes
 app.use("/api/", whatsappRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/business", businessRoutes);
+app.use("/api/basic", businessRoutes);
 app.use("/api/google", googleRoutes);
 app.use("/api/salesforce", salesforceRoutes);
 app.use("/api/odoo", odooRoutes);
