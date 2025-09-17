@@ -71,6 +71,13 @@ class AirtableService {
   }
 
   /**
+   * Delete Airtable configuration (alias for removeConfig)
+   */
+  async deleteConfig(businessId) {
+    return this.removeConfig(businessId);
+  }
+
+  /**
    * Test Airtable connection for a specific business
    */
   async testConnection(businessId) {
