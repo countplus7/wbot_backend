@@ -34,8 +34,16 @@ class DatabaseService {
       const result = await pool.query(
         `INSERT INTO messages (
           business_id, conversation_id, message_id, from_number, to_number, 
-          message_type, content, media_url, direction, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+          message_type, content, media_url, direction, status, local_file_path
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+        ON CONFLICT (message_id) 
+        DO UPDATE SET 
+          content = EXCLUDED.content,
+          media_url = EXCLUDED.media_url,
+          local_file_path = EXCLUDED.local_file_path,
+          status = EXCLUDED.status,
+          updated_at = NOW()
+        RETURNING *`,
         [
           messageData.businessId,
           messageData.conversationId,
@@ -47,11 +55,32 @@ class DatabaseService {
           messageData.mediaUrl,
           messageData.isFromUser ? "inbound" : "outbound",
           "received",
+          messageData.localFilePath || null
         ]
       );
+      
+      console.log(`Message saved successfully: ${messageData.messageId}`);
       return result.rows[0];
     } catch (error) {
       console.error("Error saving message:", error);
+      
+      // If it's still a duplicate key error, try to get the existing message
+      if (error.code === '23505') {
+        console.log(`Message ${messageData.messageId} already exists, retrieving existing message`);
+        try {
+          const existingMessage = await pool.query(
+            "SELECT * FROM messages WHERE message_id = $1",
+            [messageData.messageId]
+          );
+          if (existingMessage.rows.length > 0) {
+            console.log(`Retrieved existing message: ${messageData.messageId}`);
+            return existingMessage.rows[0];
+          }
+        } catch (retrieveError) {
+          console.error("Error retrieving existing message:", retrieveError);
+        }
+      }
+      
       throw error;
     }
   }

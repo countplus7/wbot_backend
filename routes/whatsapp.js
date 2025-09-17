@@ -66,6 +66,22 @@ router.post('/webhook', async (req, res) => {
       hasMedia: !!messageData.mediaId
     });
 
+    // Check if we've already processed this message
+    try {
+      const existingMessage = await DatabaseService.pool.query(
+        "SELECT id, created_at FROM messages WHERE message_id = $1",
+        [messageData.messageId]
+      );
+      
+      if (existingMessage.rows.length > 0) {
+        console.log(`Message ${messageData.messageId} already processed at ${existingMessage.rows[0].created_at}. Skipping duplicate.`);
+        return res.status(200).send('OK');
+      }
+    } catch (checkError) {
+      console.error('Error checking for duplicate message:', checkError);
+      // Continue processing even if check fails
+    }
+
     // Identify the business from the phone number ID
     const whatsappConfig = await BusinessService.getWhatsAppConfigByPhoneNumber(messageData.to);
     if (!whatsappConfig) {
