@@ -493,27 +493,6 @@ const migrateDatabase = async () => {
 
     // Create indexes
     console.log("Creating indexes...");
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_users_username 
-      ON users(username)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_users_email 
-      ON users(email)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_users_role 
-      ON users(role)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_users_status 
-      ON users(status)
-    `);
-
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_businesses_status 
       ON businesses(status)
@@ -530,61 +509,6 @@ const migrateDatabase = async () => {
     `);
 
     await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_google_workspace_integrations_business_id 
-      ON google_workspace_integrations(business_id)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_google_workspace_integrations_email
-      ON google_workspace_integrations(email)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_salesforce_integrations_business_id 
-      ON salesforce_integrations(business_id)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_salesforce_integrations_email
-      ON salesforce_integrations(email)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_odoo_integrations_business_id 
-      ON odoo_integrations(business_id)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_odoo_integrations_username
-      ON odoo_integrations(username)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_airtable_integrations_business_id 
-      ON airtable_integrations(business_id)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_faq_embeddings_business_id 
-      ON faq_embeddings(business_id)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_faq_embeddings_faq_id 
-      ON faq_embeddings(faq_id)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_business_id 
-      ON conversation_embeddings(business_id)
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_conversation_id 
-      ON conversation_embeddings(conversation_id)
-    `);
-
-    await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_conversations_business_id 
       ON conversations(business_id)
     `);
@@ -598,6 +522,52 @@ const migrateDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_media_files_business_id 
       ON media_files(business_id)
     `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_google_workspace_integrations_business_id 
+      ON google_workspace_integrations(business_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_salesforce_integrations_business_id 
+      ON salesforce_integrations(business_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_odoo_integrations_business_id 
+      ON odoo_integrations(business_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_airtable_integrations_business_id 
+      ON airtable_integrations(business_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_faq_embeddings_business_id 
+      ON faq_embeddings(business_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_business_id 
+      ON conversation_embeddings(business_id)
+    `);
+
+    // Remove problematic indexes that reference non-existent columns
+    // await pool.query(`
+    //   CREATE INDEX IF NOT EXISTS idx_users_email
+    //   ON users(email)
+    // `);
+
+    // await pool.query(`
+    //   CREATE INDEX IF NOT EXISTS idx_google_workspace_integrations_email
+    //   ON google_workspace_integrations(email)
+    // `);
+
+    // await pool.query(`
+    //   CREATE INDEX IF NOT EXISTS idx_salesforce_integrations_email
+    //   ON salesforce_integrations(email)
+    // `);
 
     console.log("✅ Database migration completed successfully!");
     console.log("\nYou can now run: npm run init-db");
