@@ -48,20 +48,18 @@ class GoogleService {
     try {
       const { tokens } = await this.oauth2Client.getToken(code);
 
-      // Set credentials to get user info
+      // Set the credentials for the OAuth2 client
       this.oauth2Client.setCredentials(tokens);
 
-      // Get user info to store email
+      // Get user info to get email
       const oauth2 = google.oauth2({ version: "v2", auth: this.oauth2Client });
       const userInfo = await oauth2.userinfo.get();
 
       const integrationData = {
         business_id: businessId,
-        provider: "google",
-        email: userInfo.data.email,
-        refresh_token: tokens.refresh_token,
         access_token: tokens.access_token,
-        expiry_date: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        refresh_token: tokens.refresh_token,
+        token_expires_at: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
       };
 
       // Store integration in database
@@ -74,36 +72,35 @@ class GoogleService {
       };
     } catch (error) {
       console.error("Error exchanging code for tokens:", error);
-      throw new Error("Failed to authenticate with Google");
+      throw new Error("Failed to exchange authorization code for tokens");
     }
   }
 
   /**
-   * Save Google Workspace integration to database
+   * Save integration data to database
    * @param {Object} integrationData - Integration data to save
+   * @returns {Object} Saved integration data
    */
   async saveIntegration(integrationData) {
     try {
       const query = `
         INSERT INTO google_workspace_integrations 
-        (business_id, provider, email, refresh_token, access_token, expiry_date, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
-        ON CONFLICT (business_id, provider, email) 
+        (business_id, access_token, refresh_token, token_expires_at, updated_at)
+        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+        ON CONFLICT (business_id) 
         DO UPDATE SET 
-          refresh_token = EXCLUDED.refresh_token,
           access_token = EXCLUDED.access_token,
-          expiry_date = EXCLUDED.expiry_date,
+          refresh_token = EXCLUDED.refresh_token,
+          token_expires_at = EXCLUDED.token_expires_at,
           updated_at = CURRENT_TIMESTAMP
         RETURNING id
       `;
 
       const values = [
         integrationData.business_id,
-        integrationData.provider,
-        integrationData.email,
-        integrationData.refresh_token,
         integrationData.access_token,
-        integrationData.expiry_date,
+        integrationData.refresh_token,
+        integrationData.token_expires_at,
       ];
 
       const result = await pool.query(query, values);
@@ -115,7 +112,7 @@ class GoogleService {
   }
 
   /**
-   * Get Google Workspace integration for a business
+   * Get Google integration for a business
    * @param {number} businessId - Business ID
    * @returns {Object|null} Integration data or null if not found
    */
@@ -123,7 +120,7 @@ class GoogleService {
     try {
       const query = `
         SELECT * FROM google_workspace_integrations 
-        WHERE business_id = $1 AND provider = 'google'
+        WHERE business_id = $1
         ORDER BY updated_at DESC
         LIMIT 1
       `;
@@ -133,6 +130,35 @@ class GoogleService {
     } catch (error) {
       console.error("Error getting Google integration:", error);
       throw new Error("Failed to get Google integration");
+    }
+  }
+
+  /**
+   * Get user info from Google API
+   * @param {number} businessId - Business ID
+   * @returns {Object} User info
+   */
+  async getUserInfo(businessId) {
+    try {
+      const integration = await this.getIntegration(businessId);
+      if (!integration) {
+        throw new Error("No Google integration found");
+      }
+
+      // Set credentials from stored tokens
+      this.oauth2Client.setCredentials({
+        access_token: integration.access_token,
+        refresh_token: integration.refresh_token,
+      });
+
+      // Get user info
+      const oauth2 = google.oauth2({ version: "v2", auth: this.oauth2Client });
+      const userInfo = await oauth2.userinfo.get();
+
+      return userInfo.data;
+    } catch (error) {
+      console.error("Error getting user info:", error);
+      throw new Error("Failed to get user info");
     }
   }
 
@@ -156,7 +182,7 @@ class GoogleService {
     oauth2Client.setCredentials({
       access_token: integration.access_token,
       refresh_token: integration.refresh_token,
-      expiry_date: integration.expiry_date,
+      expiry_date: integration.token_expires_at,
     });
 
     // Handle token refresh
@@ -168,7 +194,7 @@ class GoogleService {
         integration.access_token = tokens.access_token;
       }
       if (tokens.expiry_date) {
-        integration.expiry_date = new Date(tokens.expiry_date);
+        integration.token_expires_at = new Date(tokens.expiry_date);
       }
 
       // Update tokens in database
@@ -179,14 +205,15 @@ class GoogleService {
   }
 
   /**
-   * Remove Google Workspace integration
+   * Remove Google integration for a business
    * @param {number} businessId - Business ID
+   * @returns {Object} Success status
    */
   async removeIntegration(businessId) {
     try {
       const query = `
         DELETE FROM google_workspace_integrations 
-        WHERE business_id = $1 AND provider = 'google'
+        WHERE business_id = $1
       `;
 
       await pool.query(query, [businessId]);

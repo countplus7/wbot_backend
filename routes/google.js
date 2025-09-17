@@ -193,12 +193,31 @@ router.get("/config/:businessId", async (req, res) => {
 
     const integration = await googleService.getIntegration(parseInt(businessId));
 
-    res.json({
-      success: true,
-      isIntegrated: !!integration,
-      email: integration?.email || null,
-      lastUpdated: integration?.updated_at || null,
-    });
+    if (integration) {
+      // Get user email from Google API if we have valid tokens
+      let email = null;
+      try {
+        const userInfo = await googleService.getUserInfo(parseInt(businessId));
+        email = userInfo?.email || null;
+      } catch (error) {
+        console.log("Could not get user email:", error.message);
+        // Integration exists but tokens might be expired
+      }
+
+      res.json({
+        success: true,
+        isIntegrated: true,
+        email: email,
+        lastUpdated: integration.updated_at,
+      });
+    } else {
+      res.json({
+        success: true,
+        isIntegrated: false,
+        email: null,
+        lastUpdated: null,
+      });
+    }
   } catch (error) {
     console.error("Error getting integration status:", error);
     res.status(500).json({
