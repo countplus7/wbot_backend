@@ -401,6 +401,7 @@ router.post('/webhook', async (req, res) => {
     }
 
     // Enhanced AI response generation with embeddings
+    let aiResponse;
     try {
       console.log('Enhanced AI response generation with embeddings...');
       
@@ -417,7 +418,6 @@ router.post('/webhook', async (req, res) => {
         businessId
       );
 
-      let aiResponse;
       if (typeof enhancedResult === 'string') {
         aiResponse = enhancedResult;
       } else if (enhancedResult.response) {
