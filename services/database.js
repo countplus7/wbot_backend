@@ -299,6 +299,29 @@ class DatabaseService {
     }
   }
 
+  // Update conversation status
+  async updateConversationStatus(conversationId, status) {
+    try {
+      const result = await pool.query(
+        `UPDATE conversations 
+         SET status = $1, updated_at = NOW() 
+         WHERE id = $2 
+         RETURNING *`,
+        [status, conversationId]
+      );
+      
+      if (result.rows.length === 0) {
+        return null;
+      }
+      
+      console.log(`Conversation ${conversationId} status updated to ${status}`);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error updating conversation status:", error);
+      throw error;
+    }
+  }
+
   // Delete a conversation and all associated data
   async deleteConversation(conversationId) {
     try {

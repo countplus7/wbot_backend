@@ -10,28 +10,28 @@ class OdooService {
   async saveIntegration(data) {
     const query = `
       INSERT INTO odoo_integrations
-        (business_id, instance_url, db, username, api_key, updated_at)
+        (business_id, url, database, username, password, updated_at)
       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
       ON CONFLICT (business_id)
       DO UPDATE SET
-        instance_url = EXCLUDED.instance_url,
-        db = EXCLUDED.db,
+        url = EXCLUDED.url,
+        database = EXCLUDED.database,
         username = EXCLUDED.username,
-        api_key = EXCLUDED.api_key,
+        password = EXCLUDED.password,
         updated_at = CURRENT_TIMESTAMP
       RETURNING id;
     `;
-    const values = [data.business_id, data.instance_url, data.db, data.username, data.api_key];
+    const values = [data.business_id, data.url, data.database, data.username, data.password];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
 
   async getIntegration(businessId) {
     const query = `
-      SELECT * FROM odoo_integrations
+      SELECT * FROM odoo_integrations 
       WHERE business_id = $1
       ORDER BY updated_at DESC
-      LIMIT 1;
+      LIMIT 1
     `;
     const result = await pool.query(query, [businessId]);
     return result.rows[0] || null;
@@ -39,8 +39,8 @@ class OdooService {
 
   async removeIntegration(businessId) {
     const query = `
-      DELETE FROM odoo_integrations
-      WHERE business_id = $1;
+      DELETE FROM odoo_integrations 
+      WHERE business_id = $1
     `;
     await pool.query(query, [businessId]);
     return { success: true };
@@ -52,10 +52,10 @@ class OdooService {
     if (!integration) throw new Error("No Odoo integration found");
 
     return {
-      instance_url: integration.instance_url,
-      db: integration.db,
+      instance_url: integration.url,  // Map url to instance_url for API calls
+      db: integration.database,       // Map database to db for API calls
       username: integration.username,
-      api_key: integration.api_key,
+      api_key: integration.password,  // Map password to api_key for API calls
     };
   }
 

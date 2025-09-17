@@ -506,7 +506,68 @@ router.get("/conversations/:conversationId/messages", async (req, res) => {
   }
 });
 
-// Delete a conversation
+// PATCH route for conversation status update or deletion
+router.patch("/conversations/:conversationId", async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { action, status } = req.body;
+
+    if (!conversationId || isNaN(parseInt(conversationId))) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid conversation ID",
+      });
+    }
+
+    if (action === 'delete') {
+      // Handle conversation deletion
+      const deletedConversation = await DatabaseService.deleteConversation(conversationId);
+
+      if (!deletedConversation) {
+        return res.status(404).json({
+          success: false,
+          error: "Conversation not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: deletedConversation,
+        message: "Conversation deleted successfully",
+      });
+    } else if (action === 'update_status' && status) {
+      // Handle conversation status update
+      const updatedConversation = await DatabaseService.updateConversationStatus(conversationId, status);
+
+      if (!updatedConversation) {
+        return res.status(404).json({
+          success: false,
+          error: "Conversation not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: updatedConversation,
+        message: "Conversation status updated successfully",
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid action. Use 'delete' or 'update_status' with status field",
+      });
+    }
+  } catch (error) {
+    console.error("Error updating conversation:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to update conversation",
+      message: error.message,
+    });
+  }
+});
+
+// DELETE route for conversation deletion (keeping existing)
 router.delete("/conversations/:conversationId", async (req, res) => {
   try {
     const { conversationId } = req.params;

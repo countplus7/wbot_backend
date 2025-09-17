@@ -8,16 +8,14 @@ router.post("/config/:businessId", async (req, res) => {
     const { businessId } = req.params;
     const { instance_url, db, username, api_key } = req.body;
 
-    // Check if we have an existing integration
-    const existingConfig = await odooService.getIntegration(parseInt(businessId));
-    
-    // If updating existing config and no API key provided, use the existing one
-    let finalApiKey = api_key;
-    if (existingConfig && !api_key) {
-      finalApiKey = existingConfig.api_key;
+    if (!businessId || isNaN(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid business ID is required",
+      });
     }
 
-    if (!instance_url || !db || !username || !finalApiKey) {
+    if (!instance_url || !db || !username || !api_key) {
       return res.status(400).json({
         success: false,
         error: "Missing required fields: instance_url, db, username, api_key"
@@ -26,10 +24,10 @@ router.post("/config/:businessId", async (req, res) => {
 
     const configData = {
       business_id: parseInt(businessId),
-      instance_url: instance_url.trim(),
-      db: db.trim(),
+      url: instance_url.trim(),           // Map instance_url to url
+      database: db.trim(),                // Map db to database
       username: username.trim(),
-      api_key: finalApiKey.trim(),
+      password: api_key.trim(),           // Map api_key to password
     };
 
     // Test connection before saving
@@ -52,6 +50,14 @@ router.post("/config/:businessId", async (req, res) => {
 router.get("/config/:businessId", async (req, res) => {
   try {
     const { businessId } = req.params;
+
+    if (!businessId || isNaN(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid business ID is required",
+      });
+    }
+
     const config = await odooService.getIntegration(parseInt(businessId));
     
     if (config) {
@@ -59,8 +65,8 @@ router.get("/config/:businessId", async (req, res) => {
         success: true,
         data: {
           isIntegrated: true,
-          instance_url: config.instance_url,
-          db: config.db,
+          instance_url: config.url,        // Map url to instance_url for frontend
+          db: config.database,             // Map database to db for frontend
           username: config.username,
           lastUpdated: config.updated_at
         }
@@ -74,10 +80,10 @@ router.get("/config/:businessId", async (req, res) => {
       });
     }
   } catch (error) {
-    console.error("Error getting Odoo config:", error);
+    console.error("Error getting Odoo integration:", error);
     res.status(500).json({
       success: false,
-      error: "Failed to get Odoo configuration"
+      error: "Failed to get Odoo integration"
     });
   }
 });
