@@ -411,7 +411,7 @@ router.post('/webhook', async (req, res) => {
       const enhancedResult = await OpenAIService.processMessageWithEmbeddings(
         messageData.messageType,
         messageData.content,
-        messageData.localFilePath,
+        localFilePath, // Use the localFilePath variable instead of messageData.localFilePath
         conversationHistory,
         businessTone,
         businessId
