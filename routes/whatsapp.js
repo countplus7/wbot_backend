@@ -401,7 +401,6 @@ router.post('/webhook', async (req, res) => {
     }
 
     // Enhanced AI response generation with embeddings
-    let aiResponse;
     try {
       console.log('Enhanced AI response generation with embeddings...');
       
