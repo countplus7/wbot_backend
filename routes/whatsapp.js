@@ -8,6 +8,7 @@ const CalendarHandler = require('../services/calendar-handler');
 const AirtableService = require('../services/airtable');
 const path = require('path');
 const fs = require('fs-extra');
+const EmbeddingsService = require('../services/embeddings');
 
 // Webhook verification endpoint
 router.get('/webhook', async (req, res) => {
@@ -228,20 +229,35 @@ router.post('/webhook', async (req, res) => {
       }
     }
 
-    // Check for FAQ intent before general AI processing
+    // Enhanced FAQ intent detection and processing with embeddings
     if (messageData.messageType === 'text' && messageData.content) {
       try {
-        console.log('Checking for FAQ intent...');
-        const faqIntent = await OpenAIService.detectFAQIntent(messageData.content);
+        console.log('Enhanced FAQ intent detection with embeddings...');
+        
+        // Use enhanced FAQ intent detection with embeddings
+        const faqIntent = await OpenAIService.detectFAQIntentWithEmbeddings(messageData.content);
         
         if (faqIntent && faqIntent.isFAQ) {
-          console.log('FAQ intent detected:', faqIntent);
+          console.log('Enhanced FAQ intent detected:', faqIntent);
           
-          // Search FAQs in Airtable
+          // Search FAQs in Airtable with semantic search
           const faqMatch = await AirtableService.searchFAQs(businessId, messageData.content);
           
-          if (faqMatch && faqMatch.matchScore > 0.3) {
-            console.log('FAQ answer found:', faqMatch);
+          if (faqMatch && (faqMatch.semanticSimilarity > 0.75 || faqMatch.matchScore > 0.3)) {
+            console.log('Enhanced FAQ answer found:', faqMatch);
+            
+            // Store conversation embedding for context
+            try {
+              await EmbeddingsService.storeConversationEmbedding(
+                businessId, 
+                conversation.id, 
+                `msg_${Date.now()}`, 
+                messageData.content, 
+                'user'
+              );
+            } catch (embeddingError) {
+              console.error('Error storing conversation embedding:', embeddingError);
+            }
             
             // Save the FAQ response to database
             await DatabaseService.saveMessage({
@@ -257,43 +273,65 @@ router.post('/webhook', async (req, res) => {
               isFromUser: false
             });
 
+            // Store FAQ response embedding
+            try {
+              await EmbeddingsService.storeConversationEmbedding(
+                businessId, 
+                conversation.id, 
+                `faq_resp_${Date.now()}`, 
+                faqMatch.answer, 
+                'assistant'
+              );
+            } catch (embeddingError) {
+              console.error('Error storing FAQ response embedding:', embeddingError);
+            }
+
             // Send the FAQ response via WhatsApp
             try {
               const response = await WhatsAppService.sendTextMessage(messageData.from, faqMatch.answer);
-              console.log('FAQ response sent successfully:', response);
+              console.log('Enhanced FAQ response sent successfully:', response);
             } catch (whatsappError) {
               console.error('Error sending FAQ response:', whatsappError);
             }
             
             return res.status(200).send('OK');
           } else {
-            console.log('No suitable FAQ match found, continuing with AI processing');
+            console.log('No suitable FAQ match found with enhanced search, continuing with AI processing');
           }
         }
       } catch (faqError) {
-        console.error('Error processing FAQ:', faqError);
+        console.error('Error in enhanced FAQ processing:', faqError);
         // Continue with regular AI processing if FAQ processing fails
       }
     }
 
-    // Generate AI response (existing code)
+    // Enhanced AI response generation with embeddings
     try {
-      const conversationHistory = await DatabaseService.getConversationHistoryForAI(conversation.id);
-      const businessTone = await BusinessService.getBusinessTone(businessId);
+      console.log('Enhanced AI response generation with embeddings...');
       
-      console.log(`Generating AI response for message type: ${messageData.messageType}`);
+      // Get conversation history for context
+      const conversationHistory = await DatabaseService.getConversationHistory(conversation.id);
       
-      aiResponse = await OpenAIService.processMessage(
+      // Use enhanced message processing with embeddings
+      const enhancedResult = await OpenAIService.processMessageWithEmbeddings(
         messageData.messageType,
-        messageData.content || `User sent a ${messageData.messageType} message`,
-        localFilePath,
+        messageData.content,
+        messageData.localFilePath,
         conversationHistory,
         businessTone,
-        businessId,
-        messageData.from  // Add phone number parameter
+        businessId
       );
-      
-      console.log('AI response generated:', aiResponse);
+
+      let aiResponse;
+      if (typeof enhancedResult === 'string') {
+        aiResponse = enhancedResult;
+      } else if (enhancedResult.response) {
+        aiResponse = enhancedResult.response;
+      } else {
+        aiResponse = enhancedResult;
+      }
+
+      console.log('Enhanced AI response generated:', aiResponse.substring(0, 100) + '...');
     } catch (aiError) {
       console.error('Error generating AI response:', aiError);
       aiResponse = 'Sorry, I encountered an error processing your message. Please try again.';

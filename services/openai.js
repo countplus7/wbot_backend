@@ -1,9 +1,10 @@
 require('dotenv').config();
-const OpenAI = require('openai');
-const fs = require('fs');
+const { OpenAI } = require('openai');
+const fs = require('fs-extra');
 const path = require('path');
 const GoogleService = require('./google');
 const OdooService = require('./odoo');
+const EmbeddingsService = require('./embeddings');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -13,6 +14,7 @@ class OpenAIService {
   constructor() {
     this.model = 'gpt-4';
     this.visionModel = 'gpt-4o'; // Updated from deprecated gpt-4-vision-preview
+    this.embeddingsService = EmbeddingsService;
   }
 
   async chatCompletion(messages, conversationHistory = [], businessTone = null, businessId = null, phoneNumber = null) {
@@ -1938,6 +1940,342 @@ Determine if this is a FAQ-type question.`;
       console.error('Error in FAQ intent detection:', error);
       console.error('Error details:', error.message);
       return null;
+    }
+  }
+
+  /**
+   * Enhanced FAQ intent detection using embeddings
+   */
+  async detectFAQIntentWithEmbeddings(message) {
+    try {
+      console.log('Enhanced FAQ Intent Detection - Input message:', message);
+      
+      // Use embeddings for more accurate FAQ detection
+      const intentResult = await this.embeddingsService.detectIntentWithEmbeddings(message, {
+        'FAQ': [
+          'What are your business hours?',
+          'How do I return a product?',
+          'What payment methods do you accept?',
+          'Do you offer delivery?',
+          'What is your refund policy?',
+          'How can I contact support?',
+          'What are your shipping options?',
+          'What is your return policy?',
+          'How long does shipping take?',
+          'Do you have a mobile app?',
+          'What are your store locations?',
+          'How do I track my order?',
+          'What is your warranty policy?',
+          'How do I cancel my subscription?',
+          'What payment methods do you accept?'
+        ]
+      });
+
+      // If embeddings detect FAQ with high confidence, use that
+      if (intentResult.intent === 'FAQ' && intentResult.confidence >= 0.7) {
+        console.log('FAQ Intent Detection - Embeddings result:', intentResult);
+        
+        // Determine question type using embeddings
+        const questionTypeResult = await this.embeddingsService.detectIntentWithEmbeddings(message, {
+          'product': [
+            'What products do you sell?',
+            'Do you have this item in stock?',
+            'What are your best sellers?',
+            'How much does this cost?'
+          ],
+          'service': [
+            'What services do you offer?',
+            'How can you help me?',
+            'What support do you provide?'
+          ],
+          'policy': [
+            'What is your refund policy?',
+            'What is your return policy?',
+            'What is your warranty policy?',
+            'What are your terms of service?'
+          ],
+          'procedure': [
+            'How do I return a product?',
+            'How do I track my order?',
+            'How do I cancel my subscription?',
+            'How do I update my account?'
+          ],
+          'pricing': [
+            'How much does this cost?',
+            'What are your prices?',
+            'Do you offer discounts?',
+            'What payment plans do you have?'
+          ],
+          'general': [
+            'What are your business hours?',
+            'How can I contact you?',
+            'Where are you located?',
+            'What is your phone number?'
+          ]
+        });
+
+        return {
+          isFAQ: true,
+          confidence: intentResult.confidence,
+          questionType: questionTypeResult.intent,
+          originalMessage: message,
+          method: 'embeddings'
+        };
+      }
+
+      // Fallback to original chat completions method
+      console.log('FAQ Intent Detection - Falling back to chat completions');
+      return await this.detectFAQIntent(message);
+    } catch (error) {
+      console.error('Error in enhanced FAQ intent detection:', error);
+      // Fallback to original method
+      return await this.detectFAQIntent(message);
+    }
+  }
+
+  /**
+   * Enhanced general intent detection using embeddings
+   */
+  async detectIntentWithEmbeddings(message, conversationHistory = [], businessId = null) {
+    try {
+      console.log('Enhanced Intent Detection - Input message:', message);
+      
+      // Use embeddings for intent detection
+      const intentResult = await this.embeddingsService.detectIntentWithEmbeddings(message);
+      
+      console.log('Enhanced Intent Detection - Embeddings result:', intentResult);
+      
+      // If we have conversation history, analyze context
+      if (conversationHistory.length > 0) {
+        const contextAnalysis = await this.embeddingsService.analyzeConversationContext(conversationHistory, message);
+        console.log('Conversation context analysis:', contextAnalysis);
+        
+        // Adjust confidence based on context
+        if (contextAnalysis.context === 'continuation' && contextAnalysis.confidence > 0.8) {
+          // If this is a continuation of a previous topic, maintain the same intent
+          const lastMessage = conversationHistory[conversationHistory.length - 1];
+          if (lastMessage.intent) {
+            intentResult.intent = lastMessage.intent;
+            intentResult.confidence = Math.min(intentResult.confidence + 0.1, 1.0);
+            intentResult.contextAware = true;
+          }
+        }
+      }
+
+      return intentResult;
+    } catch (error) {
+      console.error('Error in enhanced intent detection:', error);
+      // Fallback to original method
+      return await this.detectIntentWithAI(message, conversationHistory, businessId);
+    }
+  }
+
+  /**
+   * Enhanced message processing with embeddings
+   */
+  async processMessageWithEmbeddings(messageType, content, filePath = null, conversationHistory = [], businessTone = null, businessId = null) {
+    try {
+      console.log(`Enhanced OpenAI Processing - Message type: ${messageType}`);
+      console.log(`Enhanced OpenAI Processing - Content: ${content}`);
+      
+      let aiResponse = '';
+
+      // Analyze conversation context if we have history
+      let contextAnalysis = null;
+      if (conversationHistory.length > 0) {
+        contextAnalysis = await this.embeddingsService.analyzeConversationContext(conversationHistory, content);
+        console.log('Conversation context for processing:', contextAnalysis);
+      }
+
+      switch (messageType) {
+        case 'text':
+          console.log('Enhanced OpenAI Processing - Processing text message');
+          
+          // Enhanced intent detection
+          const intent = await this.detectIntentWithEmbeddings(content, conversationHistory, businessId);
+          console.log('Enhanced intent detection result:', intent);
+          
+          // Process based on detected intent
+          if (intent.intent === 'FAQ' && intent.confidence >= 0.7) {
+            // This will be handled by the FAQ system
+            return {
+              intent: 'FAQ',
+              confidence: intent.confidence,
+              method: 'embeddings'
+            };
+          }
+          
+          // Enhanced chat completion with context
+          aiResponse = await this.chatCompletionWithContext([
+            { role: 'user', content: content }
+          ], conversationHistory, businessTone, contextAnalysis);
+          break;
+
+        case 'image':
+          console.log('Enhanced OpenAI Processing - Processing image message');
+          if (!filePath) {
+            throw new Error('Image file path is required for image analysis');
+          }
+          if (!fs.existsSync(filePath)) {
+            throw new Error(`Image file does not exist: ${filePath}`);
+          }
+          
+          // Enhanced image analysis with context
+          const imageAnalysis = await this.analyzeImageWithContext(filePath, content, businessTone, contextAnalysis);
+          aiResponse = imageAnalysis;
+          break;
+
+        case 'audio':
+          console.log('Enhanced OpenAI Processing - Processing audio message');
+          if (!filePath) {
+            throw new Error('Audio file path is required for audio transcription');
+          }
+          if (!fs.existsSync(filePath)) {
+            throw new Error(`Audio file does not exist: ${filePath}`);
+          }
+          
+          const transcription = await this.transcribeAudio(filePath);
+          console.log('Audio transcription:', transcription);
+          
+          // Process transcribed text with enhanced intent detection
+          const audioIntent = await this.detectIntentWithEmbeddings(transcription, conversationHistory, businessId);
+          console.log('Audio intent detection result:', audioIntent);
+          
+          if (audioIntent.intent === 'FAQ' && audioIntent.confidence >= 0.7) {
+            return {
+              intent: 'FAQ',
+              confidence: audioIntent.confidence,
+              method: 'embeddings',
+              transcription: transcription
+            };
+          }
+          
+          // Enhanced chat completion for transcribed audio
+          aiResponse = await this.chatCompletionWithContext([
+            { role: 'user', content: `[Audio transcription] ${transcription}` }
+          ], conversationHistory, businessTone, contextAnalysis);
+          break;
+
+        default:
+          throw new Error(`Unsupported message type: ${messageType}`);
+      }
+
+      return {
+        response: aiResponse,
+        intent: intent?.intent || 'GENERAL',
+        confidence: intent?.confidence || 0.5,
+        method: 'embeddings',
+        context: contextAnalysis
+      };
+    } catch (error) {
+      console.error('Error in enhanced message processing:', error);
+      // Fallback to original processing
+      return await this.processMessage(messageType, content, filePath, conversationHistory, businessTone);
+    }
+  }
+
+  /**
+   * Enhanced chat completion with conversation context
+   */
+  async chatCompletionWithContext(messages, conversationHistory = [], businessTone = null, contextAnalysis = null) {
+    try {
+      console.log('Enhanced Chat Completion - Processing with context');
+      
+      let systemPrompt = this.buildSystemPrompt(businessTone);
+      
+      // Add context information to system prompt
+      if (contextAnalysis && contextAnalysis.relevantHistory.length > 0) {
+        systemPrompt += `\n\nConversation Context:
+The user is continuing a conversation. Here are the most relevant previous messages:
+${contextAnalysis.relevantHistory.map(msg => `- ${msg.content || msg.message} (relevance: ${msg.relevance.toFixed(2)})`).join('\n')}
+
+Use this context to provide more relevant and coherent responses.`;
+      }
+
+      // Build conversation history with embeddings-based relevance
+      const relevantHistory = contextAnalysis?.relevantHistory || conversationHistory.slice(-5);
+      const historyMessages = relevantHistory.map(msg => ({
+        role: msg.role || 'user',
+        content: msg.content || msg.message
+      }));
+
+      const allMessages = [
+        { role: 'system', content: systemPrompt },
+        ...historyMessages,
+        ...messages
+      ];
+
+      console.log('Enhanced Chat Completion - Making API call with context');
+      
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: allMessages,
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+
+      const aiResponse = response.choices[0].message.content;
+      console.log('Enhanced Chat Completion - Response generated');
+      
+      return aiResponse;
+    } catch (error) {
+      console.error('Error in enhanced chat completion:', error);
+      // Fallback to original method
+      return await this.chatCompletion(messages, conversationHistory, businessTone);
+    }
+  }
+
+  /**
+   * Enhanced image analysis with context
+   */
+  async analyzeImageWithContext(imagePath, userMessage = '', businessTone = null, contextAnalysis = null) {
+    try {
+      console.log('Enhanced Image Analysis - Processing with context');
+      
+      let systemPrompt = this.buildSystemPrompt(businessTone);
+      
+      // Add context information for image analysis
+      if (contextAnalysis && contextAnalysis.relevantHistory.length > 0) {
+        systemPrompt += `\n\nConversation Context:
+The user is continuing a conversation. Here are the most relevant previous messages:
+${contextAnalysis.relevantHistory.map(msg => `- ${msg.content || msg.message} (relevance: ${msg.relevance.toFixed(2)})`).join('\n')}
+
+Use this context to provide more relevant analysis of the image.`;
+      }
+
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: userMessage ? `User message: "${userMessage}"\n\nPlease analyze this image and respond appropriately.` : 'Please analyze this image and provide a helpful response.'
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/jpeg;base64,${fs.readFileSync(imagePath, 'base64')}`,
+                  detail: 'high'
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+
+      const analysis = response.choices[0].message.content;
+      console.log('Enhanced Image Analysis - Analysis completed');
+      
+      return analysis;
+    } catch (error) {
+      console.error('Error in enhanced image analysis:', error);
+      // Fallback to original method
+      return await this.analyzeImage(imagePath, userMessage, businessTone);
     }
   }
 }

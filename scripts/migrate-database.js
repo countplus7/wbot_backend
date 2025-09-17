@@ -223,9 +223,67 @@ const migrateDatabase = async () => {
           UNIQUE(business_id)
         )
       `);
-      console.log("Airtable integrations table created successfully");
+      console.log("Created airtable_integrations table");
     } else {
       console.log("Airtable integrations table already exists");
+    }
+
+    // Check if faq_embeddings table exists
+    const faqEmbeddingsExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'faq_embeddings'
+      );
+    `);
+
+    if (!faqEmbeddingsExists.rows[0].exists) {
+      console.log("Creating faq_embeddings table...");
+      await pool.query(`
+        CREATE TABLE faq_embeddings (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          faq_id VARCHAR(255) NOT NULL,
+          question TEXT NOT NULL,
+          answer TEXT,
+          embedding JSONB NOT NULL,
+          source VARCHAR(50) DEFAULT 'airtable',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          UNIQUE(business_id, faq_id)
+        )
+      `);
+      console.log("Created faq_embeddings table");
+    } else {
+      console.log("FAQ embeddings table already exists");
+    }
+
+    // Check if conversation_embeddings table exists
+    const conversationEmbeddingsExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'conversation_embeddings'
+      );
+    `);
+
+    if (!conversationEmbeddingsExists.rows[0].exists) {
+      console.log("Creating conversation_embeddings table...");
+      await pool.query(`
+        CREATE TABLE conversation_embeddings (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          conversation_id VARCHAR(255) NOT NULL,
+          message_id VARCHAR(255) NOT NULL,
+          message_content TEXT NOT NULL,
+          embedding JSONB NOT NULL,
+          message_type VARCHAR(50) DEFAULT 'text',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+        )
+      `);
+      console.log("Created conversation_embeddings table");
+    } else {
+      console.log("Conversation embeddings table already exists");
     }
 
     // Check if conversations table has business_id column
@@ -485,6 +543,26 @@ const migrateDatabase = async () => {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_airtable_integrations_business_id 
       ON airtable_integrations(business_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_faq_embeddings_business_id 
+      ON faq_embeddings(business_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_faq_embeddings_faq_id 
+      ON faq_embeddings(faq_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_business_id 
+      ON conversation_embeddings(business_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_conversation_id 
+      ON conversation_embeddings(conversation_id)
     `);
 
     await pool.query(`

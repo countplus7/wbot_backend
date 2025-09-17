@@ -223,6 +223,40 @@ const createTables = async () => {
     `);
     console.log("Created table: airtable_integrations");
 
+    // Create FAQ embeddings table for semantic search
+    await pool.query(`
+      CREATE TABLE faq_embeddings (
+        id SERIAL PRIMARY KEY,
+        business_id INTEGER NOT NULL,
+        faq_id VARCHAR(255) NOT NULL,
+        question TEXT NOT NULL,
+        answer TEXT,
+        embedding JSONB NOT NULL,
+        source VARCHAR(50) DEFAULT 'airtable',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+        UNIQUE(business_id, faq_id)
+      )
+    `);
+    console.log("Created table: faq_embeddings");
+
+    // Create conversation embeddings table for context analysis
+    await pool.query(`
+      CREATE TABLE conversation_embeddings (
+        id SERIAL PRIMARY KEY,
+        business_id INTEGER NOT NULL,
+        conversation_id VARCHAR(255) NOT NULL,
+        message_id VARCHAR(255) NOT NULL,
+        message_content TEXT NOT NULL,
+        embedding JSONB NOT NULL,
+        message_type VARCHAR(50) DEFAULT 'text',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+      )
+    `);
+    console.log("Created table: conversation_embeddings");
+
     console.log("Database tables created successfully");
 
     console.log("Database tables created successfully");

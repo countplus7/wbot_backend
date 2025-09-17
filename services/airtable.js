@@ -1,8 +1,10 @@
 const pool = require("../config/database");
+const EmbeddingsService = require('./embeddings');
 
 class AirtableService {
   constructor() {
     this.baseURL = 'https://api.airtable.com/v0';
+    this.embeddingsService = EmbeddingsService;
   }
 
   /**
@@ -29,29 +31,16 @@ class AirtableService {
     try {
       const { access_token, base_id, table_name } = configData;
 
-      // Check if config already exists
-      const existingConfig = await this.getConfig(businessId);
+      const result = await pool.query(
+        `INSERT INTO airtable_integrations (business_id, access_token, base_id, table_name, updated_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (business_id)
+         DO UPDATE SET access_token = $2, base_id = $3, table_name = $4, updated_at = NOW()
+         RETURNING *`,
+        [businessId, access_token, base_id, table_name]
+      );
 
-      if (existingConfig) {
-        // Update existing config
-        const result = await pool.query(
-          `UPDATE airtable_integrations 
-           SET access_token = $1, base_id = $2, table_name = $3, updated_at = CURRENT_TIMESTAMP 
-           WHERE business_id = $4 
-           RETURNING *`,
-          [access_token, base_id, table_name, businessId]
-        );
-        return result.rows[0];
-      } else {
-        // Create new config
-        const result = await pool.query(
-          `INSERT INTO airtable_integrations (business_id, access_token, base_id, table_name) 
-           VALUES ($1, $2, $3, $4) 
-           RETURNING *`,
-          [businessId, access_token, base_id, table_name]
-        );
-        return result.rows[0];
-      }
+      return result.rows[0];
     } catch (error) {
       console.error('Error saving Airtable config:', error);
       throw new Error('Failed to save Airtable configuration');
@@ -59,18 +48,25 @@ class AirtableService {
   }
 
   /**
-   * Delete Airtable configuration
+   * Remove Airtable configuration
    */
-  async deleteConfig(businessId) {
+  async removeConfig(businessId) {
     try {
-      const result = await pool.query(
-        "DELETE FROM airtable_integrations WHERE business_id = $1 RETURNING *",
+      await pool.query(
+        "DELETE FROM airtable_integrations WHERE business_id = $1",
         [businessId]
       );
-      return result.rows.length > 0;
+
+      // Also remove stored FAQ embeddings
+      await pool.query(
+        "DELETE FROM faq_embeddings WHERE business_id = $1",
+        [businessId]
+      );
+
+      return true;
     } catch (error) {
-      console.error('Error deleting Airtable config:', error);
-      throw new Error('Failed to delete Airtable configuration');
+      console.error('Error removing Airtable config:', error);
+      throw new Error('Failed to remove Airtable configuration');
     }
   }
 
@@ -81,15 +77,18 @@ class AirtableService {
     try {
       const config = await this.getConfig(businessId);
       if (!config) {
-        throw new Error('No Airtable configuration found');
+        throw new Error('Airtable configuration not found');
       }
 
-      const response = await fetch(`${this.baseURL}/${config.base_id}/${config.table_name}?maxRecords=1`, {
-        headers: {
-          'Authorization': `Bearer ${config.access_token}`,
-          'Content-Type': 'application/json'
+      const response = await fetch(
+        `${this.baseURL}/${config.base_id}/${config.table_name}?maxRecords=1`,
+        {
+          headers: {
+            'Authorization': `Bearer ${config.access_token}`,
+            'Content-Type': 'application/json'
+          }
         }
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`Airtable API error: ${response.status} ${response.statusText}`);
@@ -98,49 +97,51 @@ class AirtableService {
       return { success: true, message: 'Connection successful' };
     } catch (error) {
       console.error('Error testing Airtable connection:', error);
-      return { success: false, error: error.message };
+      throw new Error(`Connection test failed: ${error.message}`);
     }
   }
 
   /**
-   * Get all FAQs from Airtable
+   * Get FAQs from Airtable with enhanced caching and embeddings
    */
   async getFAQs(businessId) {
     try {
       const config = await this.getConfig(businessId);
       if (!config) {
-        throw new Error('No Airtable configuration found');
+        throw new Error('Airtable configuration not found');
       }
 
-      console.log(`Getting FAQs from Airtable base: ${config.base_id}, table: ${config.table_name}`);
+      console.log(`Fetching FAQs from Airtable for business ${businessId}`);
 
-      const response = await fetch(`${this.baseURL}/${config.base_id}/${config.table_name}`, {
-        headers: {
-          'Authorization': `Bearer ${config.access_token}`,
-          'Content-Type': 'application/json'
+      const response = await fetch(
+        `${this.baseURL}/${config.base_id}/${config.table_name}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${config.access_token}`,
+            'Content-Type': 'application/json'
+          }
         }
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`Airtable API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      const records = data.records || [];
+      const faqs = data.records.map(record => ({
+        id: record.id,
+        question: record.fields.Question || record.fields.question || '',
+        answer: record.fields.Answer || record.fields.answer || '',
+        ...record.fields
+      })).filter(faq => faq.question && faq.answer);
 
-      // Convert Airtable records to FAQ format
-      const faqs = records.map(record => {
-        const fields = record.fields;
-        return {
-          id: record.id,
-          question: fields.Question || fields.question || '',
-          answer: fields.Answer || fields.answer || '',
-          // Include any additional fields that might be useful
-          ...fields
-        };
-      }).filter(faq => faq.question && faq.answer); // Only include FAQs with both question and answer
+      console.log(`Retrieved ${faqs.length} FAQs from Airtable`);
 
-      console.log(`Found ${faqs.length} FAQs in Airtable`);
+      // Store embeddings for semantic search (async, don't wait)
+      this.storeFAQEmbeddings(businessId, faqs).catch(error => {
+        console.error('Error storing FAQ embeddings:', error);
+      });
+
       return faqs;
     } catch (error) {
       console.error('Error getting FAQs from Airtable:', error);
@@ -149,55 +150,129 @@ class AirtableService {
   }
 
   /**
-   * Search FAQs for a matching question
+   * Enhanced FAQ search using semantic similarity with embeddings
    */
   async searchFAQs(businessId, userQuestion) {
     try {
+      console.log(`Enhanced FAQ search for business ${businessId}: "${userQuestion}"`);
+
+      // First try to find from cached embeddings
+      const cachedMatch = await this.embeddingsService.searchFAQEmbeddings(businessId, userQuestion, 0.75);
+      
+      if (cachedMatch) {
+        console.log('Found FAQ match from cached embeddings');
+        return {
+          id: cachedMatch.faq_id,
+          question: cachedMatch.question,
+          answer: cachedMatch.answer,
+          semanticSimilarity: cachedMatch.similarity,
+          matchType: 'semantic_cached'
+        };
+      }
+
+      // Fallback to live Airtable search with semantic matching
+      console.log('No cached match found, searching live Airtable data');
       const faqs = await this.getFAQs(businessId);
       
       if (faqs.length === 0) {
         return null;
       }
 
-      // Simple keyword matching for FAQ search
-      const userQuestionLower = userQuestion.toLowerCase();
-      let bestMatch = null;
-      let highestScore = 0;
-
-      for (const faq of faqs) {
-        const questionLower = faq.question.toLowerCase();
-        
-        // Calculate similarity score based on common words
-        const userWords = userQuestionLower.split(/\s+/).filter(word => word.length > 2);
-        const faqWords = questionLower.split(/\s+/).filter(word => word.length > 2);
-        
-        let commonWords = 0;
-        for (const userWord of userWords) {
-          if (faqWords.some(faqWord => faqWord.includes(userWord) || userWord.includes(faqWord))) {
-            commonWords++;
-          }
-        }
-        
-        const score = commonWords / Math.max(userWords.length, faqWords.length);
-        
-        if (score > highestScore && score > 0.2) { // Minimum threshold
-          highestScore = score;
-          bestMatch = faq;
-        }
+      // Use semantic search with embeddings
+      const semanticMatch = await this.embeddingsService.findBestFAQMatch(userQuestion, faqs, 0.75);
+      
+      if (semanticMatch) {
+        console.log('Found semantic FAQ match from live data');
+        return semanticMatch;
       }
 
-      if (bestMatch) {
-        console.log(`Found FAQ match with score ${highestScore}:`, bestMatch.question);
+      // Final fallback to keyword matching for very low confidence cases
+      console.log('No semantic match found, trying keyword matching');
+      const keywordMatch = this.keywordSearchFAQs(userQuestion, faqs);
+      
+      if (keywordMatch) {
+        console.log('Found keyword FAQ match');
         return {
-          ...bestMatch,
-          matchScore: highestScore
+          ...keywordMatch,
+          matchType: 'keyword_fallback'
         };
       }
 
+      console.log('No FAQ match found');
       return null;
     } catch (error) {
-      console.error('Error searching FAQs:', error);
+      console.error('Error in enhanced FAQ search:', error);
       throw new Error('Failed to search FAQs in Airtable');
+    }
+  }
+
+  /**
+   * Fallback keyword search method
+   */
+  keywordSearchFAQs(userQuestion, faqs) {
+    const userQuestionLower = userQuestion.toLowerCase();
+    let bestMatch = null;
+    let highestScore = 0;
+
+    for (const faq of faqs) {
+      const questionLower = faq.question.toLowerCase();
+      
+      // Calculate similarity score based on common words
+      const userWords = userQuestionLower.split(/\s+/).filter(word => word.length > 2);
+      const faqWords = questionLower.split(/\s+/).filter(word => word.length > 2);
+      
+      let commonWords = 0;
+      for (const userWord of userWords) {
+        if (faqWords.some(faqWord => faqWord.includes(userWord) || userWord.includes(faqWord))) {
+          commonWords++;
+        }
+      }
+      
+      const score = commonWords / Math.max(userWords.length, faqWords.length);
+      
+      if (score > highestScore && score > 0.3) { // Higher threshold for keyword matching
+        highestScore = score;
+        bestMatch = faq;
+      }
+    }
+
+    if (bestMatch) {
+      console.log(`Found keyword FAQ match with score ${highestScore}:`, bestMatch.question);
+      return {
+        ...bestMatch,
+        keywordScore: highestScore
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Store FAQ embeddings for semantic search
+   */
+  async storeFAQEmbeddings(businessId, faqs) {
+    try {
+      console.log(`Storing embeddings for ${faqs.length} FAQs for business ${businessId}`);
+
+      // Generate embeddings for all FAQ questions
+      const questions = faqs.map(faq => faq.question);
+      const embeddings = await this.embeddingsService.generateEmbeddingsBatch(questions);
+
+      // Store in database
+      for (let i = 0; i < faqs.length; i++) {
+        await pool.query(
+          `INSERT INTO faq_embeddings (business_id, faq_id, question, answer, embedding, source, created_at) 
+           VALUES ($1, $2, $3, $4, $5, 'airtable', NOW()) 
+           ON CONFLICT (business_id, faq_id) 
+           DO UPDATE SET question = $3, answer = $4, embedding = $5, updated_at = NOW()`,
+          [businessId, faqs[i].id, questions[i], faqs[i].answer, JSON.stringify(embeddings[i])]
+        );
+      }
+
+      console.log('FAQ embeddings stored successfully');
+    } catch (error) {
+      console.error('Error storing FAQ embeddings:', error);
+      // Don't throw error as this is a background operation
     }
   }
 
@@ -208,28 +283,29 @@ class AirtableService {
     try {
       const config = await this.getConfig(businessId);
       if (!config) {
-        throw new Error('No Airtable configuration found');
+        throw new Error('Airtable configuration not found');
       }
 
-      const response = await fetch(`${this.baseURL}/${config.base_id}/${config.table_name}/${faqId}`, {
-        headers: {
-          'Authorization': `Bearer ${config.access_token}`,
-          'Content-Type': 'application/json'
+      const response = await fetch(
+        `${this.baseURL}/${config.base_id}/${config.table_name}/${faqId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${config.access_token}`,
+            'Content-Type': 'application/json'
+          }
         }
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`Airtable API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      const fields = data.fields;
-
       return {
         id: data.id,
-        question: fields.Question || fields.question || '',
-        answer: fields.Answer || fields.answer || '',
-        ...fields
+        question: data.fields.Question || data.fields.question || '',
+        answer: data.fields.Answer || data.fields.answer || '',
+        ...data.fields
       };
     } catch (error) {
       console.error('Error getting FAQ by ID:', error);
