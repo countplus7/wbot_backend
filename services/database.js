@@ -1,6 +1,11 @@
 const pool = require("../config/database");
 
 class DatabaseService {
+  // Export the pool for use in other services
+  static get pool() {
+    return pool;
+  }
+
   async createOrGetConversation(businessId, whatsappNumber) {
     try {
       // Check if conversation exists
@@ -272,6 +277,28 @@ class DatabaseService {
     }
   }
 
+  // Get conversation history for a conversation
+  async getConversationHistory(conversationId, limit = 10) {
+    try {
+      const result = await pool.query(
+        `SELECT 
+          id, message_id, from_number, to_number, message_type, 
+          content, media_url, direction, status, created_at
+        FROM messages 
+        WHERE conversation_id = $1 
+        ORDER BY created_at DESC 
+        LIMIT $2`,
+        [conversationId, limit]
+      );
+      
+      // Return messages in chronological order (oldest first)
+      return result.rows.reverse();
+    } catch (error) {
+      console.error("Error getting conversation history:", error);
+      throw error;
+    }
+  }
+
   // Delete a conversation and all associated data
   async deleteConversation(conversationId) {
     try {
@@ -288,6 +315,57 @@ class DatabaseService {
       return conversation;
     } catch (error) {
       console.error("Error deleting conversation:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clean up malformed embeddings in the database
+   */
+  async cleanupMalformedEmbeddings(businessId = null) {
+    try {
+      console.log('Cleaning up malformed embeddings...');
+      
+      let query = 'SELECT id, business_id, faq_id, embedding FROM faq_embeddings';
+      let params = [];
+      
+      if (businessId) {
+        query += ' WHERE business_id = $1';
+        params = [businessId];
+      }
+      
+      const result = await pool.query(query, params);
+      
+      for (const row of result.rows) {
+        try {
+          // Try to parse the embedding
+          let embedding;
+          if (typeof row.embedding === 'string') {
+            embedding = JSON.parse(row.embedding);
+          } else {
+            embedding = row.embedding;
+          }
+          
+          // Validate the embedding
+          if (!Array.isArray(embedding) || embedding.length === 0) {
+            console.log(`Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id})`);
+            await pool.query(
+              'DELETE FROM faq_embeddings WHERE id = $1',
+              [row.id]
+            );
+          }
+        } catch (error) {
+          console.log(`Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id}): ${error.message}`);
+          await pool.query(
+            'DELETE FROM faq_embeddings WHERE id = $1',
+            [row.id]
+          );
+        }
+      }
+      
+      console.log('Malformed embeddings cleanup completed');
+    } catch (error) {
+      console.error('Error cleaning up malformed embeddings:', error);
       throw error;
     }
   }

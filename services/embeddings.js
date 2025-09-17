@@ -272,18 +272,43 @@ class EmbeddingsService {
 
       // Compare with stored embeddings for this business
       for (const row of result.rows) {
-        const storedEmbedding = JSON.parse(row.embedding);
-        const similarity = this.calculateCosineSimilarity(queryEmbedding, storedEmbedding);
-        
-        if (similarity > highestSimilarity && similarity >= threshold) {
-          highestSimilarity = similarity;
-          bestMatch = {
-            faq_id: row.faq_id,
-            question: row.question,
-            answer: row.answer,
-            businessId: businessId,
-            similarity: similarity
-          };
+        try {
+          let storedEmbedding;
+          
+          // Handle different embedding storage formats
+          if (typeof row.embedding === 'string') {
+            storedEmbedding = JSON.parse(row.embedding);
+          } else if (Array.isArray(row.embedding)) {
+            storedEmbedding = row.embedding;
+          } else if (row.embedding && typeof row.embedding === 'object') {
+            storedEmbedding = row.embedding;
+          } else {
+            console.warn(`Invalid embedding format for FAQ ${row.faq_id}:`, typeof row.embedding);
+            continue;
+          }
+          
+          // Validate that the embedding is an array of numbers
+          if (!Array.isArray(storedEmbedding) || storedEmbedding.length === 0) {
+            console.warn(`Invalid embedding array for FAQ ${row.faq_id}`);
+            continue;
+          }
+          
+          const similarity = this.calculateCosineSimilarity(queryEmbedding, storedEmbedding);
+          
+          if (similarity > highestSimilarity && similarity >= threshold) {
+            highestSimilarity = similarity;
+            bestMatch = {
+              faq_id: row.faq_id,
+              question: row.question,
+              answer: row.answer,
+              businessId: businessId,
+              similarity: similarity
+            };
+          }
+        } catch (parseError) {
+          console.error(`Error parsing embedding for FAQ ${row.faq_id}:`, parseError);
+          console.error(`Raw embedding data:`, row.embedding);
+          continue;
         }
       }
 
@@ -412,6 +437,57 @@ class EmbeddingsService {
     } catch (error) {
       console.error('Error storing conversation embedding:', error);
       // Don't throw error as this is a background operation
+    }
+  }
+
+  /**
+   * Clean up malformed embeddings in the database
+   */
+  async cleanupMalformedEmbeddings(businessId = null) {
+    try {
+      console.log('Cleaning up malformed embeddings...');
+      
+      let query = 'SELECT id, business_id, faq_id, embedding FROM faq_embeddings';
+      let params = [];
+      
+      if (businessId) {
+        query += ' WHERE business_id = $1';
+        params = [businessId];
+      }
+      
+      const result = await pool.query(query, params);
+      
+      for (const row of result.rows) {
+        try {
+          // Try to parse the embedding
+          let embedding;
+          if (typeof row.embedding === 'string') {
+            embedding = JSON.parse(row.embedding);
+          } else {
+            embedding = row.embedding;
+          }
+          
+          // Validate the embedding
+          if (!Array.isArray(embedding) || embedding.length === 0) {
+            console.log(`Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id})`);
+            await pool.query(
+              'DELETE FROM faq_embeddings WHERE id = $1',
+              [row.id]
+            );
+          }
+        } catch (error) {
+          console.log(`Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id}): ${error.message}`);
+          await pool.query(
+            'DELETE FROM faq_embeddings WHERE id = $1',
+            [row.id]
+          );
+        }
+      }
+      
+      console.log('Malformed embeddings cleanup completed');
+    } catch (error) {
+      console.error('Error cleaning up malformed embeddings:', error);
+      throw error;
     }
   }
 }
