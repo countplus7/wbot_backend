@@ -140,12 +140,14 @@ router.post('/webhook', async (req, res) => {
         console.log(`Processing ${messageData.messageType} message...`);
         console.log(`Media ID: ${messageData.mediaId}`);
         
-        // Download media file with MIME type information
+        // Download media file with MIME type information and retry logic
         const mediaData = await WhatsAppService.downloadMedia(messageData.mediaId);
         const mediaStream = mediaData.stream;
         const mimeType = mediaData.mimeType;
+        const fileSize = mediaData.fileSize;
         
         console.log(`Media MIME type: ${mimeType}`);
+        console.log(`Media file size: ${fileSize} bytes`);
         
         // Determine file extension based on MIME type
         let fileExtension;
@@ -210,6 +212,11 @@ router.post('/webhook', async (req, res) => {
         if (fs.existsSync(localFilePath)) {
           const fileStats = fs.statSync(localFilePath);
           console.log(`Media file saved successfully: ${localFilePath} (${fileStats.size} bytes)`);
+          
+          // Verify file size matches expected size
+          if (fileSize && fileStats.size !== fileSize) {
+            console.warn(`File size mismatch: expected ${fileSize} bytes, got ${fileStats.size} bytes`);
+          }
         } else {
           console.error(`Media file was not saved: ${localFilePath}`);
           throw new Error('Media file was not saved');
@@ -233,6 +240,17 @@ router.post('/webhook', async (req, res) => {
         console.log(`Media file info saved to database with path: ${relativePath}`);
       } catch (mediaError) {
         console.error(`Error processing ${messageData.messageType} media:`, mediaError);
+        
+        // If media download fails, we should still try to respond to the user
+        // but let them know there was an issue with the media
+        if (mediaError.message.includes('WhatsApp media download failed') || 
+            mediaError.message.includes('timeout') ||
+            mediaError.message.includes('Network error')) {
+          console.log('Media download failed, will inform user in AI response');
+          // Set a flag to indicate media processing failed
+          messageData.mediaProcessingFailed = true;
+        }
+        
         // Continue processing even if media handling fails
         localFilePath = null;
       }
@@ -454,6 +472,11 @@ router.post('/webhook', async (req, res) => {
         aiResponse = enhancedResult.response;
       } else {
         aiResponse = enhancedResult;
+      }
+
+      // If media processing failed, add a note to the response
+      if (messageData.mediaProcessingFailed && (messageData.messageType === 'image' || messageData.messageType === 'audio')) {
+        aiResponse = `I received your ${messageData.messageType} message, but I'm having trouble processing it right now. ${aiResponse}`;
       }
 
       console.log('Enhanced AI response generated:', aiResponse.substring(0, 100) + '...');

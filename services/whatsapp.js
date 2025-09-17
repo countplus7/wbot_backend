@@ -141,38 +141,56 @@ class WhatsAppService {
     }
   }
 
-  async downloadMedia(mediaId) {
+  async downloadMedia(mediaId, retries = 3) {
     try {
       if (!this.accessToken) {
         throw new Error('WhatsApp configuration not set. Please set business config first.');
       }
 
+      console.log(`Downloading media with ID: ${mediaId} (attempt ${4 - retries}/3)`);
+
+      // First, get media metadata
       const response = await axios.get(
         `${this.baseURL}/${mediaId}`,
         {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`
-          }
+          },
+          timeout: 10000 // 10 second timeout
         }
       );
 
       const mediaUrl = response.data.url;
       const mimeType = response.data.mime_type;
+      const fileSize = response.data.file_size;
       
+      console.log(`Media metadata - URL: ${mediaUrl}, MIME: ${mimeType}, Size: ${fileSize} bytes`);
+
+      if (!mediaUrl) {
+        throw new Error('No media URL returned from WhatsApp');
+      }
+
+      // Download the actual media file
       const mediaResponse = await axios.get(mediaUrl, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`
         },
-        responseType: 'stream'
+        responseType: 'stream',
+        timeout: 30000, // 30 second timeout for media download
+        maxContentLength: 50 * 1024 * 1024, // 50MB max file size
+        maxBodyLength: 50 * 1024 * 1024
       });
+
+      console.log(`Media download successful for ID: ${mediaId}`);
 
       return {
         stream: mediaResponse.data,
         mimeType: mimeType,
-        url: mediaUrl
+        url: mediaUrl,
+        fileSize: fileSize
       };
     } catch (error) {
-      console.error('Error downloading media:', error.response?.data || error.message);
+      console.error(`Error downloading media (attempt ${4 - retries}/3):`, error.response?.data || error.message);
       
       if (this.isTokenExpiredError(error)) {
         console.error(' WHATSAPP ACCESS TOKEN HAS EXPIRED! ');
@@ -180,7 +198,52 @@ class WhatsAppService {
         throw new Error('WhatsApp access token has expired. Please update the token in your business configuration.');
       }
       
-      throw new Error('Failed to download media from WhatsApp');
+      // Check for specific WhatsApp error codes
+      if (error.response?.data?.error) {
+        const errorCode = error.response.data.error.code;
+        const errorMessage = error.response.data.error.message;
+        
+        if (errorCode === 131052) {
+          console.error('WhatsApp media download error (131052): Failed to download incoming media due to internal error');
+          if (retries > 0) {
+            console.log(`Retrying media download in 2 seconds... (${retries} attempts remaining)`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return this.downloadMedia(mediaId, retries - 1);
+          } else {
+            throw new Error('WhatsApp media download failed after 3 attempts. This may be a temporary WhatsApp server issue.');
+          }
+        } else if (errorCode === 131026) {
+          throw new Error('Media file not found or expired on WhatsApp servers');
+        } else if (errorCode === 131000) {
+          throw new Error('Invalid media ID provided');
+        }
+      }
+      
+      // Handle timeout errors
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        console.error('Media download timeout');
+        if (retries > 0) {
+          console.log(`Retrying media download due to timeout... (${retries} attempts remaining)`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return this.downloadMedia(mediaId, retries - 1);
+        } else {
+          throw new Error('Media download timeout after 3 attempts');
+        }
+      }
+      
+      // Handle network errors
+      if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        console.error('Network error during media download');
+        if (retries > 0) {
+          console.log(`Retrying media download due to network error... (${retries} attempts remaining)`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          return this.downloadMedia(mediaId, retries - 1);
+        } else {
+          throw new Error('Network error during media download after 3 attempts');
+        }
+      }
+      
+      throw new Error(`Failed to download media from WhatsApp: ${error.message}`);
     }
   }
 
