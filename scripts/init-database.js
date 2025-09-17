@@ -33,234 +33,340 @@ const dropAllTables = async () => {
 
 const createTables = async () => {
   try {
-    console.log("Creating fresh database tables...");
+    console.log("Creating database tables...");
 
-    // Create users table for admin authentication
-    await pool.query(`
-      CREATE TABLE users (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(100) UNIQUE NOT NULL,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        role VARCHAR(20) DEFAULT 'admin',
-        status VARCHAR(20) DEFAULT 'active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
+    // Check if businesses table exists
+    const businessesExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'businesses'
+      );
     `);
-    console.log("Created table: users");
 
-    // Create businesses table
-    await pool.query(`
-      CREATE TABLE businesses (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        status VARCHAR(20) DEFAULT 'active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
+    if (!businessesExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE businesses (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          status VARCHAR(20) DEFAULT 'active',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log("Created table: businesses");
+    } else {
+      console.log("Businesses table already exists");
+    }
+
+    // Check if whatsapp_configs table exists
+    const whatsappConfigsExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'whatsapp_configs'
+      );
     `);
-    console.log("Created table: businesses");
 
-    // Create WhatsApp configurations table
-    await pool.query(`
-      CREATE TABLE whatsapp_configs (
-        id SERIAL PRIMARY KEY,
-        business_id INTEGER NOT NULL,
-        phone_number_id VARCHAR(100) NOT NULL,
-        access_token TEXT NOT NULL,
-        verify_token VARCHAR(255),
-        webhook_url VARCHAR(500),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
-        UNIQUE(business_id, phone_number_id)
-      )
+    if (!whatsappConfigsExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE whatsapp_configs (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          phone_number_id VARCHAR(100) NOT NULL,
+          access_token TEXT NOT NULL,
+          verify_token VARCHAR(255),
+          webhook_url VARCHAR(500),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          UNIQUE(business_id, phone_number_id)
+        )
+      `);
+      console.log("Created table: whatsapp_configs");
+    } else {
+      console.log("WhatsApp configs table already exists");
+    }
+
+    // Check if business_tones table exists
+    const businessTonesExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'business_tones'
+      );
     `);
-    console.log("Created table: whatsapp_configs");
 
-    // Create business tones table (one tone per business)
-    await pool.query(`
-      CREATE TABLE business_tones (
-        id SERIAL PRIMARY KEY,
-        business_id INTEGER NOT NULL UNIQUE,
-        name VARCHAR(100) NOT NULL,
-        description TEXT,
-        tone_instructions TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
-      )
+    if (!businessTonesExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE business_tones (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL UNIQUE,
+          name VARCHAR(100) NOT NULL,
+          description TEXT,
+          tone_instructions TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+        )
+      `);
+      console.log("Created table: business_tones");
+    } else {
+      console.log("Business tones table already exists");
+    }
+
+    // Check if conversations table exists
+    const conversationsExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'conversations'
+      );
     `);
-    console.log("Created table: business_tones");
 
-    // Create conversations table (updated to include business_id)
-    await pool.query(`
-      CREATE TABLE conversations (
-        id SERIAL PRIMARY KEY,
-        business_id INTEGER NOT NULL,
-        phone_number VARCHAR(20) NOT NULL,
-        status VARCHAR(20) DEFAULT 'active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
-      )
+    if (!conversationsExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE conversations (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          phone_number VARCHAR(20) NOT NULL,
+          status VARCHAR(20) DEFAULT 'active',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+        )
+      `);
+      console.log("Created table: conversations");
+    } else {
+      console.log("Conversations table already exists");
+    }
+
+    // Check if messages table exists
+    const messagesExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'messages'
+      );
     `);
-    console.log("Created table: conversations");
 
-    // Create messages table (updated to include business_id)
-    await pool.query(`
-      CREATE TABLE messages (
-        id SERIAL PRIMARY KEY,
-        business_id INTEGER NOT NULL,
-        conversation_id INTEGER NOT NULL,
-        message_id VARCHAR(255) UNIQUE,
-        from_number VARCHAR(20) NOT NULL,
-        to_number VARCHAR(20) NOT NULL,
-        message_type VARCHAR(20) NOT NULL,
-        content TEXT,
-        media_url VARCHAR(500),
-        media_type VARCHAR(50),
-        local_file_path VARCHAR(500),
-        direction VARCHAR(10) NOT NULL,
-        status VARCHAR(20) DEFAULT 'received',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
-        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-      )
+    if (!messagesExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE messages (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          conversation_id INTEGER NOT NULL,
+          message_id VARCHAR(255) UNIQUE,
+          from_number VARCHAR(20) NOT NULL,
+          to_number VARCHAR(20) NOT NULL,
+          message_type VARCHAR(20) NOT NULL,
+          content TEXT,
+          media_url VARCHAR(500),
+          media_type VARCHAR(50),
+          local_file_path VARCHAR(500),
+          direction VARCHAR(10) NOT NULL,
+          status VARCHAR(20) DEFAULT 'received',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+        )
+      `);
+      console.log("Created table: messages");
+    } else {
+      console.log("Messages table already exists");
+    }
+
+    // Check if media_files table exists
+    const mediaFilesExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'media_files'
+      );
     `);
-    console.log("Created table: messages");
 
-    // Create media files table (updated to include business_id)
-    await pool.query(`
-      CREATE TABLE media_files (
-        id SERIAL PRIMARY KEY,
-        business_id INTEGER NOT NULL,
-        message_id INTEGER,
-        file_name VARCHAR(255) NOT NULL,
-        file_path VARCHAR(500) NOT NULL,
-        file_type VARCHAR(50) NOT NULL,
-        file_size INTEGER,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
-        FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
-      )
+    if (!mediaFilesExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE media_files (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          message_id INTEGER,
+          file_name VARCHAR(255) NOT NULL,
+          file_path VARCHAR(500) NOT NULL,
+          file_type VARCHAR(50),
+          file_size INTEGER,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+        )
+      `);
+      console.log("Created table: media_files");
+    } else {
+      console.log("Media files table already exists");
+    }
+
+    // Check if google_workspace_integrations table exists
+    const googleWorkspaceExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'google_workspace_integrations'
+      );
     `);
-    console.log("Created table: media_files");
 
-    // Create Google Workspace integrations table
-    await pool.query(`
-      CREATE TABLE google_workspace_integrations (
-        id SERIAL PRIMARY KEY,
-        business_id INTEGER NOT NULL,
-        provider VARCHAR(20) NOT NULL DEFAULT 'google',
-        email VARCHAR(255) NOT NULL,
-        refresh_token TEXT NOT NULL,
-        access_token TEXT,
-        expiry_date TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
-        UNIQUE(business_id, provider, email)
-      )
+    if (!googleWorkspaceExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE google_workspace_integrations (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT,
+          token_expires_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          UNIQUE(business_id)
+        )
+      `);
+      console.log("Created table: google_workspace_integrations");
+    } else {
+      console.log("Google workspace integrations table already exists");
+    }
+
+    // Check if salesforce_integrations table exists
+    const salesforceExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'salesforce_integrations'
+      );
     `);
-    console.log("Created table: google_workspace_integrations");
-    console.log("Created table: google_workspace_integrations");
 
-    // Create Salesforce integrations table
-    await pool.query(`
-      CREATE TABLE salesforce_integrations (
-        id SERIAL PRIMARY KEY,
-        business_id INTEGER NOT NULL,
-        provider VARCHAR(20) NOT NULL DEFAULT 'salesforce',
-        instance_url VARCHAR(500) NOT NULL,
-        user_id VARCHAR(255) NOT NULL,
-        username VARCHAR(255) NOT NULL,
-        email VARCHAR(255) NOT NULL,
-        refresh_token TEXT NOT NULL,
-        access_token TEXT,
-        expiry_date TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
-        UNIQUE(business_id, provider, user_id)
-      )
+    if (!salesforceExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE salesforce_integrations (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT,
+          instance_url VARCHAR(255) NOT NULL,
+          token_expires_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          UNIQUE(business_id)
+        )
+      `);
+      console.log("Created table: salesforce_integrations");
+    } else {
+      console.log("Salesforce integrations table already exists");
+    }
+
+    // Check if odoo_integrations table exists
+    const odooExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'odoo_integrations'
+      );
     `);
-    console.log("Created table: salesforce_integrations");
 
-    // Create Odoo integrations table
-    await pool.query(`
-      CREATE TABLE odoo_integrations (
-        id SERIAL PRIMARY KEY,
-        business_id INTEGER NOT NULL,
-        instance_url VARCHAR(500) NOT NULL,
-        db VARCHAR(100) NOT NULL,
-        username VARCHAR(255) NOT NULL,
-        api_key TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
-        UNIQUE(business_id)
-      )
+    if (!odooExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE odoo_integrations (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          url VARCHAR(255) NOT NULL,
+          database VARCHAR(100) NOT NULL,
+          username VARCHAR(100) NOT NULL,
+          password TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          UNIQUE(business_id)
+        )
+      `);
+      console.log("Created table: odoo_integrations");
+    } else {
+      console.log("Odoo integrations table already exists");
+    }
+
+    // Check if airtable_integrations table exists
+    const airtableExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'airtable_integrations'
+      );
     `);
-    console.log("Created table: odoo_integrations");
 
-    // Create Airtable integrations table
-    await pool.query(`
-      CREATE TABLE airtable_integrations (
-        id SERIAL PRIMARY KEY,
-        business_id INTEGER NOT NULL,
-        access_token TEXT NOT NULL,
-        base_id VARCHAR(255) NOT NULL,
-        table_name VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
-        UNIQUE(business_id)
-      )
+    if (!airtableExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE airtable_integrations (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          access_token TEXT NOT NULL,
+          base_id VARCHAR(255) NOT NULL,
+          table_name VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          UNIQUE(business_id)
+        )
+      `);
+      console.log("Created table: airtable_integrations");
+    } else {
+      console.log("Airtable integrations table already exists");
+    }
+
+    // Check if faq_embeddings table exists
+    const faqEmbeddingsExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'faq_embeddings'
+      );
     `);
-    console.log("Created table: airtable_integrations");
 
-    // Create FAQ embeddings table for semantic search
-    await pool.query(`
-      CREATE TABLE faq_embeddings (
-        id SERIAL PRIMARY KEY,
-        business_id INTEGER NOT NULL,
-        faq_id VARCHAR(255) NOT NULL,
-        question TEXT NOT NULL,
-        answer TEXT,
-        embedding JSONB NOT NULL,
-        source VARCHAR(50) DEFAULT 'airtable',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
-        UNIQUE(business_id, faq_id)
-      )
+    if (!faqEmbeddingsExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE faq_embeddings (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          faq_id VARCHAR(255) NOT NULL,
+          question TEXT NOT NULL,
+          answer TEXT,
+          embedding JSONB NOT NULL,
+          source VARCHAR(50) DEFAULT 'airtable',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+          UNIQUE(business_id, faq_id)
+        )
+      `);
+      console.log("Created table: faq_embeddings");
+    } else {
+      console.log("FAQ embeddings table already exists");
+    }
+
+    // Check if conversation_embeddings table exists
+    const conversationEmbeddingsExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'conversation_embeddings'
+      );
     `);
-    console.log("Created table: faq_embeddings");
 
-    // Create conversation embeddings table for context analysis
-    await pool.query(`
-      CREATE TABLE conversation_embeddings (
-        id SERIAL PRIMARY KEY,
-        business_id INTEGER NOT NULL,
-        conversation_id VARCHAR(255) NOT NULL,
-        message_id VARCHAR(255) NOT NULL,
-        message_content TEXT NOT NULL,
-        embedding JSONB NOT NULL,
-        message_type VARCHAR(50) DEFAULT 'text',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
-      )
-    `);
-    console.log("Created table: conversation_embeddings");
+    if (!conversationEmbeddingsExists.rows[0].exists) {
+      await pool.query(`
+        CREATE TABLE conversation_embeddings (
+          id SERIAL PRIMARY KEY,
+          business_id INTEGER NOT NULL,
+          conversation_id VARCHAR(255) NOT NULL,
+          message_id VARCHAR(255) NOT NULL,
+          message_content TEXT NOT NULL,
+          embedding JSONB NOT NULL,
+          message_type VARCHAR(50) DEFAULT 'text',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+        )
+      `);
+      console.log("Created table: conversation_embeddings");
+    } else {
+      console.log("Conversation embeddings table already exists");
+    }
 
-    console.log("Database tables created successfully");
-
-    console.log("Database tables created successfully");
+    console.log("✅ All tables created successfully!");
   } catch (error) {
     console.error("Error creating database tables:", error);
     throw error;
