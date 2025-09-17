@@ -6,9 +6,10 @@ const DatabaseService = require('../services/database');
 const BusinessService = require('../services/business');
 const CalendarHandler = require('../services/calendar-handler');
 const AirtableService = require('../services/airtable');
+const EmbeddingsService = require('../services/embeddings');
+const pool = require('../config/database');
 const path = require('path');
 const fs = require('fs-extra');
-const EmbeddingsService = require('../services/embeddings');
 
 // Webhook verification endpoint
 router.get('/webhook', async (req, res) => {
@@ -68,7 +69,7 @@ router.post('/webhook', async (req, res) => {
 
     // Check if we've already processed this message
     try {
-      const existingMessage = await DatabaseService.pool.query(
+      const existingMessage = await pool.query(
         "SELECT id, created_at FROM messages WHERE message_id = $1",
         [messageData.messageId]
       );

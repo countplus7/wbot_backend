@@ -64,20 +64,41 @@ class DatabaseService {
     } catch (error) {
       console.error("Error saving message:", error);
       
-      // If it's still a duplicate key error, try to get the existing message
-      if (error.code === '23505') {
-        console.log(`Message ${messageData.messageId} already exists, retrieving existing message`);
+      // If it's a column doesn't exist error, try without local_file_path
+      if (error.code === '42703' && error.message.includes('local_file_path')) {
+        console.log("local_file_path column doesn't exist, saving without it");
         try {
-          const existingMessage = await pool.query(
-            "SELECT * FROM messages WHERE message_id = $1",
-            [messageData.messageId]
+          const result = await pool.query(
+            `INSERT INTO messages (
+              business_id, conversation_id, message_id, from_number, to_number, 
+              message_type, content, media_url, direction, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
+            ON CONFLICT (message_id) 
+            DO UPDATE SET 
+              content = EXCLUDED.content,
+              media_url = EXCLUDED.media_url,
+              status = EXCLUDED.status,
+              updated_at = NOW()
+            RETURNING *`,
+            [
+              messageData.businessId,
+              messageData.conversationId,
+              messageData.messageId,
+              messageData.fromNumber,
+              messageData.toNumber,
+              messageData.messageType,
+              messageData.content,
+              messageData.mediaUrl,
+              messageData.isFromUser ? "inbound" : "outbound",
+              "received"
+            ]
           );
-          if (existingMessage.rows.length > 0) {
-            console.log(`Retrieved existing message: ${messageData.messageId}`);
-            return existingMessage.rows[0];
-          }
-        } catch (retrieveError) {
-          console.error("Error retrieving existing message:", retrieveError);
+          
+          console.log(`Message saved successfully (without local_file_path): ${messageData.messageId}`);
+          return result.rows[0];
+        } catch (fallbackError) {
+          console.error("Error saving message (fallback):", fallbackError);
+          throw fallbackError;
         }
       }
       

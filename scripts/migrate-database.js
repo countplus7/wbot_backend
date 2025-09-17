@@ -406,6 +406,25 @@ const migrateDatabase = async () => {
       } else {
         console.log("Messages table already has business_id column");
       }
+
+      // Check if local_file_path column exists
+      const hasLocalFilePath = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_name = 'messages' AND column_name = 'local_file_path'
+        );
+      `);
+
+      if (!hasLocalFilePath.rows[0].exists) {
+        console.log("Adding local_file_path column to messages table...");
+        await pool.query(`
+          ALTER TABLE messages 
+          ADD COLUMN local_file_path VARCHAR(500)
+        `);
+        console.log("Added local_file_path column to messages table");
+      } else {
+        console.log("Messages table already has local_file_path column");
+      }
     } else {
       console.log("Messages table does not exist, will be created by init-database.js");
     }

@@ -122,6 +122,7 @@ const createTables = async () => {
         content TEXT,
         media_url VARCHAR(500),
         media_type VARCHAR(50),
+        local_file_path VARCHAR(500),
         direction VARCHAR(10) NOT NULL,
         status VARCHAR(20) DEFAULT 'received',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
