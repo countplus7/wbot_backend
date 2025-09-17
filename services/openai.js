@@ -1029,7 +1029,7 @@ Extract the intent and relevant information.`;
       console.log('AI Intent Detection - Making API call to OpenAI');
       
       const response = await openai.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -1100,7 +1100,7 @@ ${conversationHistory.length > 0 ? `Context: ${conversationHistory.slice(-2).map
 Extract the Google Workspace intent and details.`;
 
       const response = await openai.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -1175,7 +1175,7 @@ ${conversationHistory.length > 0 ? `Context: ${conversationHistory.slice(-2).map
 Extract the Salesforce intent and details.`;
 
       const response = await openai.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -1247,7 +1247,7 @@ ${conversationHistory.length > 0 ? `Context: ${conversationHistory.slice(-2).map
 Extract the Odoo intent and details.`;
 
       const response = await openai.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -1325,7 +1325,7 @@ Guidelines:
         `\n\nPrevious conversation context: ${conversationHistory.slice(-2).map(msg => `${msg.role}: ${msg.content}`).join('\n')}` : '';
 
       const response = await openai.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt + contextInfo }
@@ -1881,7 +1881,7 @@ Guidelines:
       }
 
       const response = await openai.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -1939,7 +1939,7 @@ Determine if this is a FAQ-type question.`;
       console.log('FAQ Intent Detection - Making API call to OpenAI');
       
       const response = await openai.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -2148,6 +2148,9 @@ Determine if this is a FAQ-type question.`;
             throw new Error(`Image file does not exist: ${filePath}`);
           }
           
+          // Enhanced intent detection for image
+          intent = await this.detectIntentWithEmbeddings(content, conversationHistory, businessId);
+          
           // Enhanced image analysis with context
           const imageAnalysis = await this.analyzeImageWithContext(filePath, content, businessTone, contextAnalysis);
           aiResponse = imageAnalysis;
@@ -2236,7 +2239,7 @@ Use this context to provide more relevant and coherent responses.`;
       console.log('Enhanced Chat Completion - Making API call with context');
       
       const response = await openai.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: allMessages,
         temperature: 0.7,
         max_tokens: 1000
@@ -2272,7 +2275,7 @@ Use this context to provide more relevant analysis of the image.`;
       }
 
       const response = await openai.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: [
           { role: 'system', content: systemPrompt },
           {
@@ -2305,6 +2308,14 @@ Use this context to provide more relevant analysis of the image.`;
       // Fallback to original method
       return await this.analyzeImage(imagePath, userMessage, businessTone);
     }
+  }
+
+  calculateCosineSimilarity(embedding1, embedding2) {
+    if (!embedding1 || !embedding2) {
+      console.warn("One or both embeddings are undefined, returning 0 similarity");
+      return 0;
+    }
+    // ... rest of the function
   }
 }
 

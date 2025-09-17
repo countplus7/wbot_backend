@@ -60,6 +60,10 @@ class EmbeddingsService {
    * Calculate cosine similarity between two embeddings
    */
   calculateCosineSimilarity(embedding1, embedding2) {
+    if (!embedding1 || !embedding2) {
+      console.warn("One or both embeddings are undefined, returning 0 similarity");
+      return 0;
+    }
     if (embedding1.length !== embedding2.length) {
       throw new Error('Embeddings must have the same dimensions');
     }
