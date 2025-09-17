@@ -108,6 +108,10 @@ router.post('/webhook', async (req, res) => {
     // Set WhatsApp service configuration for this business
     WhatsAppService.setBusinessConfig(whatsappConfig);
 
+    // Get business tone for AI responses
+    const businessTone = await BusinessService.getBusinessTone(businessId);
+    console.log(`Using business tone: ${businessTone ? businessTone.name : 'default'}`);
+
     // Create or get conversation
     const conversation = await DatabaseService.createOrGetConversation(businessId, messageData.from);
     console.log('Conversation created/found:', { id: conversation.id, business_id: conversation.business_id, phone_number: conversation.phone_number });
