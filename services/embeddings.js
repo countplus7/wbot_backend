@@ -247,49 +247,20 @@ class EmbeddingsService {
   }
 
   /**
-   * Store FAQ embeddings in database for caching
-   */
-  async storeFAQEmbeddings(businessId, faqs) {
-    try {
-      console.log(`Storing embeddings for ${faqs.length} FAQs for business ${businessId}`);
-
-      // Generate embeddings for all FAQ questions
-      const questions = faqs.map(faq => faq.question);
-      const embeddings = await this.generateEmbeddingsBatch(questions);
-
-      // Store in database (you'll need to create this table)
-      for (let i = 0; i < faqs.length; i++) {
-        await pool.query(
-          `INSERT INTO faq_embeddings (business_id, faq_id, question, embedding, created_at) 
-           VALUES ($1, $2, $3, $4, NOW()) 
-           ON CONFLICT (business_id, faq_id) 
-           DO UPDATE SET question = $3, embedding = $4, updated_at = NOW()`,
-          [businessId, faqs[i].id, questions[i], JSON.stringify(embeddings[i])]
-        );
-      }
-
-      console.log('FAQ embeddings stored successfully');
-    } catch (error) {
-      console.error('Error storing FAQ embeddings:', error);
-      throw new Error('Failed to store FAQ embeddings');
-    }
-  }
-
-  /**
-   * Retrieve and search FAQ embeddings from database
+   * Search FAQ embeddings from database (business-specific)
    */
   async searchFAQEmbeddings(businessId, userQuestion, threshold = 0.75) {
     try {
       console.log(`Searching FAQ embeddings for business ${businessId}`);
 
-      // Get all stored FAQ embeddings
+      // Get all stored FAQ embeddings for this specific business
       const result = await pool.query(
-        'SELECT faq_id, question, embedding FROM faq_embeddings WHERE business_id = $1',
+        'SELECT faq_id, question, answer, embedding FROM faq_embeddings WHERE business_id = $1',
         [businessId]
       );
 
       if (result.rows.length === 0) {
-        console.log('No FAQ embeddings found in database');
+        console.log(`No FAQ embeddings found in database for business ${businessId}`);
         return null;
       }
 
@@ -299,7 +270,7 @@ class EmbeddingsService {
       let bestMatch = null;
       let highestSimilarity = 0;
 
-      // Compare with stored embeddings
+      // Compare with stored embeddings for this business
       for (const row of result.rows) {
         const storedEmbedding = JSON.parse(row.embedding);
         const similarity = this.calculateCosineSimilarity(queryEmbedding, storedEmbedding);
@@ -309,19 +280,50 @@ class EmbeddingsService {
           bestMatch = {
             faq_id: row.faq_id,
             question: row.question,
+            answer: row.answer,
+            businessId: businessId,
             similarity: similarity
           };
         }
       }
 
       if (bestMatch) {
-        console.log(`Found FAQ match in database: "${bestMatch.question}" (similarity: ${bestMatch.similarity})`);
+        console.log(`Found FAQ match in database for business ${businessId}: "${bestMatch.question}" (similarity: ${bestMatch.similarity})`);
       }
 
       return bestMatch;
     } catch (error) {
-      console.error('Error searching FAQ embeddings:', error);
+      console.error('Error searching FAQ embeddings for business', businessId, ':', error);
       throw new Error('Failed to search FAQ embeddings');
+    }
+  }
+
+  /**
+   * Store FAQ embeddings in database for caching (business-specific)
+   */
+  async storeFAQEmbeddings(businessId, faqs) {
+    try {
+      console.log(`Storing embeddings for ${faqs.length} FAQs for business ${businessId}`);
+
+      // Generate embeddings for all FAQ questions
+      const questions = faqs.map(faq => faq.question);
+      const embeddings = await this.generateEmbeddingsBatch(questions);
+
+      // Store in database with business-specific tracking
+      for (let i = 0; i < faqs.length; i++) {
+        await pool.query(
+          `INSERT INTO faq_embeddings (business_id, faq_id, question, answer, embedding, source, created_at) 
+           VALUES ($1, $2, $3, $4, $5, 'airtable', NOW()) 
+           ON CONFLICT (business_id, faq_id) 
+           DO UPDATE SET question = $3, answer = $4, embedding = $5, updated_at = NOW()`,
+          [businessId, faqs[i].id, questions[i], faqs[i].answer, JSON.stringify(embeddings[i])]
+        );
+      }
+
+      console.log(`FAQ embeddings stored successfully for business ${businessId}`);
+    } catch (error) {
+      console.error('Error storing FAQ embeddings for business', businessId, ':', error);
+      throw new Error('Failed to store FAQ embeddings');
     }
   }
 
