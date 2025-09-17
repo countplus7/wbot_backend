@@ -54,7 +54,27 @@ router.post('/webhook', async (req, res) => {
     const messageData = await WhatsAppService.processIncomingMessage(req.body);
     
     if (!messageData) {
-      console.log('No message data to process');
+      console.log('No message data to process - this might be a status update');
+      
+      // Check if this is a failed media download status update
+      const entry = req.body.entry?.[0];
+      const changes = entry?.changes?.[0];
+      const statuses = changes?.value?.statuses;
+      
+      if (statuses && statuses.length > 0) {
+        const status = statuses[0];
+        if (status.status === 'failed' && status.errors) {
+          console.log('Media download failed:', {
+            messageId: status.id,
+            recipientId: status.recipient_id,
+            errors: status.errors
+          });
+          
+          // You could send a message to the user about the failed media
+          // or log this for debugging purposes
+        }
+      }
+      
       return res.status(200).send('OK');
     }
 
