@@ -140,12 +140,42 @@ router.post('/webhook', async (req, res) => {
         console.log(`Processing ${messageData.messageType} message...`);
         console.log(`Media ID: ${messageData.mediaId}`);
         
-        // Download media file
-        const mediaStream = await WhatsAppService.downloadMedia(messageData.mediaId);
+        // Download media file with MIME type information
+        const mediaData = await WhatsAppService.downloadMedia(messageData.mediaId);
+        const mediaStream = mediaData.stream;
+        const mimeType = mediaData.mimeType;
         
-        // Determine file extension and path
+        console.log(`Media MIME type: ${mimeType}`);
+        
+        // Determine file extension based on MIME type
+        let fileExtension;
+        if (messageData.messageType === 'image') {
+          fileExtension = mimeType === 'image/png' ? '.png' : '.jpg';
+        } else if (messageData.messageType === 'audio') {
+          // Map MIME types to file extensions for audio
+          switch (mimeType) {
+            case 'audio/aac':
+              fileExtension = '.aac';
+              break;
+            case 'audio/mp4':
+              fileExtension = '.m4a';
+              break;
+            case 'audio/amr':
+              fileExtension = '.amr';
+              break;
+            case 'audio/mpeg':
+              fileExtension = '.mp3';
+              break;
+            case 'audio/ogg':
+              fileExtension = '.ogg';
+              break;
+            default:
+              console.warn(`Unknown audio MIME type: ${mimeType}, defaulting to .ogg`);
+              fileExtension = '.ogg';
+          }
+        }
+        
         const timestamp = Date.now();
-        const fileExtension = messageData.messageType === 'image' ? '.jpg' : '.ogg';
         const fileName = `${businessId}_${messageData.messageId}_${timestamp}${fileExtension}`;
         const uploadDir = messageData.messageType === 'image' ? 'uploads/images' : 'uploads/audio';
         
@@ -153,6 +183,7 @@ router.post('/webhook', async (req, res) => {
         localFilePath = path.resolve(__dirname, '..', uploadDir, fileName);
         
         console.log(`Saving media to: ${localFilePath}`);
+        console.log(`File extension: ${fileExtension}`);
         console.log(`Current working directory: ${process.cwd()}`);
         console.log(`__dirname: ${__dirname}`);
 
@@ -198,12 +229,12 @@ router.post('/webhook', async (req, res) => {
 
         // Update message with local file path (this will update the media_files table)
         await DatabaseService.updateMessageLocalFilePath(messageData.messageId, relativePath);
-
+        
         console.log(`Media file info saved to database with path: ${relativePath}`);
       } catch (mediaError) {
-        console.error('Error processing media:', mediaError);
-        console.error('Media processing failed, continuing with text-only response');
-        // Continue with text processing even if media fails
+        console.error(`Error processing ${messageData.messageType} media:`, mediaError);
+        // Continue processing even if media handling fails
+        localFilePath = null;
       }
     }
 

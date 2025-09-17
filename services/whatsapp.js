@@ -157,6 +157,8 @@ class WhatsAppService {
       );
 
       const mediaUrl = response.data.url;
+      const mimeType = response.data.mime_type;
+      
       const mediaResponse = await axios.get(mediaUrl, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`
@@ -164,7 +166,11 @@ class WhatsAppService {
         responseType: 'stream'
       });
 
-      return mediaResponse.data;
+      return {
+        stream: mediaResponse.data,
+        mimeType: mimeType,
+        url: mediaUrl
+      };
     } catch (error) {
       console.error('Error downloading media:', error.response?.data || error.message);
       

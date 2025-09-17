@@ -403,6 +403,9 @@ class OpenAIService {
         throw new Error(`Audio file not found: ${audioPath}`);
       }
 
+      const fileStats = fs.statSync(audioPath);
+      console.log(`Transcribing audio file: ${audioPath} (${fileStats.size} bytes)`);
+
       const audioFile = fs.createReadStream(audioPath);
 
       const response = await openai.audio.transcriptions.create({
@@ -413,10 +416,21 @@ class OpenAIService {
         temperature: 0.2, // Lower temperature for more accurate transcription
       });
 
+      console.log(`Audio transcription completed: "${response}"`);
       return response;
     } catch (error) {
       console.error("OpenAI transcription error:", error);
-      throw error;
+      
+      // Provide more specific error messages
+      if (error.code === 'invalid_file_format') {
+        throw new Error(`Unsupported audio format for transcription: ${audioPath}`);
+      } else if (error.code === 'file_too_large') {
+        throw new Error(`Audio file too large for transcription: ${audioPath}`);
+      } else if (error.message.includes('timeout')) {
+        throw new Error(`Audio transcription timeout: ${audioPath}`);
+      }
+      
+      throw new Error(`Audio transcription failed: ${error.message}`);
     }
   }
 
