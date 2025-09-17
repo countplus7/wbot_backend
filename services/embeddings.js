@@ -372,7 +372,7 @@ class EmbeddingsService {
       
       // Find most relevant previous messages
       const relevantHistory = [];
-      const historyTexts = conversationHistory.map(msg => msg.content || msg.message);
+      const historyTexts = conversationHistory.map(msg => msg.content || msg.message).filter(text => text && text.trim().length > 0);
       const historyEmbeddings = await this.generateEmbeddingsBatch(historyTexts);
 
       for (let i = 0; i < conversationHistory.length; i++) {

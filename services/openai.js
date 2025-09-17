@@ -263,10 +263,13 @@ class OpenAIService {
         content: systemContent
       };
 
-      const allMessages = [systemMessage, ...conversationHistory, ...messages];
+      // Validate and filter messages to ensure they have required properties
+      const validHistory = conversationHistory.filter(msg => msg && msg.role && msg.content);
+      const validMessages = messages.filter(msg => msg && msg.role && msg.content);
+      const allMessages = [systemMessage, ...validHistory, ...validMessages];
 
       const response = await openai.chat.completions.create({
-        model: this.model,
+        model: this.visionModel,
         messages: allMessages,
         max_tokens: 1000,
         temperature: 0.7,
