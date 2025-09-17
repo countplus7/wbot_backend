@@ -250,7 +250,81 @@ router.post('/webhook', async (req, res) => {
       }
     }
 
-    // Enhanced FAQ intent detection and processing with embeddings
+    // Odoo integration detection and processing (PRIORITY - before FAQ detection)
+    if (messageData.messageType === 'text' && messageData.content) {
+      try {
+        console.log('Checking for Odoo integration requests...');
+        
+        // Check for Odoo operations
+        const odooOrderRequest = OpenAIService.detectOdooOrderRequest(messageData.content);
+        const odooInvoiceRequest = OpenAIService.detectOdooInvoiceRequest(messageData.content);
+        const odooLeadRequest = OpenAIService.detectOdooLeadRequest(messageData.content);
+        const odooTicketRequest = OpenAIService.detectOdooTicketRequest(messageData.content);
+        
+        console.log('Odoo detection results:', {
+          orderRequest: !!odooOrderRequest,
+          invoiceRequest: !!odooInvoiceRequest,
+          leadRequest: !!odooLeadRequest,
+          ticketRequest: !!odooTicketRequest,
+          message: messageData.content
+        });
+        
+        // Handle Odoo order request
+        if (odooOrderRequest && businessId && messageData.from) {
+          try {
+            console.log('Processing Odoo order request:', odooOrderRequest);
+            const result = await OpenAIService.handleOdooOrder(businessId, odooOrderRequest, messageData.from);
+            
+            // Save the Odoo response to database
+            await DatabaseService.saveMessage({
+              businessId: businessId,
+              conversationId: conversation.id,
+              messageId: `odoo_${Date.now()}`,
+              fromNumber: messageData.to, // From business
+              toNumber: messageData.from, // To user
+              messageType: 'text',
+              content: result,
+              mediaUrl: null,
+              localFilePath: null,
+              isFromUser: false
+            });
+
+            // Send the Odoo response via WhatsApp
+            const response = await WhatsAppService.sendTextMessage(messageData.from, result);
+            console.log('Odoo order response sent successfully:', response);
+            
+            return res.status(200).send('OK');
+          } catch (error) {
+            console.error('Error processing Odoo order:', error);
+            const errorMessage = `❌ Sorry, I couldn't process your order. Please make sure Odoo integration is properly configured. Error: ${error.message}`;
+            
+            // Save error response to database
+            await DatabaseService.saveMessage({
+              businessId: businessId,
+              conversationId: conversation.id,
+              messageId: `odoo_error_${Date.now()}`,
+              fromNumber: messageData.to,
+              toNumber: messageData.from,
+              messageType: 'text',
+              content: errorMessage,
+              mediaUrl: null,
+              localFilePath: null,
+              isFromUser: false
+            });
+
+            // Send error response via WhatsApp
+            await WhatsAppService.sendTextMessage(messageData.from, errorMessage);
+            return res.status(200).send('OK');
+          }
+        }
+        
+      } catch (odooError) {
+        console.error('Error in Odoo processing:', odooError);
+        // Continue with FAQ processing if Odoo processing fails
+      }
+    }
+
+    // Enhanced FAQ intent detection and processing with embeddings (now happens after Odoo)
     if (messageData.messageType === 'text' && messageData.content) {
       try {
         console.log('Enhanced FAQ intent detection with embeddings...');
