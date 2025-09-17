@@ -1181,7 +1181,8 @@ Extract the intent and relevant information.`;
 
       console.log("AI Intent Detection - Raw response:", response.choices[0].message.content);
 
-      const result = JSON.parse(response.choices[0].message.content);
+      // Use the safe JSON parser
+      const result = this.safeParseJSON(response.choices[0].message.content);
 
       console.log("AI Intent Detection - Parsed result:", result);
 
@@ -1257,7 +1258,8 @@ Extract the Google Workspace intent and details.`;
         max_tokens: 250,
       });
 
-      const result = JSON.parse(response.choices[0].message.content);
+      // Use the safe JSON parser
+      const result = this.safeParseJSON(response.choices[0].message.content);
 
       if (result.confidence >= 0.7) {
         return {
@@ -1339,7 +1341,8 @@ Extract the Salesforce intent and details.`;
         max_tokens: 250,
       });
 
-      const result = JSON.parse(response.choices[0].message.content);
+      // Use the safe JSON parser
+      const result = this.safeParseJSON(response.choices[0].message.content);
 
       if (result.confidence >= 0.7) {
         return {
@@ -1418,7 +1421,8 @@ Extract the Odoo intent and details.`;
         max_tokens: 250,
       });
 
-      const result = JSON.parse(response.choices[0].message.content);
+      // Use the safe JSON parser
+      const result = this.safeParseJSON(response.choices[0].message.content);
 
       if (result.confidence >= 0.7) {
         return {
@@ -2117,6 +2121,35 @@ Guidelines:
   }
 
   /**
+   * Helper function to safely parse JSON responses that might be wrapped in markdown code blocks
+   */
+  safeParseJSON(jsonString) {
+    try {
+      // First try to parse as-is
+      return JSON.parse(jsonString);
+    } catch (error) {
+      try {
+        // Remove markdown code block markers if present
+        let cleaned = jsonString.trim();
+        
+        // Remove ```json and ``` markers
+        if (cleaned.startsWith('```json')) {
+          cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        } else if (cleaned.startsWith('```')) {
+          cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
+        }
+        
+        // Try parsing the cleaned string
+        return JSON.parse(cleaned);
+      } catch (secondError) {
+        console.error('Failed to parse JSON after cleaning:', secondError);
+        console.error('Original string:', jsonString);
+        throw new Error(`Invalid JSON response: ${secondError.message}`);
+      }
+    }
+  }
+
+  /**
    * Detect if a message is a FAQ question
    */
   async detectFAQIntent(message) {
@@ -2149,7 +2182,7 @@ Examples of NON-FAQ questions:
 - "Can you update my account information?"
 - "I have a problem with my recent purchase"
 
-Return ONLY valid JSON.`;
+Return ONLY valid JSON without any markdown formatting or code blocks.`;
 
       const userPrompt = `Analyze this customer message: "${message}"
 
@@ -2169,7 +2202,8 @@ Determine if this is a FAQ-type question.`;
 
       console.log("FAQ Intent Detection - Raw response:", response.choices[0].message.content);
 
-      const result = JSON.parse(response.choices[0].message.content);
+      // Use the safe JSON parser
+      const result = this.safeParseJSON(response.choices[0].message.content);
 
       console.log("FAQ Intent Detection - Parsed result:", result);
 
