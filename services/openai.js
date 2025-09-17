@@ -279,6 +279,31 @@ class OpenAIService {
     }
   }
 
+  /**
+   * Build system prompt with business tone
+   */
+  buildSystemPrompt(businessTone = null) {
+    let systemContent = `You are a helpful AI assistant integrated with WhatsApp and Google Workspace. 
+    You can send and read emails through Gmail when users request it. Be conversational, friendly, and helpful. 
+    Keep responses concise but informative. If you're analyzing images, describe what you see clearly and provide relevant insights.
+    
+    When users ask to send emails, you can help them by sending emails through Gmail integration.
+    Format for email sending: "send email to [email] with subject [subject] and body [body]"
+    
+    When users ask to read emails, you can help them access their Gmail. Examples:
+    - "show me my unread emails" or "check unread emails"
+    - "show me recent emails" or "get my latest emails"
+    - "search emails for [query]" or "find emails about [topic]"
+    - "show emails from [label]" (like Important, Promotions, etc.)`;
+    
+    // Apply business-specific tone if provided
+    if (businessTone && businessTone.tone_instructions) {
+      systemContent += `\n\n${businessTone.tone_instructions}`;
+    }
+    
+    return systemContent;
+  }
+
   async analyzeImage(imagePath, userMessage = '', businessTone = null) {
     try {
       console.log(`OpenAI: Analyzing image at path: ${imagePath}`);
