@@ -195,11 +195,14 @@ class EmbeddingsService {
           "Create a calendar event",
           "What meetings do I have today?",
         ],
-        SALESFORCE: [
+        HUBSPOT: [
+          "Create a new contact",
+          "Add a company to HubSpot",
+          "Create a new deal",
+          "Search for contacts",
+          "Update contact information",
+          "Check deal status",
           "Create a new lead",
-          "Update the contact information",
-          "Check the opportunity status",
-          "Create a new case",
           "View my sales pipeline",
         ],
         ODOO: [
@@ -376,11 +379,12 @@ class EmbeddingsService {
       const relevantHistory = [];
       const historyTexts = conversationHistory
         .map((msg) => msg.content || msg.message)
-        .filter((text) => text && text.trim().length > 0 && text !== 'undefined' && text !== 'null');
+        .filter((text) => text && text.trim().length > 0 && text !== "undefined" && text !== "null");
       const historyEmbeddings = await this.generateEmbeddingsBatch(historyTexts);
 
       for (let i = 0; i < conversationHistory.length && i < historyEmbeddings.length; i++) {
-        if (historyEmbeddings[i]) { // Additional safety check
+        if (historyEmbeddings[i]) {
+          // Additional safety check
           const similarity = this.calculateCosineSimilarity(currentEmbedding, historyEmbeddings[i]);
           if (similarity > 0.6) {
             relevantHistory.push({

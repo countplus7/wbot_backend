@@ -12,7 +12,7 @@ const dropAllTables = async () => {
       "business_tones",
       "whatsapp_configs",
       "google_workspace_integrations",
-      "salesforce_integrations",
+      "hubspot_integrations",
       "odoo_integrations",
       "airtable_integrations",
       "businesses",
@@ -227,32 +227,33 @@ const createTables = async () => {
       console.log("Google workspace integrations table already exists");
     }
 
-    // Check if salesforce_integrations table exists
-    const salesforceExists = await pool.query(`
+    // Check if hubspot_integrations table exists
+    const hubspotExists = await pool.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
-        WHERE table_name = 'salesforce_integrations'
+        WHERE table_name = 'hubspot_integrations'
       );
     `);
 
-    if (!salesforceExists.rows[0].exists) {
+    if (!hubspotExists.rows[0].exists) {
       await pool.query(`
-        CREATE TABLE salesforce_integrations (
+        CREATE TABLE hubspot_integrations (
           id SERIAL PRIMARY KEY,
           business_id INTEGER NOT NULL,
-          access_token TEXT NOT NULL,
+          access_token TEXT,
           refresh_token TEXT,
-          instance_url VARCHAR(255) NOT NULL,
           token_expires_at TIMESTAMP,
+          user_id VARCHAR(255),
+          email VARCHAR(255),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
           UNIQUE(business_id)
         )
       `);
-      console.log("Created table: salesforce_integrations");
+      console.log("Created table: hubspot_integrations");
     } else {
-      console.log("Salesforce integrations table already exists");
+      console.log("HubSpot integrations table already exists");
     }
 
     // Check if odoo_integrations table exists

@@ -54,38 +54,35 @@ const migrateDatabase = async () => {
     } else {
     }
 
-    // Check if salesforce_integrations table exists
-    const salesforceIntegrationsExists = await pool.query(`
+    // Check if hubspot_integrations table exists
+    const hubspotIntegrationsExists = await pool.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
-        WHERE table_name = 'salesforce_integrations'
+        WHERE table_name = 'hubspot_integrations'
       );
     `);
 
-    if (!salesforceIntegrationsExists.rows[0].exists) {
-      console.log("Creating salesforce_integrations table...");
+    if (!hubspotIntegrationsExists.rows[0].exists) {
+      console.log("Creating hubspot_integrations table...");
       await pool.query(`
-        CREATE TABLE salesforce_integrations (
+        CREATE TABLE hubspot_integrations (
           id SERIAL PRIMARY KEY,
           business_id INTEGER NOT NULL,
-          provider VARCHAR(20) NOT NULL DEFAULT 'salesforce',
-          instance_url VARCHAR(500) NOT NULL,
-          user_id VARCHAR(255) NOT NULL,
-          username VARCHAR(255) NOT NULL,
-          email VARCHAR(255) NOT NULL,
-          refresh_token TEXT NOT NULL,
+          client_id VARCHAR(255) NOT NULL,
+          client_secret TEXT NOT NULL,
           access_token TEXT,
-          expiry_date TIMESTAMP,
+          refresh_token TEXT,
+          redirect_uri VARCHAR(500),
+          token_expires_at TIMESTAMP,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
-          UNIQUE(business_id, provider, user_id)
+          UNIQUE(business_id)
         )
       `);
-      console.log("Salesforce integrations table created successfully");
+      console.log("HubSpot integrations table created successfully");
     } else {
-      console.log("Salesforce integrations table already exists");
-      console.log("Businesses table already exists");
+      console.log("HubSpot integrations table already exists");
     }
 
     // Check if whatsapp_configs table exists
@@ -529,8 +526,8 @@ const migrateDatabase = async () => {
     `);
 
     await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_salesforce_integrations_business_id 
-      ON salesforce_integrations(business_id)
+      CREATE INDEX IF NOT EXISTS idx_hubspot_integrations_business_id
+      ON hubspot_integrations(business_id)
     `);
 
     await pool.query(`

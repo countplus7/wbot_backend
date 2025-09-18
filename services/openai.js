@@ -45,8 +45,8 @@ class OpenAIService {
           case "GOOGLE_CALENDAR":
             return await this.handleGoogleCalendarWithAI(businessId, aiIntent, conversationHistory, businessTone);
 
-          case "SALESFORCE":
-            return await this.handleSalesforceWithAI(businessId, aiIntent, conversationHistory, businessTone);
+          case "HUBSPOT":
+            return await this.handleHubSpotWithAI(businessId, aiIntent, conversationHistory, businessTone);
 
           case "ODOO":
             return await this.handleOdooWithAI(businessId, aiIntent, phoneNumber, conversationHistory, businessTone);
@@ -420,16 +420,16 @@ class OpenAIService {
       return response;
     } catch (error) {
       console.error("OpenAI transcription error:", error);
-      
+
       // Provide more specific error messages
-      if (error.code === 'invalid_file_format') {
+      if (error.code === "invalid_file_format") {
         throw new Error(`Unsupported audio format for transcription: ${audioPath}`);
-      } else if (error.code === 'file_too_large') {
+      } else if (error.code === "file_too_large") {
         throw new Error(`Audio file too large for transcription: ${audioPath}`);
-      } else if (error.message.includes('timeout')) {
+      } else if (error.message.includes("timeout")) {
         throw new Error(`Audio transcription timeout: ${audioPath}`);
       }
-      
+
       throw new Error(`Audio transcription failed: ${error.message}`);
     }
   }
@@ -1137,7 +1137,7 @@ class OpenAIService {
 Your task is to analyze the customer's message and determine if they want to interact with:
 1. GOOGLE_EMAIL - Send, read, search emails via Gmail
 2. GOOGLE_CALENDAR - Schedule, check availability, create events
-3. SALESFORCE - CRM operations (leads, contacts, opportunities, cases)
+3. HUBSPOT - CRM operations (contacts, companies, deals, search)
 4. ODOO - ERP operations (orders, invoices, products, support)
 5. GENERAL - General conversation or unrelated requests
 
@@ -1276,87 +1276,70 @@ Extract the Google Workspace intent and details.`;
   }
 
   /**
-   * Enhanced Salesforce Intent Detection
+   * Enhanced HubSpot Intent Detection
    */
-  async detectSalesforceIntentWithAI(message, conversationHistory = []) {
+  async detectHubSpotIntentWithAI(message, conversationHistory = []) {
     try {
-      const systemPrompt = `You are an AI assistant specialized in Salesforce CRM operations.
-
-Analyze the customer's message to detect Salesforce intents:
-
-LEAD OPERATIONS:
-- CREATE_LEAD: Create new leads, prospects
-- UPDATE_LEAD: Modify existing leads
-- SEARCH_LEAD: Find leads by name, company, email
-- CONVERT_LEAD: Convert leads to opportunities
-
-CONTACT OPERATIONS:
-- CREATE_CONTACT: Add new contacts
-- UPDATE_CONTACT: Modify contact information
-- SEARCH_CONTACT: Find contacts
-- DELETE_CONTACT: Remove contacts
-
-OPPORTUNITY OPERATIONS:
-- CREATE_OPPORTUNITY: Create sales opportunities
-- UPDATE_OPPORTUNITY: Modify opportunities
-- SEARCH_OPPORTUNITY: Find opportunities
-- CLOSE_OPPORTUNITY: Close won/lost opportunities
-
-CASE OPERATIONS:
-- CREATE_CASE: Create support cases
-- UPDATE_CASE: Modify cases
-- SEARCH_CASE: Find cases
-- CLOSE_CASE: Resolve cases
-
-Extract detailed information in JSON format:
-
-Examples:
-- "Create a new lead for ABC Company" → {"intent": "CREATE_LEAD", "company": "ABC Company", "confidence": 0.95}
-- "Find contact John Smith" → {"intent": "SEARCH_CONTACT", "name": "John Smith", "confidence": 0.9}
-- "Update opportunity for XYZ Corp to closed-won" → {"intent": "CLOSE_OPPORTUNITY", "company": "XYZ Corp", "stage": "closed-won", "confidence": 0.95}
-- "Create a support case for billing issue" → {"intent": "CREATE_CASE", "subject": "billing issue", "confidence": 0.9}
-
-Return ONLY valid JSON.`;
-
-      const userPrompt = `Analyze this Salesforce request: "${message}"
-
-${
-  conversationHistory.length > 0
-    ? `Context: ${conversationHistory
-        .slice(-2)
-        .map((msg) => `${msg.role}: ${msg.content}`)
-        .join("\n")}`
-    : ""
-}
-
-Extract the Salesforce intent and details.`;
-
-      const response = await openai.chat.completions.create({
-        model: this.visionModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.1,
-        max_tokens: 250,
-      });
-
-      // Use the safe JSON parser
-      const result = this.safeParseJSON(response.choices[0].message.content);
-
-      if (result.confidence >= 0.7) {
-        return {
-          ...result,
-          originalMessage: message,
-        };
-      }
-
-      return null;
-    } catch (error) {
-      console.error("Error in Salesforce AI intent detection:", error);
-      return null;
-    }
+      const systemPrompt = `You are an AI assistant specialized in HubSpot CRM operations.
+  
+  Analyze the customer's message to detect HubSpot intents:
+  
+  HUBSPOT OPERATIONS:
+  - CREATE_CONTACT: Create new contacts, leads, prospects
+  - CREATE_COMPANY: Add new companies, organizations
+  - CREATE_DEAL: Create new deals, opportunities, sales
+  - SEARCH_CONTACTS: Find existing contacts, search by email/name
+  - UPDATE_CONTACT: Modify existing contact information
+  - UPDATE_COMPANY: Modify existing company information
+  - UPDATE_DEAL: Modify existing deal information
+  
+  Extract detailed information in JSON format:
+  
+  Examples:
+  - "Create a contact for john@example.com" → {"intent": "CREATE_CONTACT", "email": "john@example.com", "confidence": 0.95}
+  - "Add a new company called TechCorp" → {"intent": "CREATE_COMPANY", "companyName": "TechCorp", "confidence": 0.9}
+  - "Create a deal for $5000" → {"intent": "CREATE_DEAL", "amount": 5000, "confidence": 0.9}
+  - "Search for contacts with email example.com" → {"intent": "SEARCH_CONTACTS", "searchTerm": "example.com", "confidence": 0.95}
+  
+  Return ONLY valid JSON.`;
+  
+      const userPrompt = `Analyze this HubSpot request: "${message}"
+  
+  ${
+    conversationHistory.length > 0
+      ? `Context: ${conversationHistory
+          .slice(-2)
+          .map((msg) => `${msg.role}: ${msg.content}`)
+          .join("\n")}`
+      : ""
   }
+  Extract the HubSpot intent and details.`;
+
+    const response = await openai.chat.completions.create({
+      model: this.visionModel,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.1,
+      max_tokens: 250,
+    });
+
+    const result = this.safeParseJSON(response.choices[0].message.content);
+
+    if (result.confidence >= 0.7) {
+      return {
+        ...result,
+        originalMessage: message,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error in HubSpot AI intent detection:", error);
+    return null;
+  }
+}
 
   /**
    * Enhanced Odoo Intent Detection
@@ -1479,8 +1462,8 @@ Guidelines:
             userPrompt = `Generate a response for showing calendar events. Timeframe: ${data.timeframe || "upcoming"}`;
           }
           break;
-        case "SALESFORCE":
-          userPrompt = `Generate a response for Salesforce ${intent.action}. Details: ${JSON.stringify(data)}`;
+        case "HUBSPOT":
+          userPrompt = `Generate a response for HubSpot ${intent.action}. Details: ${JSON.stringify(data)}`;
           break;
         case "ODOO":
           if (intent.action === "order") {
@@ -1910,129 +1893,115 @@ Guidelines:
   }
 
   /**
-   * Handle Salesforce operations with AI
+   * Handle HubSpot operations with AI
    */
-  async handleSalesforceWithAI(businessId, intent, conversationHistory, businessTone) {
+  async handleHubSpotWithAI(businessId, intent, conversationHistory, businessTone) {
     try {
-      const SalesforceService = require("./salesforce");
+      const HubSpotService = require("./hubspot");
 
       switch (intent.action) {
-        case "create_lead":
-          const leadResult = await SalesforceService.createLead(businessId, {
-            company: intent.company,
-            lastName: intent.lastName || "Unknown",
+        case "create_contact":
+          const contactResult = await HubSpotService.createContact(businessId, {
             email: intent.email,
+            firstName: intent.firstName,
+            lastName: intent.lastName,
             phone: intent.phone,
+            company: intent.company,
+            jobTitle: intent.jobTitle,
           });
 
-          if (leadResult.success) {
+          if (contactResult.success) {
             return await this.generateContextualResponse(
               intent,
               {
-                company: intent.company,
-                leadId: leadResult.id,
+                email: intent.email,
+                contactId: contactResult.contactId,
                 success: true,
               },
               businessTone,
               conversationHistory
             );
           } else {
-            return `❌ Sorry, I couldn't create the lead. ${leadResult.error}`;
+            return `❌ Sorry, I couldn't create the contact. ${contactResult.error}`;
           }
 
-        case "update_lead":
-          const updatedLeadResult = await SalesforceService.updateLead(businessId, {
-            leadId: intent.leadId,
-            company: intent.company,
-            lastName: intent.lastName || "Unknown",
-            email: intent.email,
+        case "create_company":
+          const companyResult = await HubSpotService.createCompany(businessId, {
+            name: intent.companyName,
+            domain: intent.domain,
+            industry: intent.industry,
             phone: intent.phone,
+            address: intent.address,
+            city: intent.city,
+            state: intent.state,
+            country: intent.country,
           });
-          if (updatedLeadResult.success) {
+
+          if (companyResult.success) {
             return await this.generateContextualResponse(
               intent,
               {
-                leadId: intent.leadId,
-                company: intent.company,
+                companyName: intent.companyName,
+                companyId: companyResult.companyId,
                 success: true,
               },
               businessTone,
               conversationHistory
             );
           } else {
-            return `❌ Sorry, I couldn't update the lead. ${updatedLeadResult.error}`;
+            return `❌ Sorry, I couldn't create the company. ${companyResult.error}`;
           }
 
-        case "search_lead":
-          const searchLeadResult = await SalesforceService.searchLead(businessId, intent.query);
-          if (searchLeadResult.success) {
-            return await this.generateContextualResponse(
-              intent,
-              {
-                query: intent.query,
-                leads: searchLeadResult.leads,
-                success: true,
-              },
-              businessTone,
-              conversationHistory
-            );
-          } else {
-            return `❌ Sorry, I couldn't search for leads. ${searchLeadResult.error}`;
-          }
-
-        case "convert_lead":
-          const convertedLeadResult = await SalesforceService.convertLead(businessId, {
-            leadId: intent.leadId,
-            opportunityName: intent.opportunityName,
+        case "create_deal":
+          const dealResult = await HubSpotService.createDeal(businessId, {
+            name: intent.dealName,
+            amount: intent.amount,
             stage: intent.stage,
+            closeDate: intent.closeDate,
+            description: intent.description,
+            pipeline: intent.pipeline,
           });
-          if (convertedLeadResult.success) {
+
+          if (dealResult.success) {
             return await this.generateContextualResponse(
               intent,
               {
-                leadId: intent.leadId,
-                opportunityName: intent.opportunityName,
-                stage: intent.stage,
+                dealName: intent.dealName,
+                dealId: dealResult.dealId,
                 success: true,
               },
               businessTone,
               conversationHistory
             );
           } else {
-            return `❌ Sorry, I couldn't convert the lead. ${convertedLeadResult.error}`;
+            return `❌ Sorry, I couldn't create the deal. ${dealResult.error}`;
           }
 
-        case "search_contact":
-          const contacts = await SalesforceService.searchContacts(businessId, {
-            name: intent.name,
-            email: intent.email,
-          });
+        case "search_contacts":
+          const searchResult = await HubSpotService.searchContacts(businessId, intent.searchTerm);
 
-          if (contacts.success && contacts.contacts.length > 0) {
-            const contactList = contacts.contacts
-              .map((contact) => `• ${contact.Name} - ${contact.Email || "No email"} (${contact.Phone || "No phone"})`)
-              .join("\n");
-
+          if (searchResult.success) {
             return await this.generateContextualResponse(
               intent,
               {
-                name: intent.name,
-                count: contacts.contacts.length,
-                contacts: contactList,
+                searchTerm: intent.searchTerm,
+                contacts: searchResult.contacts,
+                total: searchResult.total,
+                success: true,
               },
               businessTone,
               conversationHistory
             );
           } else {
-            return `👤 No contacts found matching "${intent.name}".`;
+            return `❌ Sorry, I couldn't search contacts. ${searchResult.error}`;
           }
 
         default:
-          return `I understand you want to work with Salesforce, but I'm not sure what specific action you'd like to take.`;
+          return `❌ I'm not sure how to handle that HubSpot action. Please try again with a specific request like creating a contact, company, or deal.`;
       }
     } catch (error) {
-      console.error("Error handling Salesforce with AI:", error);
-      return `❌ Sorry, I encountered an error with your Salesforce request. Please try again.`;
+      console.error("Error handling HubSpot request:", error);
+      return `❌ Sorry, I encountered an error with your HubSpot request. Please make sure HubSpot integration is properly configured.`;
     }
   }
 
@@ -2093,8 +2062,8 @@ Guidelines:
         case "GOOGLE_CALENDAR":
           userPrompt = `Generate a response for working with your calendar.`;
           break;
-        case "SALESFORCE":
-          userPrompt = `Generate a response for working with Salesforce.`;
+        case "HUBSPOT":
+          userPrompt = `Generate a response for working with HubSpot.`;
           break;
         case "ODOO":
           userPrompt = `Generate a response for working with Odoo.`;
@@ -2131,19 +2100,19 @@ Guidelines:
       try {
         // Remove markdown code block markers if present
         let cleaned = jsonString.trim();
-        
+
         // Remove ```json and ``` markers
-        if (cleaned.startsWith('```json')) {
-          cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        } else if (cleaned.startsWith('```')) {
-          cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
+        if (cleaned.startsWith("```json")) {
+          cleaned = cleaned.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+        } else if (cleaned.startsWith("```")) {
+          cleaned = cleaned.replace(/^```\s*/, "").replace(/\s*```$/, "");
         }
-        
+
         // Try parsing the cleaned string
         return JSON.parse(cleaned);
       } catch (secondError) {
-        console.error('Failed to parse JSON after cleaning:', secondError);
-        console.error('Original string:', jsonString);
+        console.error("Failed to parse JSON after cleaning:", secondError);
+        console.error("Original string:", jsonString);
         throw new Error(`Invalid JSON response: ${secondError.message}`);
       }
     }
