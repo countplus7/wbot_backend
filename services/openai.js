@@ -216,6 +216,8 @@ You can send emails through Gmail when users request it. Be conversational, frie
 Keep responses concise but informative. If you're analyzing images, describe what you see clearly and provide relevant insights.
 
 When users ask to send emails, you can help them by sending emails through Gmail integration.
+IMPORTANT: When users want to send emails, they provide their own email address (sender), and the email gets sent to the business's Gmail account.
+When asking for email details, ask for: "your email address, subject, and body"
 Format for email sending: "send email to [email] with subject [subject] and body [body]"`;
       // Apply business-specific tone if provided
       if (businessTone && businessTone.tone_instructions) {
@@ -251,11 +253,13 @@ Format for email sending: "send email to [email] with subject [subject] and body
    */
   buildSystemPrompt(businessTone = null) {
     let systemContent = `You are a helpful AI assistant integrated with WhatsApp and Google Workspace. 
-    You can send emails through Gmail when users request it. Be conversational, friendly, and helpful. 
-    Keep responses concise but informative. If you're analyzing images, describe what you see clearly and provide relevant insights.
-    
-    When users ask to send emails, you can help them by sending emails through Gmail integration.
-    Format for email sending: "send email to [email] with subject [subject] and body [body]"`;
+You can send emails through Gmail when users request it. Be conversational, friendly, and helpful. 
+Keep responses concise but informative. If you're analyzing images, describe what you see clearly and provide relevant insights.
+
+When users ask to send emails, you can help them by sending emails through Gmail integration.
+IMPORTANT: When users want to send emails, they provide their own email address (sender), and the email gets sent to the business's Gmail account.
+When asking for email details, ask for: "your email address, subject, and body"
+Format for email sending: "send email to [email] with subject [subject] and body [body]"`;
 
     // Apply business-specific tone if provided
     if (businessTone && businessTone.tone_instructions) {
@@ -500,35 +504,35 @@ Format for email sending: "send email to [email] with subject [subject] and body
 
     // Bot-requested format - "Email address: [email]\nSubject: [subject]\nBody: [body]"
     const lines = message
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line);
-  
-  if (lines.length >= 3) {
-    let userEmail = "";
-    let subject = "";
-    let body = "";
-  
-    // Parse the bot-requested format
-    for (const line of lines) {
-      if (line.toLowerCase().startsWith("email address:")) {
-        userEmail = line.substring(14).trim();
-      } else if (line.toLowerCase().startsWith("subject:")) {
-        subject = line.substring(8).trim();
-      } else if (line.toLowerCase().startsWith("body:")) {
-        body = line.substring(5).trim();
-      }
-    }
-  
-    // Validate that all required fields are present and email is valid
-    if (userEmail && subject && body && userEmail.includes("@")) {
-      return {
-        user_email: userEmail,  // This is the sender's email address
-        subject: subject,
-        body: body,
-      };
+  .split("\n")
+  .map((line) => line.trim())
+  .filter((line) => line);
+
+if (lines.length >= 3) {
+  let userEmail = "";
+  let subject = "";
+  let body = "";
+
+  // Parse the bot-requested format
+  for (const line of lines) {
+    if (line.toLowerCase().includes("email:")) {
+      userEmail = line.substring(6).trim();
+    } else if (line.toLowerCase().includes("subject:")) {
+      subject = line.substring(8).trim();
+    } else if (line.toLowerCase().includes("body:")) {
+      body = line.substring(5).trim();
     }
   }
+
+  // Validate that all required fields are present and email is valid
+  if (userEmail && subject && body && userEmail.includes("@")) {
+    return {
+      user_email: userEmail,  // This is the sender's email address
+      subject: subject,
+      body: body,
+    };
+  }
+}
 
     return null;
   }
