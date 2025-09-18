@@ -70,8 +70,26 @@ router.post('/webhook', async (req, res) => {
             errors: status.errors
           });
           
-          // You could send a message to the user about the failed media
-          // or log this for debugging purposes
+          // Check if this is a media download error
+          const mediaError = status.errors.find(error => error.code === 131052);
+          if (mediaError) {
+            console.log('Sending media download failure notification to user');
+            
+            // Send a helpful message to the user about the failed media
+            const WhatsAppService = require('../services/whatsapp');
+            const recipientId = status.recipient_id;
+            
+            try {
+              await WhatsAppService.sendMessage(recipientId, 
+                "I'm sorry, but I couldn't process your voice message due to a technical issue. " +
+                "This sometimes happens with voice notes. Please try sending your message again, " +
+                "or you can type your message instead. I'm here to help! 😊"
+              );
+              console.log('Media download failure notification sent successfully');
+            } catch (error) {
+              console.error('Failed to send media download failure notification:', error);
+            }
+          }
         }
       }
       

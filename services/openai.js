@@ -1142,14 +1142,17 @@ Your task is to analyze the customer's message and determine if they want to int
 5. GENERAL - General conversation or unrelated requests
 
 For email messages, extract:
-- to: email address
-- subject: email subject (from "Title:" or "Subject:")  
-- body: email content (from "Content:" or "Body:")
+- user_email: sender's email address (required)
+- subject: email subject/title (required)
+- body: email content (required)
 - action: "send" or "read"
 
+Note: When sending emails, the email will be sent to the business's own Gmail account (self-email).
+The user_email field is used to identify who is sending the email.
+
 Examples:
-- "I need to send email to john@example.com\nTitle: Meeting\nContent: Let's meet tomorrow" → {"intent": "GOOGLE_EMAIL", "action": "send", "to": "john@example.com", "subject": "Meeting", "body": "Let's meet tomorrow", "confidence": 0.95}
-- "Send an email to john@example.com about the meeting" → {"intent": "GOOGLE_EMAIL", "action": "send", "to": "john@example.com", "subject": "meeting", "confidence": 0.95}
+- "I want to send an email\nMy email: john@example.com\nTitle: Meeting Request\nContent: Let's meet tomorrow" → {"intent": "GOOGLE_EMAIL", "action": "send", "user_email": "john@example.com", "subject": "Meeting Request", "body": "Let's meet tomorrow", "confidence": 0.95}
+- "Send email\nFrom: john@example.com\nSubject: Project Update\nBody: The project is on track" → {"intent": "GOOGLE_EMAIL", "action": "send", "user_email": "john@example.com", "subject": "Project Update", "body": "The project is on track", "confidence": 0.95}
 - "Schedule a meeting tomorrow at 2pm" → {"intent": "GOOGLE_CALENDAR", "action": "schedule", "time": "tomorrow at 2pm", "confidence": 0.9}
 
 Return ONLY valid JSON. If no clear intent is detected, return {"intent": "GENERAL", "confidence": 0.5}.`;
@@ -1302,7 +1305,7 @@ Extract the Google Workspace intent and details.`;
   - "Search for contacts with email example.com" → {"intent": "SEARCH_CONTACTS", "searchTerm": "example.com", "confidence": 0.95}
   
   Return ONLY valid JSON.`;
-  
+
       const userPrompt = `Analyze this HubSpot request: "${message}"
   
   ${
@@ -1315,31 +1318,31 @@ Extract the Google Workspace intent and details.`;
   }
   Extract the HubSpot intent and details.`;
 
-    const response = await openai.chat.completions.create({
-      model: this.visionModel,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.1,
-      max_tokens: 250,
-    });
+      const response = await openai.chat.completions.create({
+        model: this.visionModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.1,
+        max_tokens: 250,
+      });
 
-    const result = this.safeParseJSON(response.choices[0].message.content);
+      const result = this.safeParseJSON(response.choices[0].message.content);
 
-    if (result.confidence >= 0.7) {
-      return {
-        ...result,
-        originalMessage: message,
-      };
+      if (result.confidence >= 0.7) {
+        return {
+          ...result,
+          originalMessage: message,
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error in HubSpot AI intent detection:", error);
+      return null;
     }
-
-    return null;
-  } catch (error) {
-    console.error("Error in HubSpot AI intent detection:", error);
-    return null;
   }
-}
 
   /**
    * Enhanced Odoo Intent Detection
@@ -1761,25 +1764,45 @@ Guidelines:
       switch (intent.action) {
         case "send":
           try {
+            // Validate required fields
+            const validation = this.validateEmailRequirements(intent, businessId);
+
+            if (!validation.isValid) {
+              return await this.generateEmailGuidance(validation.missingFields, businessId);
+            }
+
+            // Get the business's own email address
+            const userInfo = await GoogleService.getUserInfo(businessId);
+            const businessEmail = userInfo.email;
+
+            // Create the email content with user information
+            const emailBody = `From: ${intent.user_email}
+Subject: ${intent.subject}
+
+${intent.body}
+
+---
+This email was sent via WhatsApp by: ${intent.user_email}`;
+
             const emailResult = await GoogleService.sendEmail(businessId, {
-              to: intent.to,
-              subject: intent.subject || "No Subject",
-              body: intent.body || "No content",
+              to: businessEmail, // Send to business's own email
+              subject: `[WhatsApp] ${intent.subject}`,
+              body: emailBody,
             });
 
-            // GoogleService.sendEmail returns the Gmail API response directly
             if (emailResult && emailResult.id) {
-              return await this.generateContextualResponse(
-                intent,
-                {
-                  to: intent.to,
-                  subject: intent.subject,
-                  messageId: emailResult.id,
-                  success: true,
-                },
-                businessTone,
-                conversationHistory
-              );
+              const businessConfig = await require("./business").getBusinessById(businessId);
+              const businessName = businessConfig?.name || "our team";
+
+              let response = `✅ Email sent successfully to ${businessName}!\n\n`;
+              response += `�� **Email Details:**\n`;
+              response += `• From: ${intent.user_email}\n`;
+              response += `• Subject: ${intent.subject}\n`;
+              response += `• Message ID: ${emailResult.id}\n\n`;
+              response += `The email has been delivered to ${businessName}'s inbox. `;
+              response += `You should receive a response soon!`;
+
+              return response;
             } else {
               return `❌ Sorry, I couldn't send the email. The response was invalid.`;
             }
@@ -1795,7 +1818,6 @@ Guidelines:
               maxResults: intent.maxResults || 5,
             });
 
-            // GoogleService.getEmails returns the emails array directly
             if (emails && emails.length > 0) {
               const emailList = emails
                 .map((email) => `• ${email.subject} - From: ${email.from} (${email.date})`)
@@ -1812,7 +1834,7 @@ Guidelines:
                 conversationHistory
               );
             } else {
-              return `📧 No ${intent.type || "recent"} emails found.`;
+              return `�� No ${intent.type || "recent"} emails found.`;
             }
           } catch (error) {
             console.error("Error reading emails:", error);
@@ -2125,33 +2147,31 @@ Guidelines:
     try {
       console.log("FAQ Intent Detection - Input message:", message);
 
-      const systemPrompt = `You are an AI assistant that determines if a customer message is asking a Frequently Asked Question (FAQ).
-      
-Your task is to analyze the customer's message and determine if it's:
-1. A question seeking information about products, services, policies, or procedures
-2. A request for general information that could be answered by an FAQ
-3. NOT a request for specific account information, orders, or personal data
-4. NOT a complex inquiry requiring human intervention
+      const systemPrompt = `You are an AI assistant that analyzes customer messages to detect business intents across multiple systems.
 
-Return a JSON response with:
-- isFAQ: boolean (true if this is a FAQ-type question)
-- confidence: number (0.0 to 1.0, confidence level)
-- questionType: string ("product", "service", "policy", "procedure", "pricing", "general", or "other")
+Your task is to analyze the customer's message and determine if they want to interact with:
+1. GOOGLE_EMAIL - Send, read, search emails via Gmail
+2. GOOGLE_CALENDAR - Schedule, check availability, create events
+3. HUBSPOT - CRM operations (contacts, companies, deals, search)
+4. ODOO - ERP operations (orders, invoices, products, support)
+5. GENERAL - General conversation or unrelated requests
 
-Examples of FAQ questions:
-- "What are your business hours?"
-- "How do I return a product?"
-- "What payment methods do you accept?"
-- "Do you offer delivery?"
-- "What is your refund policy?"
+For email messages, extract:
+- user_email: sender's email address (required for sending)
+- subject: email subject/title (required for sending)
+- body: email content (required for sending)
+- action: "send" or "read"
 
-Examples of NON-FAQ questions:
-- "What's the status of my order #123?"
-- "I want to place an order for 3 pizzas"
-- "Can you update my account information?"
-- "I have a problem with my recent purchase"
+IMPORTANT: When users want to send emails, they are actually sending emails to the business's own Gmail account (self-email). 
+The user_email field identifies who is sending the email, and the email will be delivered to the business's inbox.
 
-Return ONLY valid JSON without any markdown formatting or code blocks.`;
+Examples:
+- "I want to send an email\nMy email: john@example.com\nTitle: Meeting Request\nContent: Let's meet tomorrow" → {"intent": "GOOGLE_EMAIL", "action": "send", "user_email": "john@example.com", "subject": "Meeting Request", "body": "Let's meet tomorrow", "confidence": 0.95}
+- "Send email\nFrom: john@example.com\nSubject: Project Update\nBody: The project is on track" → {"intent": "GOOGLE_EMAIL", "action": "send", "user_email": "john@example.com", "subject": "Project Update", "body": "The project is on track", "confidence": 0.95}
+- "I want to send an email about the meeting" → {"intent": "GOOGLE_EMAIL", "action": "send", "confidence": 0.8} (missing required fields)
+- "Schedule a meeting tomorrow at 2pm" → {"intent": "GOOGLE_CALENDAR", "action": "schedule", "time": "tomorrow at 2pm", "confidence": 0.9}
+
+Return ONLY valid JSON. If no clear intent is detected, return {"intent": "GENERAL", "confidence": 0.5}.`;
 
       const userPrompt = `Analyze this customer message: "${message}"
 
@@ -2314,6 +2334,52 @@ Determine if this is a FAQ-type question.`;
       // Fallback to original method
       return await this.detectIntentWithAI(message, conversationHistory, businessId);
     }
+  }
+
+  /**
+   * Validate email sending requirements and provide user guidance
+   */
+  validateEmailRequirements(intent, businessId) {
+    const missingFields = [];
+    const fieldLabels = {
+      user_email: "your email address",
+      subject: "email subject/title",
+      body: "email content",
+    };
+
+    Object.keys(fieldLabels).forEach((field) => {
+      if (!intent[field] || intent[field].trim() === "") {
+        missingFields.push(fieldLabels[field]);
+      }
+    });
+
+    return {
+      isValid: missingFields.length === 0,
+      missingFields,
+      fieldLabels,
+    };
+  }
+
+  /**
+   * Generate user guidance for missing email fields
+   */
+  async generateEmailGuidance(missingFields, businessId) {
+    const businessConfig = await require("./business").getBusinessById(businessId);
+    const businessName = businessConfig?.name || "our team";
+
+    let message = `I'd be happy to help you send an email to ${businessName}! `;
+    message += `However, I need some additional information:\n\n`;
+    message += `Please provide:\n`;
+    missingFields.forEach((field) => {
+      message += `• ${field}\n`;
+    });
+    message += `\nYou can provide this information in your next message. `;
+    message += `For example:\n`;
+    message += `"My email: your@email.com\n`;
+    message += `Title: Your Subject\n`;
+    message += `Content: Your message content"`;
+
+    return message;
   }
 
   /**
