@@ -119,20 +119,34 @@ class OpenAIService {
       }
 
       // Handle email sending request
-      if (emailRequest && businessId) {
-        try {
-          const result = await GoogleService.sendEmail(businessId, {
-            to: emailRequest.to,
-            subject: emailRequest.subject,
-            body: emailRequest.body,
-          });
+if (emailRequest && businessId) {
+  try {
+    // Get the business's own email address to send to
+    const userInfo = await GoogleService.getUserInfo(businessId);
+    const businessEmail = userInfo.email;
 
-          return `✅ Email sent successfully to ${emailRequest.to}!\n\nSubject: ${emailRequest.subject}\n\nMessage: ${emailRequest.body}`;
-        } catch (error) {
-          console.error("Error sending email:", error);
-          return `❌ Sorry, I couldn't send the email. Please make sure Google Workspace integration is properly configured. Error: ${error.message}`;
-        }
-      }
+    // Create the email content with sender information
+    const emailBody = `From: ${emailRequest.user_email || emailRequest.to}
+Subject: ${emailRequest.subject}
+
+${emailRequest.body}
+
+---
+This email was sent via WhatsApp by: ${emailRequest.user_email || emailRequest.to}`;
+
+    const result = await GoogleService.sendEmail(businessId, {
+      to: businessEmail, // Send to business's own email
+      subject: `[WhatsApp] ${emailRequest.subject}`,
+      body: emailBody,
+    });
+
+    const senderEmail = emailRequest.user_email || emailRequest.to;
+    return `✅ Email sent successfully to the business!\n\nFrom: ${senderEmail}\nSubject: ${emailRequest.subject}\n\nMessage: ${emailRequest.body}`;
+  } catch (error) {
+    console.error("Error sending email:", error);
+    return `❌ Sorry, I couldn't send the email. Please make sure Google Workspace integration is properly configured. Error: ${error.message}`;
+  }
+}
 
       // Handle calendar request
       if (calendarRequest && businessId) {
@@ -484,69 +498,37 @@ Format for email sending: "send email to [email] with subject [subject] and body
       };
     }
 
-    // Format 2: "send message to [email]\nSubject: [subject]\nContent: [body]"
+    // Bot-requested format - "Email address: [email]\nSubject: [subject]\nBody: [body]"
     const lines = message
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line);
-    if (lines.length >= 3) {
-      const firstLine = lines[0].toLowerCase();
-      if (firstLine.includes("send") && firstLine.includes("to") && firstLine.includes("@")) {
-        const emailMatch = firstLine.match(/([^\s]+@[^\s]+)/);
-        if (emailMatch) {
-          let subject = "";
-          let body = "";
-
-          // Look for Subject: and Content: lines
-          for (let i = 1; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.toLowerCase().startsWith("subject:")) {
-              subject = line.substring(8).trim();
-            } else if (line.toLowerCase().startsWith("content:")) {
-              body = line.substring(8).trim();
-            }
-          }
-
-          if (subject && body) {
-            return {
-              to: emailMatch[1].trim(),
-              subject: subject,
-              body: body,
-            };
-          }
-        }
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line);
+  
+  if (lines.length >= 3) {
+    let userEmail = "";
+    let subject = "";
+    let body = "";
+  
+    // Parse the bot-requested format
+    for (const line of lines) {
+      if (line.toLowerCase().startsWith("email address:")) {
+        userEmail = line.substring(14).trim();
+      } else if (line.toLowerCase().startsWith("subject:")) {
+        subject = line.substring(8).trim();
+      } else if (line.toLowerCase().startsWith("body:")) {
+        body = line.substring(5).trim();
       }
     }
-
-    // Format 3: "send message to [email]\nSubject: [subject]\nBody: [body]"
-    if (lines.length >= 3) {
-      const firstLine = lines[0].toLowerCase();
-      if (firstLine.includes("send") && firstLine.includes("to") && firstLine.includes("@")) {
-        const emailMatch = firstLine.match(/([^\s]+@[^\s]+)/);
-        if (emailMatch) {
-          let subject = "";
-          let body = "";
-
-          // Look for Subject: and Body: lines
-          for (let i = 1; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.toLowerCase().startsWith("subject:")) {
-              subject = line.substring(8).trim();
-            } else if (line.toLowerCase().startsWith("body:")) {
-              body = line.substring(5).trim();
-            }
-          }
-
-          if (subject && body) {
-            return {
-              to: emailMatch[1].trim(),
-              subject: subject,
-              body: body,
-            };
-          }
-        }
-      }
+  
+    // Validate that all required fields are present and email is valid
+    if (userEmail && subject && body && userEmail.includes("@")) {
+      return {
+        user_email: userEmail,  // This is the sender's email address
+        subject: subject,
+        body: body,
+      };
     }
+  }
 
     return null;
   }
