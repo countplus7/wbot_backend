@@ -60,12 +60,10 @@ class OpenAIService {
       // Fallback to existing detection methods if AI detection fails or confidence is low
       console.log("Using fallback keyword-based detection");
       const emailRequest = this.detectEmailRequest(latestMessage.content);
-      const emailReadRequest = this.detectEmailReadRequest(latestMessage.content);
       const calendarRequest = this.detectCalendarRequest(latestMessage.content);
 
       console.log("Fallback detection results:", {
         emailRequest: !!emailRequest,
-        emailReadRequest: !!emailReadRequest,
         calendarRequest: !!calendarRequest,
         message: latestMessage.content,
       });
@@ -136,69 +134,6 @@ class OpenAIService {
         }
       }
 
-      // Handle email reading request
-      if (emailReadRequest && businessId) {
-        try {
-          let emails = [];
-          let response = "";
-
-          switch (emailReadRequest.type) {
-            case "unread":
-              emails = await GoogleService.getUnreadEmails(businessId, emailReadRequest.maxResults || 5);
-              response = `📧 Here are your unread emails (${emails.length} found):\n\n`;
-              break;
-            case "recent":
-              emails = await GoogleService.getEmails(businessId, { maxResults: emailReadRequest.maxResults || 5 });
-              response = `📧 Here are your recent emails (${emails.length} found):\n\n`;
-              break;
-            case "search":
-              emails = await GoogleService.searchEmails(
-                businessId,
-                emailReadRequest.query,
-                emailReadRequest.maxResults || 5
-              );
-              response = `📧 Search results for "${emailReadRequest.query}" (${emails.length} found):\n\n`;
-              break;
-            case "label":
-              emails = await GoogleService.getEmailsByLabel(
-                businessId,
-                emailReadRequest.label,
-                emailReadRequest.maxResults || 5
-              );
-              response = `📧 Emails from "${emailReadRequest.label}" (${emails.length} found):\n\n`;
-              break;
-            default:
-              emails = await GoogleService.getEmails(businessId, { maxResults: 5 });
-              response = `📧 Here are your recent emails (${emails.length} found):\n\n`;
-          }
-
-          if (emails.length === 0) {
-            return `📧 No emails found for your request.`;
-          }
-
-          // Format emails for display
-          emails.forEach((email, index) => {
-            const date = new Date(email.internalDate).toLocaleString();
-            const isUnread = email.labelIds && email.labelIds.includes("UNREAD") ? "🔵 " : "";
-            const attachmentInfo =
-              email.attachments && email.attachments.length > 0 ? ` 📎 (${email.attachments.length} attachments)` : "";
-
-            response += `${index + 1}. ${isUnread}**${email.subject || "No Subject"}**\n`;
-            response += `   📤 From: ${email.from || "Unknown"}\n`;
-            response += `   📅 Date: ${date}\n`;
-            response += `   💬 Preview: ${(email.snippet || email.body || "").substring(
-              0,
-              100
-            )}...${attachmentInfo}\n\n`;
-          });
-
-          return response;
-        } catch (error) {
-          console.error("Error reading emails:", error);
-          return `❌ Sorry, I couldn't read your emails. Please make sure Google Workspace integration is properly configured. Error: ${error.message}`;
-        }
-      }
-
       // Handle calendar request
       if (calendarRequest && businessId) {
         try {
@@ -263,17 +198,11 @@ class OpenAIService {
       }
 
       let systemContent = `You are a helpful AI assistant integrated with WhatsApp and Google Workspace. 
-      You can send and read emails through Gmail when users request it. Be conversational, friendly, and helpful. 
-      Keep responses concise but informative. If you're analyzing images, describe what you see clearly and provide relevant insights.
-      
-      When users ask to send emails, you can help them by sending emails through Gmail integration.
-      Format for email sending: "send email to [email] with subject [subject] and body [body]"
-      
-      When users ask to read emails, you can help them access their Gmail. Examples:
-      - "show me my unread emails" or "check unread emails"
-      - "show me recent emails" or "get my latest emails"
-      - "search emails for [query]" or "find emails about [topic]"
-      - "show emails from [label]" (like Important, Promotions, etc.)`;
+You can send emails through Gmail when users request it. Be conversational, friendly, and helpful. 
+Keep responses concise but informative. If you're analyzing images, describe what you see clearly and provide relevant insights.
+
+When users ask to send emails, you can help them by sending emails through Gmail integration.
+Format for email sending: "send email to [email] with subject [subject] and body [body]"`;
       // Apply business-specific tone if provided
       if (businessTone && businessTone.tone_instructions) {
         systemContent += `\n\n${businessTone.tone_instructions}`;
@@ -308,17 +237,11 @@ class OpenAIService {
    */
   buildSystemPrompt(businessTone = null) {
     let systemContent = `You are a helpful AI assistant integrated with WhatsApp and Google Workspace. 
-    You can send and read emails through Gmail when users request it. Be conversational, friendly, and helpful. 
+    You can send emails through Gmail when users request it. Be conversational, friendly, and helpful. 
     Keep responses concise but informative. If you're analyzing images, describe what you see clearly and provide relevant insights.
     
     When users ask to send emails, you can help them by sending emails through Gmail integration.
-    Format for email sending: "send email to [email] with subject [subject] and body [body]"
-    
-    When users ask to read emails, you can help them access their Gmail. Examples:
-    - "show me my unread emails" or "check unread emails"
-    - "show me recent emails" or "get my latest emails"
-    - "search emails for [query]" or "find emails about [topic]"
-    - "show emails from [label]" (like Important, Promotions, etc.)`;
+    Format for email sending: "send email to [email] with subject [subject] and body [body]"`;
 
     // Apply business-specific tone if provided
     if (businessTone && businessTone.tone_instructions) {
@@ -623,67 +546,6 @@ class OpenAIService {
           }
         }
       }
-    }
-
-    return null;
-  }
-
-  detectEmailReadRequest(message) {
-    const lowercaseMessage = message.toLowerCase();
-
-    // Check for unread emails - more flexible patterns
-    if (
-      lowercaseMessage.includes("unread") &&
-      (lowercaseMessage.includes("email") || lowercaseMessage.includes("message"))
-    ) {
-      return { type: "unread", maxResults: this.extractNumber(message) || 5 };
-    }
-
-    // Check for recent/latest emails - more flexible patterns
-    if (
-      (lowercaseMessage.includes("recent") ||
-        lowercaseMessage.includes("latest") ||
-        lowercaseMessage.includes("new")) &&
-      (lowercaseMessage.includes("email") || lowercaseMessage.includes("message"))
-    ) {
-      return { type: "recent", maxResults: this.extractNumber(message) || 5 };
-    }
-
-    // Check for general email reading requests
-    if (
-      (lowercaseMessage.includes("read") || lowercaseMessage.includes("show") || lowercaseMessage.includes("get")) &&
-      (lowercaseMessage.includes("email") || lowercaseMessage.includes("message"))
-    ) {
-      // If it mentions unread, prioritize unread
-      if (lowercaseMessage.includes("unread")) {
-        return { type: "unread", maxResults: this.extractNumber(message) || 5 };
-      }
-      // Otherwise, get recent emails
-      return { type: "recent", maxResults: this.extractNumber(message) || 5 };
-    }
-
-    // Check for email search
-    const searchMatch = message.match(
-      /search\s+(?:emails?|messages?)\s+for\s+(.+)|find\s+(?:emails?|messages?)\s+about\s+(.+)|(?:emails?|messages?)\s+about\s+(.+)/i
-    );
-    if (searchMatch) {
-      const query = searchMatch[1] || searchMatch[2] || searchMatch[3];
-      return {
-        type: "search",
-        query: query.trim(),
-        maxResults: this.extractNumber(message) || 5,
-      };
-    }
-
-    // Check for emails by label
-    const labelMatch = message.match(/emails?\s+from\s+(\w+)|show\s+(\w+)\s+emails?/i);
-    if (labelMatch) {
-      const label = labelMatch[1] || labelMatch[2];
-      return {
-        type: "label",
-        label: label.trim(),
-        maxResults: this.extractNumber(message) || 5,
-      };
     }
 
     return null;
@@ -1135,7 +997,7 @@ class OpenAIService {
       const systemPrompt = `You are an AI assistant that analyzes customer messages to detect business intents across multiple systems.
 
 Your task is to analyze the customer's message and determine if they want to interact with:
-1. GOOGLE_EMAIL - Send, read, search emails via Gmail
+1. GOOGLE_EMAIL - Send emails via Gmail
 2. GOOGLE_CALENDAR - Schedule, check availability, create events
 3. HUBSPOT - CRM operations (contacts, companies, deals, search)
 4. ODOO - ERP operations (orders, invoices, products, support)
@@ -1145,14 +1007,13 @@ For email messages, extract:
 - user_email: sender's email address (required)
 - subject: email subject/title (required)
 - body: email content (required)
-- action: "send" or "read"
+- action: "send"
 
 Note: When sending emails, the email will be sent to the business's own Gmail account (self-email).
 The user_email field is used to identify who is sending the email.
 
 Examples:
 - "I want to send an email\nMy email: john@example.com\nTitle: Meeting Request\nContent: Let's meet tomorrow" → {"intent": "GOOGLE_EMAIL", "action": "send", "user_email": "john@example.com", "subject": "Meeting Request", "body": "Let's meet tomorrow", "confidence": 0.95}
-- "Send email\nFrom: john@example.com\nSubject: Project Update\nBody: The project is on track" → {"intent": "GOOGLE_EMAIL", "action": "send", "user_email": "john@example.com", "subject": "Project Update", "body": "The project is on track", "confidence": 0.95}
 - "Schedule a meeting tomorrow at 2pm" → {"intent": "GOOGLE_CALENDAR", "action": "schedule", "time": "tomorrow at 2pm", "confidence": 0.9}
 
 Return ONLY valid JSON. If no clear intent is detected, return {"intent": "GENERAL", "confidence": 0.5}.`;
@@ -1218,9 +1079,6 @@ Analyze the customer's message to detect Google Workspace intents:
 
 EMAIL OPERATIONS:
 - SEND_EMAIL: Send new emails
-- READ_EMAIL: Read, check, show emails
-- SEARCH_EMAIL: Search emails by content, sender, subject
-- REPLY_EMAIL: Reply to existing emails
 
 CALENDAR OPERATIONS:
 - SCHEDULE_EVENT: Create new calendar events, meetings, appointments
@@ -1232,7 +1090,6 @@ Extract detailed information in JSON format:
 
 Examples:
 - "Send email to john@example.com about the project update" → {"intent": "SEND_EMAIL", "to": "john@example.com", "subject": "project update", "confidence": 0.95}
-- "Check my unread emails" → {"intent": "READ_EMAIL", "type": "unread", "confidence": 0.9}
 - "Schedule a meeting tomorrow at 2pm with the team" → {"intent": "SCHEDULE_EVENT", "time": "tomorrow at 2pm", "attendees": "team", "confidence": 0.95}
 - "What's on my calendar today?" → {"intent": "LIST_EVENTS", "timeframe": "today", "confidence": 0.9}
 
@@ -1449,10 +1306,6 @@ Guidelines:
           if (intent.action === "send") {
             userPrompt = `Generate a response for successfully sending an email. To: ${data.to}, Subject: ${
               data.subject || "No subject"
-            }`;
-          } else if (intent.action === "read") {
-            userPrompt = `Generate a response for reading emails. Type: ${data.type || "recent"}, Count: ${
-              data.count || "several"
             }`;
           }
           break;
@@ -1811,36 +1664,6 @@ This email was sent via WhatsApp by: ${intent.user_email}`;
             return `❌ Sorry, I couldn't send the email. ${error.message}`;
           }
 
-        case "read":
-          try {
-            const emails = await GoogleService.getEmails(businessId, {
-              type: intent.type || "recent",
-              maxResults: intent.maxResults || 5,
-            });
-
-            if (emails && emails.length > 0) {
-              const emailList = emails
-                .map((email) => `• ${email.subject} - From: ${email.from} (${email.date})`)
-                .join("\n");
-
-              return await this.generateContextualResponse(
-                intent,
-                {
-                  type: intent.type,
-                  count: emails.length,
-                  emails: emailList,
-                },
-                businessTone,
-                conversationHistory
-              );
-            } else {
-              return `�� No ${intent.type || "recent"} emails found.`;
-            }
-          } catch (error) {
-            console.error("Error reading emails:", error);
-            return `❌ Sorry, I couldn't retrieve your emails. ${error.message}`;
-          }
-
         default:
           return `I understand you want to work with emails, but I'm not sure what specific action you'd like to take.`;
       }
@@ -2150,7 +1973,7 @@ Guidelines:
       const systemPrompt = `You are an AI assistant that analyzes customer messages to detect business intents across multiple systems.
 
 Your task is to analyze the customer's message and determine if they want to interact with:
-1. GOOGLE_EMAIL - Send, read, search emails via Gmail
+1. GOOGLE_EMAIL - Send emails via Gmail
 2. GOOGLE_CALENDAR - Schedule, check availability, create events
 3. HUBSPOT - CRM operations (contacts, companies, deals, search)
 4. ODOO - ERP operations (orders, invoices, products, support)
@@ -2160,15 +1983,13 @@ For email messages, extract:
 - user_email: sender's email address (required for sending)
 - subject: email subject/title (required for sending)
 - body: email content (required for sending)
-- action: "send" or "read"
+- action: "send"
 
 IMPORTANT: When users want to send emails, they are actually sending emails to the business's own Gmail account (self-email). 
 The user_email field identifies who is sending the email, and the email will be delivered to the business's inbox.
 
 Examples:
 - "I want to send an email\nMy email: john@example.com\nTitle: Meeting Request\nContent: Let's meet tomorrow" → {"intent": "GOOGLE_EMAIL", "action": "send", "user_email": "john@example.com", "subject": "Meeting Request", "body": "Let's meet tomorrow", "confidence": 0.95}
-- "Send email\nFrom: john@example.com\nSubject: Project Update\nBody: The project is on track" → {"intent": "GOOGLE_EMAIL", "action": "send", "user_email": "john@example.com", "subject": "Project Update", "body": "The project is on track", "confidence": 0.95}
-- "I want to send an email about the meeting" → {"intent": "GOOGLE_EMAIL", "action": "send", "confidence": 0.8} (missing required fields)
 - "Schedule a meeting tomorrow at 2pm" → {"intent": "GOOGLE_CALENDAR", "action": "schedule", "time": "tomorrow at 2pm", "confidence": 0.9}
 
 Return ONLY valid JSON. If no clear intent is detected, return {"intent": "GENERAL", "confidence": 0.5}.`;
