@@ -989,17 +989,22 @@ Your task is to analyze the customer's message and determine if they want to int
 4. ODOO - ERP operations (orders, invoices, products, support)
 5. GENERAL - General conversation or unrelated requests
 
-For email messages, extract:
+For email messages, intelligently extract:
 - user_email: sender's email address (required)
 - subject: email subject/title (required)
 - body: email content (required)
 - action: "send"
 
-Note: When sending emails, the email will be sent to the business's own Gmail account (self-email).
-The user_email field is used to identify who is sending the email.
+IMPORTANT: The user_email is the sender's email address. The email will be sent to the business's own Gmail account.
+
+Be flexible in extracting email details from various formats:
+- "Email address: user@example.com" or "My email: user@example.com" or "From: user@example.com"
+- "Subject: Meeting Request" or "Title: Meeting Request" or "Topic: Meeting Request"
+- "Body: Let's meet tomorrow" or "Content: Let's meet tomorrow" or "Message: Let's meet tomorrow"
 
 Examples:
-- "I want to send an email\nMy email: john@example.com\nTitle: Meeting Request\nContent: Let's meet tomorrow" → {"intent": "GOOGLE_EMAIL", "action": "send", "user_email": "john@example.com", "subject": "Meeting Request", "body": "Let's meet tomorrow", "confidence": 0.95}
+- "Email address: john@example.com\nSubject: Meeting Request\nBody: Let's meet tomorrow" → {"intent": "GOOGLE_EMAIL", "action": "send", "user_email": "john@example.com", "subject": "Meeting Request", "body": "Let's meet tomorrow", "confidence": 0.95}
+- "My email: john@example.com\nTitle: Project Update\nContent: The project is on track" → {"intent": "GOOGLE_EMAIL", "action": "send", "user_email": "john@example.com", "subject": "Project Update", "body": "The project is on track", "confidence": 0.95}
 - "Schedule a meeting tomorrow at 2pm" → {"intent": "GOOGLE_CALENDAR", "action": "schedule", "time": "tomorrow at 2pm", "confidence": 0.9}
 
 Return ONLY valid JSON. If no clear intent is detected, return {"intent": "GENERAL", "confidence": 0.5}.`;
