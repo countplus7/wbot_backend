@@ -73,6 +73,21 @@ const commonValidations = {
   clientSecret: body("client_secret").isLength({ min: 10 }).withMessage("Client secret must be at least 10 characters"),
   refreshToken: body("refresh_token").isLength({ min: 10 }).withMessage("Refresh token must be at least 10 characters"),
 
+  // HubSpot validations
+  hubspotClientId: body("client_id").isLength({ min: 10 }).withMessage("HubSpot Client ID must be at least 10 characters"),
+  hubspotClientSecret: body("client_secret").isLength({ min: 10 }).withMessage("HubSpot Client secret must be at least 10 characters"),
+
+  // Odoo validations
+  odooUrl: body("instance_url").isURL().withMessage("Odoo instance URL must be a valid URL"),
+  odooDatabase: body("db").isLength({ min: 1 }).withMessage("Database name is required"),
+  odooUsername: body("username").isLength({ min: 1 }).withMessage("Username is required"),
+  odooApiKey: body("api_key").isLength({ min: 1 }).withMessage("API key is required"),
+
+  // Airtable validations
+  airtableToken: body("access_token").isLength({ min: 10 }).withMessage("Airtable access token must be at least 10 characters"),
+  airtableBaseId: body("base_id").isLength({ min: 10 }).withMessage("Airtable base ID must be at least 10 characters"),
+  airtableTableName: body("table_name").isLength({ min: 1 }).withMessage("Table name is required"),
+
   // Calendar event validations
   title: body("title").trim().isLength({ min: 1, max: 200 }).withMessage("Title must be between 1 and 200 characters"),
   startTime: body("startTime").isISO8601().withMessage("Start time must be a valid ISO 8601 date"),
@@ -123,6 +138,9 @@ const commonValidations = {
     .trim()
     .isLength({ min: 10, max: 1000 })
     .withMessage("Tone instructions must be between 10 and 1000 characters"),
+
+  // Search validations
+  searchTerm: body("searchTerm").trim().isLength({ min: 1 }).withMessage("Search term is required"),
 };
 
 // Specific validation sets for different operations
@@ -168,6 +186,31 @@ const validationSets = {
     commonValidations.refreshToken,
     body("scopes").isArray().withMessage("Scopes must be an array"),
     commonValidations.status,
+  ],
+
+  // HubSpot validations
+  createHubSpotConfig: [
+    commonValidations.businessId,
+    commonValidations.hubspotClientId,
+    commonValidations.hubspotClientSecret,
+    commonValidations.status,
+  ],
+
+  // Odoo validations
+  createOdooConfig: [
+    commonValidations.businessId,
+    commonValidations.odooUrl,
+    commonValidations.odooDatabase,
+    commonValidations.odooUsername,
+    commonValidations.odooApiKey,
+  ],
+
+  // Airtable validations
+  createAirtableConfig: [
+    commonValidations.businessId,
+    commonValidations.airtableToken,
+    commonValidations.airtableBaseId,
+    commonValidations.airtableTableName,
   ],
 
   // Calendar event validations
@@ -288,6 +331,9 @@ const validationSets = {
         return true;
       }),
   ],
+
+  // Search validations
+  search: [commonValidations.searchTerm],
 };
 
 module.exports = {

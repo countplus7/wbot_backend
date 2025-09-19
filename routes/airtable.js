@@ -1,173 +1,93 @@
 const express = require("express");
 const router = express.Router();
 const AirtableService = require("../services/airtable");
+const { authMiddleware, adminMiddleware } = require("../middleware/auth");
+const { validate, validationSets } = require("../middleware/validation");
+const { createResponse, asyncHandler } = require("../middleware/error-handler");
 
 /**
  * Get Airtable configuration for a business
  * GET /api/airtable/config/:businessId
  */
-router.get("/config/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
+router.get("/config/:businessId", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const config = await AirtableService.getConfig(parseInt(businessId));
 
-    if (!businessId || isNaN(businessId)) {
-      return res.status(400).json({
-        success: false,
-        error: "Valid business ID is required",
-      });
-    }
-
-    const config = await AirtableService.getConfig(parseInt(businessId));
-
-    res.json({
-      success: true,
-      data: config,
-      message: config ? "Airtable configuration found" : "No Airtable configuration found",
-    });
-  } catch (error) {
-    console.error("Error getting Airtable config:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Failed to get Airtable configuration",
-    });
-  }
-});
+  res.json(createResponse(true, config, config ? "Airtable configuration found" : "No Airtable configuration found"));
+}));
 
 /**
  * Create or update Airtable configuration
  * POST /api/airtable/config/:businessId
  */
-router.post("/config/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    const { access_token, base_id, table_name } = req.body;
+router.post("/config/:businessId", authMiddleware, adminMiddleware, validate(validationSets.createAirtableConfig), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const { access_token, base_id, table_name } = req.body;
 
-    if (!businessId || isNaN(businessId)) {
-      return res.status(400).json({
-        success: false,
-        error: "Valid business ID is required",
-      });
-    }
+  const config = await AirtableService.saveConfig(parseInt(businessId), {
+    access_token,
+    base_id,
+    table_name,
+  });
 
-    if (!access_token || !base_id || !table_name) {
-      return res.status(400).json({
-        success: false,
-        error: "access_token, base_id, and table_name are required",
-      });
-    }
-
-    const config = await AirtableService.saveConfig(parseInt(businessId), {
-      access_token,
-      base_id,
-      table_name,
-    });
-
-    res.json({
-      success: true,
-      data: config,
-      message: "Airtable configuration saved successfully",
-    });
-  } catch (error) {
-    console.error("Error saving Airtable config:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Failed to save Airtable configuration",
-    });
-  }
-});
+  res.status(201).json(createResponse(true, config, "Airtable configuration saved successfully"));
+}));
 
 /**
  * Delete Airtable configuration
  * DELETE /api/airtable/config/:businessId
  */
-router.delete("/config/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
+router.delete("/config/:businessId", authMiddleware, adminMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const deleted = await AirtableService.deleteConfig(parseInt(businessId));
 
-    if (!businessId || isNaN(businessId)) {
-      return res.status(400).json({
-        success: false,
-        error: "Valid business ID is required",
-      });
-    }
-
-    const deleted = await AirtableService.deleteConfig(parseInt(businessId));
-
-    res.json({
-      success: true,
-      deleted,
-      message: deleted ? "Airtable configuration deleted successfully" : "No Airtable configuration found to delete",
-    });
-  } catch (error) {
-    console.error("Error deleting Airtable config:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Failed to delete Airtable configuration",
-    });
-  }
-});
+  res.json(createResponse(true, { deleted }, deleted ? "Airtable configuration deleted successfully" : "No Airtable configuration found to delete"));
+}));
 
 /**
  * Test Airtable connection
  * POST /api/airtable/test/:businessId
  */
-router.post("/test/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
+router.post("/test/:businessId", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const result = await AirtableService.testConnection(parseInt(businessId));
 
-    if (!businessId || isNaN(businessId)) {
-      return res.status(400).json({
-        success: false,
-        error: "Valid business ID is required",
-      });
-    }
-
-    const result = await AirtableService.testConnection(parseInt(businessId));
-
-    res.json({
-      success: result.success,
-      message: result.message,
-      error: result.error,
-    });
-  } catch (error) {
-    console.error("Error testing Airtable connection:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Failed to test Airtable connection",
-    });
-  }
-});
+  res.json(createResponse(result.success, result, result.message));
+}));
 
 /**
  * Get all FAQs from Airtable
  * GET /api/airtable/faqs/:businessId
  */
-router.get("/faqs/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
+router.get("/faqs/:businessId", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const faqs = await AirtableService.getFAQs(parseInt(businessId));
 
-    if (!businessId || isNaN(businessId)) {
-      return res.status(400).json({
-        success: false,
-        error: "Valid business ID is required",
-      });
-    }
+  res.json(createResponse(true, { faqs, count: faqs.length }, `Found ${faqs.length} FAQs`));
+}));
 
-    const faqs = await AirtableService.getFAQs(parseInt(businessId));
+/**
+ * Search FAQs in Airtable
+ * POST /api/airtable/faqs/:businessId/search
+ */
+router.post("/faqs/:businessId/search", authMiddleware, validate([validationSets.commonValidations.businessId, ...validationSets.search]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const { searchTerm } = req.body;
+  
+  const results = await AirtableService.searchFAQs(parseInt(businessId), searchTerm);
+  
+  res.json(createResponse(true, { results, count: results.length }, `Found ${results.length} matching FAQs`));
+}));
 
-    res.json({
-      success: true,
-      data: faqs,
-      count: faqs.length,
-      message: `Found ${faqs.length} FAQs`,
-    });
-  } catch (error) {
-    console.error("Error getting FAQs:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Failed to get FAQs from Airtable",
-    });
-  }
-});
+/**
+ * Get FAQ statistics
+ * GET /api/airtable/faqs/:businessId/stats
+ */
+router.get("/faqs/:businessId/stats", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const stats = await AirtableService.getFAQStats(parseInt(businessId));
+  
+  res.json(createResponse(true, stats, "FAQ statistics retrieved successfully"));
+}));
 
 module.exports = router;

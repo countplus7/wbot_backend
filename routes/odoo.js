@@ -1,290 +1,120 @@
 const express = require("express");
 const router = express.Router();
 const odooService = require("../services/odoo");
+const { authMiddleware, adminMiddleware } = require("../middleware/auth");
+const { validate, validationSets } = require("../middleware/validation");
+const { createResponse, asyncHandler } = require("../middleware/error-handler");
 
 // Configuration Management
-router.post("/config/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    const { instance_url, db, username, api_key } = req.body;
+router.post("/config/:businessId", authMiddleware, adminMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const { instance_url, db, username, api_key } = req.body;
 
-    if (!businessId || isNaN(businessId)) {
-      return res.status(400).json({
-        success: false,
-        error: "Valid business ID is required",
-      });
-    }
-
-    if (!instance_url || !db || !username || !api_key) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing required fields: instance_url, db, username, api_key"
-      });
-    }
-
-    const configData = {
-      business_id: parseInt(businessId),
-      url: instance_url.trim(),           // Map instance_url to url
-      database: db.trim(),                // Map db to database
-      username: username.trim(),
-      password: api_key.trim(),           // Map api_key to password
-    };
-
-    // Test connection before saving
-    await odooService.saveIntegration(configData);
-    await odooService.testConnection(parseInt(businessId));
-
-    res.json({
-      success: true,
-      message: "Odoo integration configured successfully"
-    });
-  } catch (error) {
-    console.error("Error configuring Odoo integration:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Failed to configure Odoo integration"
-    });
+  if (!instance_url || !db || !username || !api_key) {
+    return res.status(400).json(createResponse(false, null, "Missing required fields: instance_url, db, username, api_key", null, "VALIDATION_ERROR"));
   }
-});
 
-router.get("/config/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
+  const configData = {
+    business_id: parseInt(businessId),
+    url: instance_url.trim(),
+    database: db.trim(),
+    username: username.trim(),
+    password: api_key.trim(),
+  };
 
-    if (!businessId || isNaN(businessId)) {
-      return res.status(400).json({
-        success: false,
-        error: "Valid business ID is required",
-      });
-    }
+  await odooService.saveIntegration(configData);
+  await odooService.testConnection(parseInt(businessId));
 
-    const config = await odooService.getIntegration(parseInt(businessId));
-    
-    if (config) {
-      res.json({
-        success: true,
-        data: {
-          isIntegrated: true,
-          instance_url: config.url,        // Map url to instance_url for frontend
-          db: config.database,             // Map database to db for frontend
-          username: config.username,
-          lastUpdated: config.updated_at
-        }
-      });
-    } else {
-      res.json({
-        success: true,
-        data: {
-          isIntegrated: false
-        }
-      });
-    }
-  } catch (error) {
-    console.error("Error getting Odoo integration:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to get Odoo integration"
-    });
-  }
-});
+  res.json(createResponse(true, null, "Odoo integration configured successfully"));
+}));
 
-router.delete("/config/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    await odooService.removeIntegration(parseInt(businessId));
-    
-    res.json({
-      success: true,
-      message: "Odoo integration removed successfully"
-    });
-  } catch (error) {
-    console.error("Error removing Odoo config:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to remove Odoo configuration"
-    });
-  }
-});
+router.get("/config/:businessId", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const config = await odooService.getIntegration(parseInt(businessId));
+  
+  const response = config ? {
+    isIntegrated: true,
+    instance_url: config.url,
+    db: config.database,
+    username: config.username,
+    lastUpdated: config.updated_at
+  } : {
+    isIntegrated: false
+  };
+
+  res.json(createResponse(true, response));
+}));
+
+router.delete("/config/:businessId", authMiddleware, adminMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  await odooService.removeIntegration(parseInt(businessId));
+  res.json(createResponse(true, null, "Odoo integration removed successfully"));
+}));
 
 // Test connection
-router.post("/test/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    const result = await odooService.testConnection(parseInt(businessId));
-    
-    res.json({
-      success: true,
-      message: "Connection successful",
-      userId: result.userId
-    });
-  } catch (error) {
-    console.error("Error testing Odoo connection:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Connection test failed"
-    });
-  }
-});
+router.post("/test/:businessId", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const result = await odooService.testConnection(parseInt(businessId));
+  res.json(createResponse(true, { userId: result.userId }, "Connection successful"));
+}));
 
 // CRM Operations
-router.post("/leads/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    const result = await odooService.createLead(parseInt(businessId), req.body);
-    
-    res.json({
-      success: true,
-      leadId: result.id,
-      message: "Lead created successfully"
-    });
-  } catch (error) {
-    console.error("Error creating lead:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to create lead"
-    });
-  }
-});
+router.post("/leads/:businessId", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const result = await odooService.createLead(parseInt(businessId), req.body);
+  res.status(201).json(createResponse(true, { leadId: result.id }, "Lead created successfully"));
+}));
 
-router.get("/leads/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    const leads = await odooService.getLeads(parseInt(businessId));
-    
-    res.json({
-      success: true,
-      leads: leads
-    });
-  } catch (error) {
-    console.error("Error getting leads:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to get leads"
-    });
-  }
-});
+router.get("/leads/:businessId", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const leads = await odooService.getLeads(parseInt(businessId));
+  res.json(createResponse(true, { leads }));
+}));
 
 // Sales Orders
-router.post("/sales/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    const result = await odooService.createSaleOrder(parseInt(businessId), req.body);
-    
-    res.json({
-      success: true,
-      orderId: result.id,
-      message: "Sale order created successfully"
-    });
-  } catch (error) {
-    console.error("Error creating sale order:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to create sale order"
-    });
-  }
-});
+router.post("/sales/:businessId", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const result = await odooService.createSaleOrder(parseInt(businessId), req.body);
+  res.status(201).json(createResponse(true, { orderId: result.id }, "Sale order created successfully"));
+}));
 
 // Invoices
-router.get("/invoices/:businessId/:invoiceRef", async (req, res) => {
-  try {
-    const { businessId, invoiceRef } = req.params;
-    const invoice = await odooService.getInvoice(parseInt(businessId), invoiceRef);
-    
-    if (invoice) {
-      res.json({
-        success: true,
-        invoice: invoice
-      });
-    } else {
-      res.status(404).json({
-        success: false,
-        error: "Invoice not found"
-      });
-    }
-  } catch (error) {
-    console.error("Error getting invoice:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to get invoice"
-    });
+router.get("/invoices/:businessId/:invoiceRef", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId, invoiceRef } = req.params;
+  const invoice = await odooService.getInvoice(parseInt(businessId), invoiceRef);
+  
+  if (!invoice) {
+    return res.status(404).json(createResponse(false, null, "Invoice not found", null, "NOT_FOUND_ERROR"));
   }
-});
+  
+  res.json(createResponse(true, { invoice }));
+}));
 
 // Helpdesk Tickets
-router.post("/tickets/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    const result = await odooService.createTicket(parseInt(businessId), req.body);
-    
-    res.json({
-      success: true,
-      ticketId: result.id,
-      message: "Support ticket created successfully"
-    });
-  } catch (error) {
-    console.error("Error creating ticket:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to create ticket"
-    });
-  }
-});
+router.post("/tickets/:businessId", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const result = await odooService.createTicket(parseInt(businessId), req.body);
+  res.status(201).json(createResponse(true, { ticketId: result.id }, "Support ticket created successfully"));
+}));
 
 // Products
-router.get("/products/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    const products = await odooService.getProducts(parseInt(businessId));
-    
-    res.json({
-      success: true,
-      products: products
-    });
-  } catch (error) {
-    console.error("Error getting products:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to get products"
-    });
-  }
-});
+router.get("/products/:businessId", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const products = await odooService.getProducts(parseInt(businessId));
+  res.json(createResponse(true, { products }));
+}));
 
 // Customers
-router.get("/customers/:businessId/search/:phone", async (req, res) => {
-  try {
-    const { businessId, phone } = req.params;
-    const customer = await odooService.searchCustomer(parseInt(businessId), phone);
-    
-    res.json({
-      success: true,
-      customer: customer
-    });
-  } catch (error) {
-    console.error("Error searching customer:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to search customer"
-    });
-  }
-});
+router.get("/customers/:businessId/search/:phone", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId, phone } = req.params;
+  const customer = await odooService.searchCustomer(parseInt(businessId), phone);
+  res.json(createResponse(true, { customer }));
+}));
 
-router.post("/customers/:businessId", async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    const result = await odooService.createCustomer(parseInt(businessId), req.body);
-    
-    res.json({
-      success: true,
-      customerId: result.id,
-      message: "Customer created successfully"
-    });
-  } catch (error) {
-    console.error("Error creating customer:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to create customer"
-    });
-  }
-});
+router.post("/customers/:businessId", authMiddleware, validate([validationSets.commonValidations.businessId]), asyncHandler(async (req, res) => {
+  const { businessId } = req.params;
+  const result = await odooService.createCustomer(parseInt(businessId), req.body);
+  res.status(201).json(createResponse(true, { customerId: result.id }, "Customer created successfully"));
+}));
 
 module.exports = router;

@@ -11,13 +11,18 @@ const pool = require('../config/database');
 const path = require('path');
 const fs = require('fs-extra');
 const IntentDetectionService = require('../services/intent-detection');
+const { createResponse } = require('../middleware/error-handler');
 
 // Webhook verification endpoint
 router.get('/webhook', async (req, res) => {
   try {
     const { 'hub.mode': mode, 'hub.verify_token': token, 'hub.challenge': challenge } = req.query;
 
-    console.log('Webhook verification request:', { mode, token: token ? token.substring(0, 10) + '...' : 'undefined', challenge });
+    console.log('Webhook verification request:', { 
+      mode, 
+      token: token ? token.substring(0, 10) + '...' : 'undefined', 
+      challenge 
+    });
 
     if (!mode || !token) {
       console.log('Webhook verification failed: Missing required parameters');
@@ -26,11 +31,14 @@ router.get('/webhook', async (req, res) => {
 
     // Check if the verify token matches any business configuration
     const configs = await BusinessService.getAllWhatsAppConfigs();
-    
     const matchingConfig = configs.find(config => config.verify_token === token);
     
     if (mode === 'subscribe' && matchingConfig) {
-      console.log('Webhook verification successful:', { mode, token: token.substring(0, 10) + '...', businessId: matchingConfig.business_id });
+      console.log('Webhook verification successful:', { 
+        mode, 
+        token: token.substring(0, 10) + '...', 
+        businessId: matchingConfig.business_id 
+      });
       res.status(200).send(challenge);
     } else {
       console.log('Webhook verification failed: Invalid token or mode');
@@ -44,6 +52,8 @@ router.get('/webhook', async (req, res) => {
 
 // Webhook endpoint for receiving messages
 router.post('/webhook', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     console.log('=== WEBHOOK RECEIVED ===');
     console.log('Timestamp:', new Date().toISOString());
@@ -105,10 +115,10 @@ router.post('/webhook', async (req, res) => {
       hasMedia: !!messageData.mediaId
     });
 
-    // Check if we've already processed this message
+    // Check if we've already processed this message (optimized query)
     try {
       const existingMessage = await pool.query(
-        "SELECT id, created_at FROM messages WHERE message_id = $1",
+        "SELECT id, created_at FROM messages WHERE message_id = $1 LIMIT 1",
         [messageData.messageId]
       );
       
@@ -152,7 +162,11 @@ router.post('/webhook', async (req, res) => {
 
     // Create or get conversation
     const conversation = await DatabaseService.createOrGetConversation(businessId, messageData.from);
-    console.log('Conversation created/found:', { id: conversation.id, business_id: conversation.business_id, phone_number: conversation.phone_number });
+    console.log('Conversation created/found:', { 
+      id: conversation.id, 
+      business_id: conversation.business_id, 
+      phone_number: conversation.phone_number 
+    });
 
     // Save the incoming message
     const savedMessage = await DatabaseService.saveMessage({
@@ -168,11 +182,11 @@ router.post('/webhook', async (req, res) => {
       isFromUser: true
     });
 
-    // Handle media files if present (existing code)
+    // Handle media files if present
     let localFilePath = null;
     let aiResponse = '';
 
-    // Handle different message types (existing media processing code)
+    // Handle different message types
     if (messageData.messageType === 'image' || messageData.messageType === 'audio') {
       try {
         console.log(`Processing ${messageData.messageType} message...`);
@@ -200,21 +214,21 @@ router.post('/webhook', async (req, res) => {
             case 'audio/mp4':
               fileExtension = '.m4a';
               break;
-            case 'audio/amr':
-              fileExtension = '.amr';
-              break;
             case 'audio/mpeg':
               fileExtension = '.mp3';
               break;
             case 'audio/ogg':
               fileExtension = '.ogg';
               break;
+            case 'audio/wav':
+              fileExtension = '.wav';
+              break;
             default:
-              console.warn(`Unknown audio MIME type: ${mimeType}, defaulting to .ogg`);
-              fileExtension = '.ogg';
+              fileExtension = '.aac'; // Default fallback
           }
         }
         
+        // Create filename with timestamp and extension
         const timestamp = Date.now();
         const fileName = `${businessId}_${messageData.messageId}_${timestamp}${fileExtension}`;
         const uploadDir = messageData.messageType === 'image' ? 'uploads/images' : 'uploads/audio';
@@ -224,8 +238,6 @@ router.post('/webhook', async (req, res) => {
         
         console.log(`Saving media to: ${localFilePath}`);
         console.log(`File extension: ${fileExtension}`);
-        console.log(`Current working directory: ${process.cwd()}`);
-        console.log(`__dirname: ${__dirname}`);
 
         // Ensure directory exists before saving file
         await fs.ensureDir(path.dirname(localFilePath));
@@ -233,7 +245,7 @@ router.post('/webhook', async (req, res) => {
         // Save file with proper error handling
         const writeStream = fs.createWriteStream(localFilePath);
         mediaStream.pipe(writeStream);
-
+        
         await new Promise((resolve, reject) => {
           writeStream.on('finish', resolve);
           writeStream.on('error', (error) => {
@@ -276,6 +288,7 @@ router.post('/webhook', async (req, res) => {
         await DatabaseService.updateMessageLocalFilePath(messageData.messageId, relativePath);
         
         console.log(`Media file info saved to database with path: ${relativePath}`);
+        
       } catch (mediaError) {
         console.error(`Error processing ${messageData.messageType} media:`, mediaError);
         
@@ -523,7 +536,7 @@ router.post('/webhook', async (req, res) => {
       const enhancedResult = await OpenAIService.processMessageWithEmbeddings(
         messageData.messageType,
         messageData.content,
-        localFilePath, // Use the localFilePath variable instead of messageData.localFilePath
+        localFilePath,
         conversationHistory,
         businessTone,
         businessId
@@ -576,9 +589,18 @@ router.post('/webhook', async (req, res) => {
       console.error('Error sending WhatsApp response:', whatsappError);
     }
 
+    // Log processing time for performance monitoring
+    const processingTime = Date.now() - startTime;
+    console.log(`Webhook processing completed in ${processingTime}ms`);
+
     return res.status(200).send('OK');
   } catch (error) {
     console.error('Webhook processing error:', error);
+    
+    // Log processing time even for errors
+    const processingTime = Date.now() - startTime;
+    console.log(`Webhook processing failed after ${processingTime}ms`);
+    
     return res.status(500).send('Internal Server Error');
   }
 });
