@@ -1,4 +1,4 @@
-const { google } = require("googleapis");
+﻿const { google } = require("googleapis");
 const pool = require("../config/database");
 
 class GoogleService {
@@ -48,27 +48,24 @@ class GoogleService {
     try {
       const { tokens } = await this.oauth2Client.getToken(code);
 
-      // Set the credentials for the OAuth2 client
-      this.oauth2Client.setCredentials(tokens);
-
-      // Get user info to get email
-      const oauth2 = google.oauth2({ version: "v2", auth: this.oauth2Client });
-      const userInfo = await oauth2.userinfo.get();
-
+      // Save the integration to database
       const integrationData = {
         business_id: businessId,
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
-        token_expires_at: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        token_type: tokens.token_type,
+        expiry_date: tokens.expiry_date,
+        scope: tokens.scope,
+        created_at: new Date(),
+        updated_at: new Date(),
       };
 
-      // Store integration in database
       await this.saveIntegration(integrationData);
 
       return {
         success: true,
-        email: userInfo.data.email,
-        tokens,
+        tokens: tokens,
+        businessId: businessId,
       };
     } catch (error) {
       console.error("Error exchanging code for tokens:", error);
@@ -77,88 +74,89 @@ class GoogleService {
   }
 
   /**
-   * Save integration data to database
+   * Save Google Workspace integration to database
    * @param {Object} integrationData - Integration data to save
-   * @returns {Object} Saved integration data
+   * @returns {Promise<Object>} Saved integration data
    */
   async saveIntegration(integrationData) {
     try {
-      const query = `
-        INSERT INTO google_workspace_integrations 
-        (business_id, access_token, refresh_token, token_expires_at, updated_at)
-        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-        ON CONFLICT (business_id) 
-        DO UPDATE SET 
-          access_token = EXCLUDED.access_token,
-          refresh_token = EXCLUDED.refresh_token,
-          token_expires_at = EXCLUDED.token_expires_at,
-          updated_at = CURRENT_TIMESTAMP
-        RETURNING id
-      `;
+      const {
+        business_id,
+        access_token,
+        refresh_token,
+        token_type,
+        expiry_date,
+        scope,
+        created_at,
+        updated_at,
+      } = integrationData;
 
-      const values = [
-        integrationData.business_id,
-        integrationData.access_token,
-        integrationData.refresh_token,
-        integrationData.token_expires_at,
-      ];
+      // Check if integration already exists
+      const existingIntegration = await pool.query(
+        "SELECT id FROM google_workspace_integrations WHERE business_id = $1",
+        [business_id]
+      );
 
-      const result = await pool.query(query, values);
-      return result.rows[0];
+      if (existingIntegration.rows.length > 0) {
+        // Update existing integration
+        const result = await pool.query(
+          `UPDATE google_workspace_integrations 
+           SET access_token = $2, refresh_token = $3, token_type = $4, 
+               expiry_date = $5, scope = $6, updated_at = $7
+           WHERE business_id = $1
+           RETURNING *`,
+          [
+            business_id,
+            access_token,
+            refresh_token,
+            token_type,
+            expiry_date,
+            scope,
+            updated_at,
+          ]
+        );
+        return result.rows[0];
+      } else {
+        // Create new integration
+        const result = await pool.query(
+          `INSERT INTO google_workspace_integrations 
+           (business_id, access_token, refresh_token, token_type, expiry_date, scope, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING *`,
+          [
+            business_id,
+            access_token,
+            refresh_token,
+            token_type,
+            expiry_date,
+            scope,
+            created_at,
+            updated_at,
+          ]
+        );
+        return result.rows[0];
+      }
     } catch (error) {
-      console.error("Error saving Google integration:", error);
-      throw new Error("Failed to save Google integration");
+      console.error("Error saving integration:", error);
+      throw new Error("Failed to save Google Workspace integration");
     }
   }
 
   /**
-   * Get Google integration for a business
+   * Get Google Workspace integration for a business
    * @param {number} businessId - Business ID
-   * @returns {Object|null} Integration data or null if not found
+   * @returns {Promise<Object|null>} Integration data or null if not found
    */
   async getIntegration(businessId) {
     try {
-      const query = `
-        SELECT * FROM google_workspace_integrations 
-        WHERE business_id = $1
-        ORDER BY updated_at DESC
-        LIMIT 1
-      `;
-
-      const result = await pool.query(query, [businessId]);
-      return result.rows[0] || null;
+      const result = await pool.query(
+        "SELECT * FROM google_workspace_integrations WHERE business_id = $1",
+        [businessId]
+      );
+      return result.rows.length > 0 ? result.rows[0] : null;
     } catch (error) {
-      console.error("Error getting Google integration:", error);
-      throw new Error("Failed to get Google integration");
-    }
-  }
-
-  /**
-   * Get user info from Google API
-   * @param {number} businessId - Business ID
-   * @returns {Object} User info
-   */
-  async getUserInfo(businessId) {
-    try {
-      const integration = await this.getIntegration(businessId);
-      if (!integration) {
-        throw new Error("No Google integration found");
-      }
-
-      // Set credentials from stored tokens
-      this.oauth2Client.setCredentials({
-        access_token: integration.access_token,
-        refresh_token: integration.refresh_token,
-      });
-
-      // Get user info
-      const oauth2 = google.oauth2({ version: "v2", auth: this.oauth2Client });
-      const userInfo = await oauth2.userinfo.get();
-
-      return userInfo.data;
-    } catch (error) {
-      console.error("Error getting user info:", error);
-      throw new Error("Failed to get user info");
+      console.error("Error getting integration:", error);
+      throw new Error("Failed to get Google Workspace integration");
     }
   }
 
@@ -182,7 +180,6 @@ class GoogleService {
     oauth2Client.setCredentials({
       access_token: integration.access_token,
       refresh_token: integration.refresh_token,
-      expiry_date: integration.token_expires_at,
     });
 
     // Handle token refresh
@@ -190,14 +187,9 @@ class GoogleService {
       if (tokens.refresh_token) {
         integration.refresh_token = tokens.refresh_token;
       }
-      if (tokens.access_token) {
-        integration.access_token = tokens.access_token;
-      }
-      if (tokens.expiry_date) {
-        integration.token_expires_at = new Date(tokens.expiry_date);
-      }
+      integration.access_token = tokens.access_token;
+      integration.expiry_date = tokens.expiry_date;
 
-      // Update tokens in database
       await this.saveIntegration(integration);
     });
 
@@ -205,59 +197,69 @@ class GoogleService {
   }
 
   /**
-   * Remove Google integration for a business
+   * Remove Google Workspace integration for a business
    * @param {number} businessId - Business ID
-   * @returns {Object} Success status
+   * @returns {Promise<boolean>} Success status
    */
   async removeIntegration(businessId) {
     try {
-      const query = `
-        DELETE FROM google_workspace_integrations 
-        WHERE business_id = $1
-      `;
-
-      await pool.query(query, [businessId]);
-      return { success: true };
+      const result = await pool.query(
+        "DELETE FROM google_workspace_integrations WHERE business_id = $1",
+        [businessId]
+      );
+      return result.rowCount > 0;
     } catch (error) {
-      console.error("Error removing Google integration:", error);
-      throw new Error("Failed to remove Google integration");
+      console.error("Error removing integration:", error);
+      throw new Error("Failed to remove Google Workspace integration");
     }
   }
 
   /**
    * Check if business has Google Workspace integration
    * @param {number} businessId - Business ID
-   * @returns {boolean} True if integrated, false otherwise
+   * @returns {Promise<boolean>} Integration status
    */
   async isIntegrated(businessId) {
     const integration = await this.getIntegration(businessId);
-    return !!integration;
+    return integration !== null;
   }
 
-  // Gmail integration methods
+  /**
+   * Get Gmail service instance
+   * @param {number} businessId - Business ID
+   * @returns {Promise<Object>} Gmail service instance
+   */
   async getGmailService(businessId) {
     const auth = await this.getAuthenticatedClient(businessId);
     return google.gmail({ version: "v1", auth });
   }
 
+  /**
+   * Send email via Gmail
+   * @param {number} businessId - Business ID
+   * @param {Object} emailData - Email data
+   * @param {string} emailData.to - Recipient email
+   * @param {string} emailData.subject - Email subject
+   * @param {string} emailData.body - Email body
+   * @param {boolean} emailData.isHtml - Whether body is HTML
+   * @returns {Promise<Object>} Email send result
+   */
   async sendEmail(businessId, { to, subject, body, isHtml = false }) {
     try {
       const gmail = await this.getGmailService(businessId);
 
-      const email = [
-        `To: ${to}`,
-        `Subject: ${subject}`,
-        `Content-Type: ${isHtml ? "text/html" : "text/plain"}; charset=utf-8`,
-        "",
-        body,
-      ].join("\n");
+      const message = {
+        to: to,
+        subject: subject,
+        body: body,
+        isHtml: isHtml,
+      };
 
-      const encodedEmail = Buffer.from(email).toString("base64url");
-
+      const raw = this.createEmailMessage(message);
       const result = await gmail.users.messages.send({
         userId: "me",
-        requestBody: {
-          raw: encodedEmail,
+        resource: {
+          raw: raw,
         },
       });
 
@@ -268,28 +270,65 @@ class GoogleService {
     }
   }
 
-  // Calendar integration methods
+  /**
+   * Create email message in Gmail format
+   * @param {Object} message - Message data
+   * @returns {string} Base64 encoded email message
+   */
+  createEmailMessage(message) {
+    const { to, subject, body, isHtml } = message;
+    
+    const headers = [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      `Content-Type: ${isHtml ? 'text/html' : 'text/plain'}; charset=utf-8`,
+      `MIME-Version: 1.0`,
+    ].join('\r\n');
+
+    const email = `${headers}\r\n\r\n${body}`;
+    return Buffer.from(email).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  /**
+   * Get Calendar service instance
+   * @param {number} businessId - Business ID
+   * @returns {Promise<Object>} Calendar service instance
+   */
   async getCalendarService(businessId) {
     const auth = await this.getAuthenticatedClient(businessId);
     return google.calendar({ version: "v3", auth });
   }
 
+  /**
+   * Create calendar event
+   * @param {number} businessId - Business ID
+   * @param {Object} eventData - Event data
+   * @returns {Promise<Object>} Created event
+   */
   async createCalendarEvent(businessId, eventData) {
     try {
       const calendar = await this.getCalendarService(businessId);
 
       const event = {
-        summary: eventData.title,
+        summary: eventData.title || eventData.summary,
         description: eventData.description,
         start: {
-          dateTime: eventData.startTime,
+          dateTime: eventData.startTime || eventData.start?.dateTime,
           timeZone: eventData.timeZone || "UTC",
         },
         end: {
-          dateTime: eventData.endTime,
+          dateTime: eventData.endTime || eventData.end?.dateTime,
           timeZone: eventData.timeZone || "UTC",
         },
-        attendees: eventData.attendees?.map((email) => ({ email })) || [],
+        attendees: eventData.attendees || [],
+        location: eventData.location,
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: "email", minutes: 24 * 60 },
+            { method: "popup", minutes: 10 },
+          ],
+        },
       };
 
       const result = await calendar.events.insert({
@@ -304,83 +343,89 @@ class GoogleService {
     }
   }
 
-  // Calendar reading methods
+  /**
+   * Get calendar events
+   * @param {number} businessId - Business ID
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} Calendar events
+   */
   async getCalendarEvents(businessId, options = {}) {
     try {
       const calendar = await this.getCalendarService(businessId);
 
-      const {
-        maxResults = 10,
-        timeMin = new Date().toISOString(),
-        timeMax = null,
-        singleEvents = true,
-        orderBy = "startTime",
-      } = options;
-
       const params = {
         calendarId: "primary",
-        timeMin,
-        maxResults,
-        singleEvents,
-        orderBy,
+        timeMin: options.startDate || new Date().toISOString(),
+        timeMax: options.endDate,
+        maxResults: options.limit || 10,
+        singleEvents: true,
+        orderBy: "startTime",
       };
 
-      if (timeMax) {
-        params.timeMax = timeMax;
-      }
-
-      const response = await calendar.events.list(params);
-      return response.data.items || [];
+      const result = await calendar.events.list(params);
+      return result.data.items || [];
     } catch (error) {
       console.error("Error getting calendar events:", error);
-      throw new Error("Failed to retrieve calendar events");
+      throw new Error("Failed to get calendar events");
     }
   }
 
+  /**
+   * Get upcoming events
+   * @param {number} businessId - Business ID
+   * @param {number} maxResults - Maximum number of results
+   * @returns {Promise<Array>} Upcoming events
+   */
   async getUpcomingEvents(businessId, maxResults = 10) {
-    return this.getCalendarEvents(businessId, { maxResults });
+    return this.getCalendarEvents(businessId, { limit: maxResults });
   }
 
-  async getEventsByDateRange(businessId, startDate, endDate, maxResults = 50) {
-    return this.getCalendarEvents(businessId, {
-      timeMin: startDate,
-      timeMax: endDate,
-      maxResults,
-    });
-  }
-
+  /**
+   * Get event by ID
+   * @param {number} businessId - Business ID
+   * @param {string} eventId - Event ID
+   * @returns {Promise<Object>} Event data
+   */
   async getEventById(businessId, eventId) {
     try {
       const calendar = await this.getCalendarService(businessId);
 
-      const response = await calendar.events.get({
+      const result = await calendar.events.get({
         calendarId: "primary",
         eventId: eventId,
       });
 
-      return response.data;
+      return result.data;
     } catch (error) {
-      console.error("Error getting calendar event by ID:", error);
-      throw new Error("Failed to retrieve calendar event");
+      console.error("Error getting event by ID:", error);
+      throw new Error("Failed to get event by ID");
     }
   }
 
+  /**
+   * Update calendar event
+   * @param {number} businessId - Business ID
+   * @param {string} eventId - Event ID
+   * @param {Object} eventData - Updated event data
+   * @returns {Promise<Object>} Updated event
+   */
   async updateCalendarEvent(businessId, eventId, eventData) {
     try {
       const calendar = await this.getCalendarService(businessId);
 
       const event = {
-        summary: eventData.title,
+        summary: eventData.title || eventData.summary,
         description: eventData.description,
         start: {
-          dateTime: eventData.startTime,
+          dateTime: eventData.startTime || eventData.start?.dateTime,
           timeZone: eventData.timeZone || "UTC",
         },
         end: {
-          dateTime: eventData.endTime,
+          dateTime: eventData.endTime || eventData.end?.dateTime,
           timeZone: eventData.timeZone || "UTC",
         },
-        attendees: eventData.attendees?.map((email) => ({ email })) || [],
+        attendees: eventData.attendees || [],
+        location: eventData.location,
       };
 
       const result = await calendar.events.update({
@@ -396,6 +441,12 @@ class GoogleService {
     }
   }
 
+  /**
+   * Delete calendar event
+   * @param {number} businessId - Business ID
+   * @param {string} eventId - Event ID
+   * @returns {Promise<boolean>} Success status
+   */
   async deleteCalendarEvent(businessId, eventId) {
     try {
       const calendar = await this.getCalendarService(businessId);
@@ -405,109 +456,118 @@ class GoogleService {
         eventId: eventId,
       });
 
-      return { success: true };
+      return true;
     } catch (error) {
       console.error("Error deleting calendar event:", error);
       throw new Error("Failed to delete calendar event");
     }
   }
 
+  /**
+   * Search calendar events
+   * @param {number} businessId - Business ID
+   * @param {string} query - Search query
+   * @param {number} maxResults - Maximum number of results
+   * @returns {Promise<Array>} Search results
+   */
   async searchCalendarEvents(businessId, query, maxResults = 10) {
     try {
       const calendar = await this.getCalendarService(businessId);
 
-      const response = await calendar.events.list({
+      const result = await calendar.events.list({
         calendarId: "primary",
         q: query,
-        maxResults,
+        maxResults: maxResults,
         singleEvents: true,
         orderBy: "startTime",
       });
 
-      return response.data.items || [];
+      return result.data.items || [];
     } catch (error) {
       console.error("Error searching calendar events:", error);
       throw new Error("Failed to search calendar events");
     }
   }
 
-  // Enhanced Calendar Operations for Booking & Appointments
-
   /**
-   * Check availability for a specific time slot
+   * Check availability for a time slot
+   * @param {number} businessId - Business ID
+   * @param {string} startTime - Start time (ISO string)
+   * @param {string} endTime - End time (ISO string)
+   * @returns {Promise<Object>} Availability status
    */
   async checkAvailability(businessId, startTime, endTime) {
     try {
       const calendar = await this.getCalendarService(businessId);
 
-      const response = await calendar.events.list({
-        calendarId: "primary",
-        timeMin: startTime,
-        timeMax: endTime,
-        singleEvents: true,
-        orderBy: "startTime",
+      const result = await calendar.freebusy.query({
+        resource: {
+          timeMin: startTime,
+          timeMax: endTime,
+          items: [{ id: "primary" }],
+        },
       });
 
-      const conflictingEvents = (response.data.items || []).map((event) => ({
-        start: event.start.dateTime || event.start.date,
-        end: event.end.dateTime || event.end.date,
-        summary: event.summary || "Busy",
-      }));
+      const busyTimes = result.data.calendars.primary.busy || [];
+      const isAvailable = busyTimes.length === 0;
 
       return {
-        isAvailable: conflictingEvents.length === 0,
-        conflictingEvents,
-        startTime,
-        endTime,
+        isAvailable: isAvailable,
+        busyTimes: busyTimes,
+        startTime: startTime,
+        endTime: endTime,
       };
     } catch (error) {
       console.error("Error checking availability:", error);
-      throw new Error("Failed to check calendar availability");
+      throw new Error("Failed to check availability");
     }
   }
 
   /**
-   * Find available time slots for a specific date
+   * Find available time slots for a date
+   * @param {number} businessId - Business ID
+   * @param {string} date - Date to check (YYYY-MM-DD)
+   * @param {number} durationMinutes - Duration in minutes
+   * @param {Object} options - Additional options
+   * @returns {Promise<Array>} Available time slots
    */
   async findAvailableSlots(businessId, date, durationMinutes = 60, options = {}) {
     try {
-      const { startHour = 9, endHour = 17, timeZone = "UTC" } = options;
       const calendar = await this.getCalendarService(businessId);
 
-      // Get all events for the specified date
-      const startOfDay = new Date(date);
-      startOfDay.setHours(startHour, 0, 0, 0);
+      const startOfDay = new Date(`${date}T00:00:00`);
+      const endOfDay = new Date(`${date}T23:59:59`);
 
-      const endOfDay = new Date(date);
-      endOfDay.setHours(endHour, 0, 0, 0);
-
-      const response = await calendar.events.list({
-        calendarId: "primary",
-        timeMin: startOfDay.toISOString(),
-        timeMax: endOfDay.toISOString(),
-        singleEvents: true,
-        orderBy: "startTime",
+      const result = await calendar.freebusy.query({
+        resource: {
+          timeMin: startOfDay.toISOString(),
+          timeMax: endOfDay.toISOString(),
+          items: [{ id: "primary" }],
+        },
       });
 
-      const events = response.data.items || [];
+      const busyTimes = result.data.calendars.primary.busy || [];
       const availableSlots = [];
 
-      // Generate time slots and check availability
-      const currentTime = new Date(startOfDay);
-      while (currentTime < endOfDay) {
-        const slotStart = new Date(currentTime);
-        const slotEnd = new Date(currentTime.getTime() + durationMinutes * 60000);
+      const workingHours = {
+        start: options.startHour || 9,
+        end: options.endHour || 17,
+      };
 
-        if (slotEnd <= endOfDay) {
-          // Check if this slot conflicts with any events
-          const hasConflict = events.some((event) => {
-            const eventStart = new Date(event.start.dateTime || event.start.date);
-            const eventEnd = new Date(event.end.dateTime || event.end.date);
+      for (let hour = workingHours.start; hour < workingHours.end; hour++) {
+        for (let minute = 0; minute < 60; minute += 30) {
+          const slotStart = new Date(`${date}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`);
+          const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60000);
 
-            return slotStart < eventEnd && slotEnd > eventStart;
+          if (slotEnd.getHours() > workingHours.end) break;
+
+          const isSlotAvailable = !busyTimes.some(busy => {
+            const busyStart = new Date(busy.start);
+            const busyEnd = new Date(busy.end);
+            return (slotStart < busyEnd && slotEnd > busyStart);
           });
 
-          if (!hasConflict) {
+          if (isSlotAvailable) {
             availableSlots.push({
               start: slotStart.toISOString(),
               end: slotEnd.toISOString(),
@@ -515,46 +575,41 @@ class GoogleService {
             });
           }
         }
-
-        // Move to next hour
-        currentTime.setHours(currentTime.getHours() + 1);
       }
 
-      return {
-        date,
-        duration: durationMinutes,
-        availableSlots,
-        count: availableSlots.length,
-      };
+      return availableSlots;
     } catch (error) {
       console.error("Error finding available slots:", error);
-      throw new Error("Failed to find available time slots");
+      throw new Error("Failed to find available slots");
     }
   }
 
   /**
-   * Create a meeting event with Google Meet link
+   * Create meeting event with Google Meet link
+   * @param {number} businessId - Business ID
+   * @param {Object} eventData - Event data
+   * @returns {Promise<Object>} Created event with meeting link
    */
   async createMeetingEvent(businessId, eventData) {
     try {
       const calendar = await this.getCalendarService(businessId);
 
       const event = {
-        summary: eventData.title,
-        description: eventData.description || "",
+        summary: eventData.title || eventData.summary,
+        description: eventData.description,
         start: {
-          dateTime: eventData.startTime,
+          dateTime: eventData.startTime || eventData.start?.dateTime,
           timeZone: eventData.timeZone || "UTC",
         },
         end: {
-          dateTime: eventData.endTime,
+          dateTime: eventData.endTime || eventData.end?.dateTime,
           timeZone: eventData.timeZone || "UTC",
         },
-        attendees: eventData.attendees ? eventData.attendees.map((email) => ({ email })) : [],
-        location: eventData.location || "",
+        attendees: eventData.attendees || [],
+        location: eventData.location,
         conferenceData: {
           createRequest: {
-            requestId: `meet-${Date.now()}`,
+            requestId: `meeting-${Date.now()}`,
             conferenceSolutionKey: {
               type: "hangoutsMeet",
             },
@@ -569,19 +624,13 @@ class GoogleService {
         },
       };
 
-      const response = await calendar.events.insert({
+      const result = await calendar.events.insert({
         calendarId: "primary",
         resource: event,
         conferenceDataVersion: 1,
       });
 
-      const createdEvent = response.data;
-      const meetingLink = createdEvent.conferenceData?.entryPoints?.[0]?.uri;
-
-      return {
-        ...createdEvent,
-        meetingLink,
-      };
+      return result.data;
     } catch (error) {
       console.error("Error creating meeting event:", error);
       throw new Error("Failed to create meeting event");
@@ -589,15 +638,18 @@ class GoogleService {
   }
 
   /**
-   * Create a reminder event
+   * Create reminder event
+   * @param {number} businessId - Business ID
+   * @param {Object} reminderData - Reminder data
+   * @returns {Promise<Object>} Created reminder event
    */
   async createReminder(businessId, reminderData) {
     try {
       const calendar = await this.getCalendarService(businessId);
 
       const event = {
-        summary: reminderData.title,
-        description: reminderData.description || "",
+        summary: `Reminder: ${reminderData.title}`,
+        description: reminderData.description,
         start: {
           dateTime: reminderData.reminderTime,
           timeZone: reminderData.timeZone || "UTC",
@@ -615,12 +667,12 @@ class GoogleService {
         },
       };
 
-      const response = await calendar.events.insert({
+      const result = await calendar.events.insert({
         calendarId: "primary",
         resource: event,
       });
 
-      return response.data;
+      return result.data;
     } catch (error) {
       console.error("Error creating reminder:", error);
       throw new Error("Failed to create reminder");
@@ -628,19 +680,19 @@ class GoogleService {
   }
 
   /**
-   * Get day schedule with availability summary
+   * Get day schedule
+   * @param {number} businessId - Business ID
+   * @param {string} date - Date (YYYY-MM-DD)
+   * @returns {Promise<Array>} Day schedule
    */
   async getDaySchedule(businessId, date) {
     try {
       const calendar = await this.getCalendarService(businessId);
 
-      const startOfDay = new Date(date);
-      startOfDay.setHours(0, 0, 0, 0);
+      const startOfDay = new Date(`${date}T00:00:00`);
+      const endOfDay = new Date(`${date}T23:59:59`);
 
-      const endOfDay = new Date(date);
-      endOfDay.setHours(23, 59, 59, 999);
-
-      const response = await calendar.events.list({
+      const result = await calendar.events.list({
         calendarId: "primary",
         timeMin: startOfDay.toISOString(),
         timeMax: endOfDay.toISOString(),
@@ -648,30 +700,7 @@ class GoogleService {
         orderBy: "startTime",
       });
 
-      const events = response.data.items || [];
-      let totalBusyMinutes = 0;
-
-      events.forEach((event) => {
-        const start = new Date(event.start.dateTime || event.start.date);
-        const end = new Date(event.end.dateTime || event.end.date);
-        const duration = (end - start) / (1000 * 60); // Convert to minutes
-        totalBusyMinutes += duration;
-      });
-
-      const totalMinutes = 24 * 60; // 24 hours in minutes
-      const totalFreeMinutes = totalMinutes - totalBusyMinutes;
-      const busyPercentage = Math.round((totalBusyMinutes / totalMinutes) * 100);
-
-      return {
-        date,
-        events,
-        summary: {
-          totalEvents: events.length,
-          totalBusyMinutes: Math.round(totalBusyMinutes),
-          totalFreeMinutes: Math.round(totalFreeMinutes),
-          busyPercentage,
-        },
-      };
+      return result.data.items || [];
     } catch (error) {
       console.error("Error getting day schedule:", error);
       throw new Error("Failed to get day schedule");
@@ -679,41 +708,34 @@ class GoogleService {
   }
 
   /**
-   * Get next available appointment slot
+   * Get next available slot
+   * @param {number} businessId - Business ID
+   * @param {number} durationMinutes - Duration in minutes
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Next available slot
    */
   async getNextAvailableSlot(businessId, durationMinutes = 60, options = {}) {
     try {
-      const { startDate, maxDays = 30, startHour = 9, endHour = 17, timeZone = "UTC" } = options;
+      const today = new Date();
+      const maxDays = options.maxDays || 30;
 
-      let searchDate = startDate ? new Date(startDate) : new Date();
-      const endSearchDate = new Date(searchDate.getTime() + maxDays * 24 * 60 * 60 * 1000);
+      for (let day = 0; day < maxDays; day++) {
+        const checkDate = new Date(today);
+        checkDate.setDate(today.getDate() + day);
+        const dateString = checkDate.toISOString().split('T')[0];
 
-      while (searchDate <= endSearchDate) {
-        const dateStr = searchDate.toISOString().split("T")[0];
-        const availableSlots = await this.findAvailableSlots(businessId, dateStr, durationMinutes, {
-          startHour,
-          endHour,
-          timeZone,
-        });
-
-        if (availableSlots.availableSlots.length > 0) {
+        const availableSlots = await this.findAvailableSlots(businessId, dateString, durationMinutes, options);
+        
+        if (availableSlots.length > 0) {
           return {
-            date: dateStr,
-            availableSlots: availableSlots.availableSlots,
-            nextSlot: availableSlots.availableSlots[0],
-            message: `Found ${availableSlots.availableSlots.length} available slots on ${dateStr}`,
+            date: dateString,
+            slot: availableSlots[0],
+            allSlots: availableSlots,
           };
         }
-
-        searchDate.setDate(searchDate.getDate() + 1);
       }
 
-      return {
-        date: null,
-        availableSlots: [],
-        nextSlot: null,
-        message: `No available slots found in the next ${maxDays} days`,
-      };
+      return null;
     } catch (error) {
       console.error("Error getting next available slot:", error);
       throw new Error("Failed to get next available slot");
@@ -722,77 +744,80 @@ class GoogleService {
 
   /**
    * Bulk create calendar events
+   * @param {number} businessId - Business ID
+   * @param {Array} events - Array of event data
+   * @returns {Promise<Array>} Created events
    */
   async bulkCreateCalendarEvents(businessId, events) {
     try {
-      const results = {
-        created: [],
-        failed: [],
-      };
-
+      const results = [];
+      
       for (const eventData of events) {
         try {
           const event = await this.createCalendarEvent(businessId, eventData);
-          results.created.push(event);
+          results.push({ success: true, event: event });
         } catch (error) {
-          results.failed.push({
-            eventData,
-            error: error.message,
-          });
+          results.push({ success: false, error: error.message, eventData: eventData });
         }
       }
 
       return results;
     } catch (error) {
-      console.error("Error in bulk create calendar events:", error);
+      console.error("Error bulk creating calendar events:", error);
       throw new Error("Failed to bulk create calendar events");
     }
   }
 
   /**
    * Bulk delete calendar events
+   * @param {number} businessId - Business ID
+   * @param {Array} eventIds - Array of event IDs
+   * @returns {Promise<Array>} Deletion results
    */
   async bulkDeleteCalendarEvents(businessId, eventIds) {
     try {
-      const results = {
-        deleted: 0,
-        failed: 0,
-        errors: [],
-      };
-
+      const results = [];
+      
       for (const eventId of eventIds) {
         try {
           await this.deleteCalendarEvent(businessId, eventId);
-          results.deleted++;
+          results.push({ success: true, eventId: eventId });
         } catch (error) {
-          results.failed++;
-          results.errors.push({
-            eventId,
-            error: error.message,
-          });
+          results.push({ success: false, error: error.message, eventId: eventId });
         }
       }
 
       return results;
     } catch (error) {
-      console.error("Error in bulk delete calendar events:", error);
+      console.error("Error bulk deleting calendar events:", error);
       throw new Error("Failed to bulk delete calendar events");
     }
   }
 
-  // Sheets integration methods
+  /**
+   * Get Sheets service instance
+   * @param {number} businessId - Business ID
+   * @returns {Promise<Object>} Sheets service instance
+   */
   async getSheetsService(businessId) {
     const auth = await this.getAuthenticatedClient(businessId);
     return google.sheets({ version: "v4", auth });
   }
 
+  /**
+   * Read data from Google Sheet
+   * @param {number} businessId - Business ID
+   * @param {string} spreadsheetId - Spreadsheet ID
+   * @param {string} range - Range to read (e.g., "Sheet1!A1:B10")
+   * @returns {Promise<Array>} Sheet data
+   */
   async readSheet(businessId, spreadsheetId, range) {
     try {
       const sheets = await this.getSheetsService(businessId);
 
       const result = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range,
+        spreadsheetId: spreadsheetId,
+        range: range,
       });
 
       return result.data.values || [];
@@ -802,16 +827,24 @@ class GoogleService {
     }
   }
 
+  /**
+   * Write data to Google Sheet
+   * @param {number} businessId - Business ID
+   * @param {string} spreadsheetId - Spreadsheet ID
+   * @param {string} range - Range to write to
+   * @param {Array} values - Values to write
+   * @returns {Promise<Object>} Write result
+   */
   async writeSheet(businessId, spreadsheetId, range, values) {
     try {
       const sheets = await this.getSheetsService(businessId);
 
       const result = await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range,
-        valueInputOption: "USER_ENTERED",
+        spreadsheetId: spreadsheetId,
+        range: range,
+        valueInputOption: "RAW",
         resource: {
-          values,
+          values: values,
         },
       });
 
@@ -822,22 +855,37 @@ class GoogleService {
     }
   }
 
-  // Drive integration methods
+  /**
+   * Get Drive service instance
+   * @param {number} businessId - Business ID
+   * @returns {Promise<Object>} Drive service instance
+   */
   async getDriveService(businessId) {
     const auth = await this.getAuthenticatedClient(businessId);
     return google.drive({ version: "v3", auth });
   }
 
+  /**
+   * List files in Google Drive
+   * @param {number} businessId - Business ID
+   * @param {string} query - Search query
+   * @param {number} maxResults - Maximum number of results
+   * @returns {Promise<Array>} File list
+   */
   async listFiles(businessId, query = "", maxResults = 10) {
     try {
       const drive = await this.getDriveService(businessId);
 
-      const result = await drive.files.list({
-        q: query,
+      const params = {
         pageSize: maxResults,
-        fields: "nextPageToken, files(id, name, mimeType, size, modifiedTime)",
-      });
+        fields: "nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime)",
+      };
 
+      if (query) {
+        params.q = query;
+      }
+
+      const result = await drive.files.list(params);
       return result.data.files || [];
     } catch (error) {
       console.error("Error listing files:", error);
@@ -845,109 +893,107 @@ class GoogleService {
     }
   }
 
+  /**
+   * Download file from Google Drive
+   * @param {number} businessId - Business ID
+   * @param {string} fileId - File ID
+   * @returns {Promise<Object>} File data
+   */
   async downloadFile(businessId, fileId) {
     try {
       const drive = await this.getDriveService(businessId);
 
       const result = await drive.files.get({
-        fileId,
+        fileId: fileId,
         alt: "media",
+      }, {
+        responseType: "stream",
       });
 
       return result.data;
     } catch (error) {
       console.error("Error downloading file:", error);
-      throw new Error("Failed to download Google Drive file");
+      throw new Error("Failed to download file from Google Drive");
     }
   }
 
-  // FAQ integration methods
+  /**
+   * Get FAQs from Google Sheet
+   * @param {number} businessId - Business ID
+   * @param {string} spreadsheetId - Spreadsheet ID
+   * @param {string} range - Range to read (default: "Sheet1!A:B")
+   * @returns {Promise<Array>} FAQ data
+   */
   async getFAQs(businessId, spreadsheetId, range = "Sheet1!A:B") {
     try {
-      console.log(`Getting FAQs from spreadsheet: ${spreadsheetId}, range: ${range}`);
-
       const sheets = await this.getSheetsService(businessId);
 
       const result = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range,
+        spreadsheetId: spreadsheetId,
+        range: range,
       });
 
       const rows = result.data.values || [];
-
-      // Convert to FAQ objects (assuming first row is headers: Question | Answer)
       const faqs = [];
+
       for (let i = 1; i < rows.length; i++) {
-        // Skip header row
         const row = rows[i];
-        if (row.length >= 2 && row[0] && row[1]) {
+        if (row.length >= 2) {
           faqs.push({
-            question: row[0].trim(),
-            answer: row[1].trim(),
-            index: i,
+            question: row[0],
+            answer: row[1],
+            row: i + 1,
           });
         }
       }
 
-      console.log(`Found ${faqs.length} FAQs in spreadsheet`);
       return faqs;
     } catch (error) {
-      console.error("Error reading FAQ sheet:", error);
-      throw new Error("Failed to read FAQ Google Sheet");
+      console.error("Error getting FAQs:", error);
+      throw new Error("Failed to get FAQs from Google Sheet");
     }
   }
 
+  /**
+   * Search FAQs in Google Sheet
+   * @param {number} businessId - Business ID
+   * @param {string} spreadsheetId - Spreadsheet ID
+   * @param {string} userQuestion - User's question
+   * @param {string} range - Range to search (default: "Sheet1!A:B")
+   * @returns {Promise<Array>} Search results
+   */
   async searchFAQs(businessId, spreadsheetId, userQuestion, range = "Sheet1!A:B") {
     try {
       const faqs = await this.getFAQs(businessId, spreadsheetId, range);
+      const results = [];
 
-      if (faqs.length === 0) {
-        return null;
-      }
-
-      // Simple keyword matching for FAQ search
-      const userQuestionLower = userQuestion.toLowerCase();
-      let bestMatch = null;
-      let highestScore = 0;
+      const questionLower = userQuestion.toLowerCase();
 
       for (const faq of faqs) {
-        const questionLower = faq.question.toLowerCase();
+        const questionMatch = faq.question.toLowerCase().includes(questionLower);
+        const answerMatch = faq.answer.toLowerCase().includes(questionLower);
 
-        // Calculate similarity score based on common words
-        const userWords = userQuestionLower.split(/\s+/).filter((word) => word.length > 2);
-        const faqWords = questionLower.split(/\s+/).filter((word) => word.length > 2);
-
-        let commonWords = 0;
-        for (const userWord of userWords) {
-          if (faqWords.some((faqWord) => faqWord.includes(userWord) || userWord.includes(faqWord))) {
-            commonWords++;
-          }
-        }
-
-        const score = commonWords / Math.max(userWords.length, faqWords.length);
-
-        if (score > highestScore && score > 0.2) {
-          // Minimum threshold
-          highestScore = score;
-          bestMatch = faq;
+        if (questionMatch || answerMatch) {
+          results.push({
+            ...faq,
+            matchType: questionMatch ? "question" : "answer",
+            relevanceScore: questionMatch ? 1.0 : 0.5,
+          });
         }
       }
 
-      if (bestMatch) {
-        console.log(`Found FAQ match with score ${highestScore}:`, bestMatch.question);
-        return {
-          ...bestMatch,
-          matchScore: highestScore,
-        };
-      }
-
-      return null;
+      return results.sort((a, b) => b.relevanceScore - a.relevanceScore);
     } catch (error) {
       console.error("Error searching FAQs:", error);
       throw new Error("Failed to search FAQ Google Sheet");
     }
   }
 
+  /**
+   * Get Google Workspace configuration
+   * @param {number} businessId - Business ID
+   * @returns {Promise<Object|null>} Configuration data
+   */
   async getConfig(businessId) {
     try {
       const result = await pool.query(
@@ -957,8 +1003,8 @@ class GoogleService {
 
       return result.rows.length > 0 ? result.rows[0] : null;
     } catch (error) {
-      console.error('Error getting Google config:', error);
-      throw new Error('Failed to get Google Workspace configuration');
+      console.error("Error getting config:", error);
+      throw new Error("Failed to get Google Workspace configuration");
     }
   }
 }

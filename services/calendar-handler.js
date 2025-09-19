@@ -1,11 +1,9 @@
 const GoogleService = require('./google');
-const WhatsAppService = require('./whatsapp');
 const OpenAIService = require('./openai');
 
 class CalendarHandler {
   constructor() {
     this.googleService = GoogleService;
-    this.whatsappService = WhatsAppService;
     this.openaiService = OpenAIService;
     this.conversationContext = new Map();
     

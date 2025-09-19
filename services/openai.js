@@ -14,7 +14,7 @@ const openai = new OpenAI({
 class OpenAIService {
   constructor() {
     this.model = "gpt-4";
-    this.chatModel = "gpt-4"; // Fixed: Added missing chatModel property
+    this.chatModel = "gpt-4";
     this.visionModel = "gpt-4-vision-preview";
     this.embeddingsService = EmbeddingsService;
     this.intentDetectionService = IntentDetectionService;
@@ -229,6 +229,157 @@ class OpenAIService {
       console.error("Error processing message:", error.message);
       return "I apologize, but I could not process your message. Please try again.";
     }
+  }
+
+  /**
+   * Detect Odoo order request (legacy compatibility)
+   */
+  detectOdooOrderRequest(message) {
+    const orderKeywords = ["order", "purchase", "buy", "place order", "create order"];
+    const hasOrderKeyword = orderKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    if (hasOrderKeyword) {
+      return {
+        type: "order",
+        message: message,
+        confidence: 0.7
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Detect Odoo invoice request (legacy compatibility)
+   */
+  detectOdooInvoiceRequest(message) {
+    const invoiceKeywords = ["invoice", "bill", "payment", "invoice status", "check invoice"];
+    const hasInvoiceKeyword = invoiceKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    if (hasInvoiceKeyword) {
+      return {
+        type: "invoice",
+        message: message,
+        confidence: 0.7
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Detect Odoo lead request (legacy compatibility)
+   */
+  detectOdooLeadRequest(message) {
+    const leadKeywords = ["lead", "prospect", "potential customer", "new lead", "create lead"];
+    const hasLeadKeyword = leadKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    if (hasLeadKeyword) {
+      return {
+        type: "lead",
+        message: message,
+        confidence: 0.7
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Detect Odoo ticket request (legacy compatibility)
+   */
+  detectOdooTicketRequest(message) {
+    const ticketKeywords = ["ticket", "support", "issue", "problem", "help", "complaint"];
+    const hasTicketKeyword = ticketKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    if (hasTicketKeyword) {
+      return {
+        type: "ticket",
+        message: message,
+        confidence: 0.7
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Handle Odoo order (legacy compatibility)
+   */
+  async handleOdooOrder(businessId, orderRequest, phoneNumber) {
+    try {
+      const result = await OdooService.createOrder(businessId, {
+        customer_phone: phoneNumber,
+        message: orderRequest.message
+      });
+      
+      return `✅ Order created successfully. Order ID: ${result.id}`;
+    } catch (error) {
+      console.error("Error handling Odoo order:", error.message);
+      return "❌ Sorry, I could not process your order. Please try again or contact support.";
+    }
+  }
+
+  /**
+   * Detect FAQ intent with embeddings (legacy compatibility)
+   */
+  async detectFAQIntentWithEmbeddings(message) {
+    try {
+      const result = await this.embeddingsService.detectIntentWithEmbeddings(message, {
+        intentType: "FAQ"
+      });
+      
+      return {
+        isFAQ: result && result.confidence >= 0.7,
+        confidence: result ? result.confidence : 0,
+        response: result ? result.response : null
+      };
+    } catch (error) {
+      console.error("Error in FAQ intent detection:", error.message);
+      return { isFAQ: false, confidence: 0, response: null };
+    }
+  }
+
+  /**
+   * Process message with embeddings (legacy compatibility)
+   */
+  async processMessageWithEmbeddings(messageType, content, filePath = null, conversationHistory = [], businessTone = null, businessId = null) {
+    try {
+      if (messageType === "text" && content) {
+        const faqResult = await this.detectFAQIntentWithEmbeddings(content);
+        if (faqResult.isFAQ && faqResult.response) {
+          return faqResult.response;
+        }
+      }
+      
+      return await this.processMessage(messageType, content, filePath, conversationHistory, businessTone, businessId);
+    } catch (error) {
+      console.error("Error in enhanced message processing:", error.message);
+      return await this.processMessage(messageType, content, filePath, conversationHistory, businessTone, businessId);
+    }
+  }
+
+  /**
+   * Detect calendar intent (legacy compatibility)
+   */
+  detectCalendarIntent(message) {
+    const calendarKeywords = ["schedule", "meeting", "appointment", "calendar", "book", "reserve", "time"];
+    const hasCalendarKeyword = calendarKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    if (hasCalendarKeyword) {
+      return {
+        type: "calendar",
+        message: message,
+        confidence: 0.7
+      };
+    }
+    return null;
   }
 
   // Intent-specific handlers (simplified and cleaned up)
