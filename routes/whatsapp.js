@@ -18,12 +18,6 @@ router.get("/webhook", async (req, res) => {
   try {
     const { "hub.mode": mode, "hub.verify_token": token, "hub.challenge": challenge } = req.query;
 
-    console.log("Webhook verification request:", {
-      mode,
-      token: token ? token.substring(0, 10) + "..." : "undefined",
-      challenge,
-    });
-
     if (!mode || !token) {
       console.log("Webhook verification failed: Missing required parameters");
       return res.status(403).send("Forbidden");
@@ -34,11 +28,7 @@ router.get("/webhook", async (req, res) => {
     const matchingConfig = configs.find((config) => config.verify_token === token);
 
     if (mode === "subscribe" && matchingConfig) {
-      console.log("Webhook verification successful:", {
-        mode,
-        token: token.substring(0, 10) + "...",
-        businessId: matchingConfig.business_id,
-      });
+      console.log("Webhook verification successful");
       res.status(200).send(challenge);
     } else {
       console.log("Webhook verification failed: Invalid token or mode");
@@ -56,10 +46,6 @@ router.post("/webhook", async (req, res) => {
 
   try {
     console.log("=== WEBHOOK RECEIVED ===");
-    console.log("Timestamp:", new Date().toISOString());
-    console.log("Headers:", JSON.stringify(req.headers, null, 2));
-    console.log("Body:", JSON.stringify(req.body, null, 2));
-    console.log("========================");
 
     // Process the incoming message
     const messageData = await WhatsAppService.processIncomingMessage(req.body);
@@ -107,15 +93,6 @@ router.post("/webhook", async (req, res) => {
       return res.status(200).send("OK");
     }
 
-    console.log("Processed message data:", {
-      messageId: messageData.messageId,
-      from: messageData.from,
-      to: messageData.to,
-      type: messageData.messageType,
-      hasContent: !!messageData.content,
-      hasMedia: !!messageData.mediaId,
-    });
-
     // Check if we've already processed this message (optimized query)
     try {
       const existingMessage = await pool.query("SELECT id, created_at FROM messages WHERE message_id = $1 LIMIT 1", [
@@ -123,9 +100,6 @@ router.post("/webhook", async (req, res) => {
       ]);
 
       if (existingMessage.rows.length > 0) {
-        console.log(
-          `Message ${messageData.messageId} already processed at ${existingMessage.rows[0].created_at}. Skipping duplicate.`
-        );
         return res.status(200).send("OK");
       }
     } catch (checkError) {
@@ -164,11 +138,6 @@ router.post("/webhook", async (req, res) => {
 
     // Create or get conversation
     const conversation = await DatabaseService.createOrGetConversation(businessId, messageData.from);
-    console.log("Conversation created/found:", {
-      id: conversation.id,
-      business_id: conversation.business_id,
-      phone_number: conversation.phone_number,
-    });
 
     // Save the incoming message
     const savedMessage = await DatabaseService.saveMessage({

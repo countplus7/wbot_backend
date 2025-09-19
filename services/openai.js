@@ -130,7 +130,14 @@ class OpenAIService {
   async generateGeneralResponse(messages, conversationHistory = [], businessTone = null) {
     try {
       const systemPrompt = this.buildSystemPrompt(businessTone);
-      const allMessages = [{ role: "system", content: systemPrompt }, ...conversationHistory, ...messages];
+      
+      // Format conversation history properly for AI service
+      const formattedHistory = conversationHistory.map(msg => ({
+        role: msg.direction === 'inbound' ? 'user' : 'assistant',
+        content: msg.content || ''
+      })).filter(msg => msg.content && msg.content.trim().length > 0);
+      
+      const allMessages = [{ role: "system", content: systemPrompt }, ...formattedHistory, ...messages];
 
       const response = await openai.chat.completions.create({
         model: this.chatModel,

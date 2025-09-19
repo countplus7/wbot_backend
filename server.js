@@ -371,11 +371,11 @@ const server = app.listen(PORT, "0.0.0.0", () => {
 
   console.log(`Server running on port ${PORT}`);
 
-  if (isDev) {
-    console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
-    console.log(`Health check: http://localhost:${PORT}/health`);
-    console.log(`Test endpoint: http://localhost:${PORT}/test`);
-  }
+  // if (isDev) {
+  //   console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+  //   console.log(`Health check: http://localhost:${PORT}/health`);
+  //   console.log(`Test endpoint: http://localhost:${PORT}/test`);
+  // }
 });
 
 // Optimized error handling for server startup
