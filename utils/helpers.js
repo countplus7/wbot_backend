@@ -1,20 +1,19 @@
-﻿const crypto = require('crypto');
-const fs = require('fs-extra');
-const path = require('path');
+﻿const crypto = require("crypto");
+const fs = require("fs-extra");
+const path = require("path");
 
 /**
  * Enhanced Utility Helpers for WhatsApp Bot
  * Provides common utility functions used across the application
  */
 class Helpers {
-  
   /**
    * Generate a secure random string
    * @param {number} length - Length of the random string
    * @returns {string} Random string
    */
   static generateRandomString(length = 32) {
-    return crypto.randomBytes(length).toString('hex');
+    return crypto.randomBytes(length).toString("hex");
   }
 
   /**
@@ -23,7 +22,7 @@ class Helpers {
    */
   static generateUniqueId() {
     const timestamp = Date.now().toString();
-    const random = crypto.randomBytes(8).toString('hex');
+    const random = crypto.randomBytes(8).toString("hex");
     return `${timestamp}_${random}`;
   }
 
@@ -34,8 +33,8 @@ class Helpers {
    */
   static sanitizeFilename(filename) {
     return filename
-      .replace(/[<>:"/\\|?*]/g, '')
-      .replace(/\s+/g, '_')
+      .replace(/[<>:"/\\|?*]/g, "")
+      .replace(/\s+/g, "_")
       .toLowerCase()
       .substring(0, 100);
   }
@@ -46,11 +45,11 @@ class Helpers {
    * @returns {string} Formatted size
    */
   static formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return "0 Bytes";
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   }
 
   /**
@@ -70,7 +69,7 @@ class Helpers {
    */
   static isValidPhone(phone) {
     const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-    return phoneRegex.test(phone.replace(/\s/g, ''));
+    return phoneRegex.test(phone.replace(/\s/g, ""));
   }
 
   /**
@@ -79,7 +78,7 @@ class Helpers {
    * @returns {string} Cleaned phone number
    */
   static cleanPhoneNumber(phone) {
-    return phone.replace(/[^\d+]/g, '');
+    return phone.replace(/[^\d+]/g, "");
   }
 
   /**
@@ -90,12 +89,12 @@ class Helpers {
   static timeAgo(date) {
     const now = new Date();
     const diffInSeconds = Math.floor((now - date) / 1000);
-    
-    if (diffInSeconds < 60) return 'just now';
+
+    if (diffInSeconds < 60) return "just now";
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
     if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} days ago`;
-    
+
     return date.toLocaleDateString();
   }
 
@@ -105,12 +104,12 @@ class Helpers {
    * @returns {any} Cloned object
    */
   static deepClone(obj) {
-    if (obj === null || typeof obj !== 'object') return obj;
+    if (obj === null || typeof obj !== "object") return obj;
     if (obj instanceof Date) return new Date(obj.getTime());
-    if (obj instanceof Array) return obj.map(item => this.deepClone(item));
-    if (typeof obj === 'object') {
+    if (obj instanceof Array) return obj.map((item) => this.deepClone(item));
+    if (typeof obj === "object") {
       const cloned = {};
-      Object.keys(obj).forEach(key => {
+      Object.keys(obj).forEach((key) => {
         cloned[key] = this.deepClone(obj[key]);
       });
       return cloned;
@@ -139,7 +138,7 @@ class Helpers {
    */
   static truncateText(text, length = 100) {
     if (!text || text.length <= length) return text;
-    return text.substring(0, length).trim() + '...';
+    return text.substring(0, length).trim() + "...";
   }
 
   /**
@@ -148,7 +147,7 @@ class Helpers {
    * @returns {string} Clean text
    */
   static stripHtml(html) {
-    return html.replace(/<[^>]*>/g, '');
+    return html.replace(/<[^>]*>/g, "");
   }
 
   /**
@@ -157,7 +156,7 @@ class Helpers {
    * @returns {string} Escaped string
    */
   static escapeRegex(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   /**
@@ -202,7 +201,7 @@ class Helpers {
       rss: Math.round(usage.rss / 1024 / 1024),
       heapTotal: Math.round(usage.heapTotal / 1024 / 1024),
       heapUsed: Math.round(usage.heapUsed / 1024 / 1024),
-      external: Math.round(usage.external / 1024 / 1024)
+      external: Math.round(usage.external / 1024 / 1024),
     };
   }
 
@@ -212,7 +211,7 @@ class Helpers {
    * @returns {Promise<void>}
    */
   static async sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -224,22 +223,22 @@ class Helpers {
    */
   static async retry(fn, maxAttempts = 3, baseDelay = 1000) {
     let lastError;
-    
+
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         return await fn();
       } catch (error) {
         lastError = error;
-        
+
         if (attempt === maxAttempts) {
           throw error;
         }
-        
+
         const delay = baseDelay * Math.pow(2, attempt - 1);
         await this.sleep(delay);
       }
     }
-    
+
     throw lastError;
   }
 
@@ -281,8 +280,8 @@ class Helpers {
    * @param {string} algorithm - Hash algorithm (default: sha256)
    * @returns {string} Hash
    */
-  static hash(str, algorithm = 'sha256') {
-    return crypto.createHash(algorithm).update(str).digest('hex');
+  static hash(str, algorithm = "sha256") {
+    return crypto.createHash(algorithm).update(str).digest("hex");
   }
 
   /**

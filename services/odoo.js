@@ -52,10 +52,10 @@ class OdooService {
     if (!integration) throw new Error("No Odoo integration found");
 
     return {
-      instance_url: integration.url,  // Map url to instance_url for API calls
-      db: integration.database,       // Map database to db for API calls
+      instance_url: integration.url, // Map url to instance_url for API calls
+      db: integration.database, // Map database to db for API calls
       username: integration.username,
-      api_key: integration.password,  // Map password to api_key for API calls
+      api_key: integration.password, // Map password to api_key for API calls
     };
   }
 
@@ -75,17 +75,17 @@ class OdooService {
       id: 1,
     };
 
-
     const authResponse = await axios.post(`${auth.instance_url}/jsonrpc`, authPayload, {
       headers: {
         "Content-Type": "application/json",
       },
     });
 
-
     if (authResponse.data.error) {
-      console.error('Odoo authentication failed:', authResponse.data.error);
-      throw new Error(`Odoo Authentication Error: ${authResponse.data.error.message || JSON.stringify(authResponse.data.error)}`);
+      console.error("Odoo authentication failed:", authResponse.data.error);
+      throw new Error(
+        `Odoo Authentication Error: ${authResponse.data.error.message || JSON.stringify(authResponse.data.error)}`
+      );
     }
 
     const userId = authResponse.data.result;
@@ -103,16 +103,14 @@ class OdooService {
       id: Math.floor(Math.random() * 1000000),
     };
 
-
     const response = await axios.post(`${auth.instance_url}/jsonrpc`, payload, {
       headers: {
         "Content-Type": "application/json",
       },
     });
 
-
     if (response.data.error) {
-      console.error('Odoo API error details:', response.data.error);
+      console.error("Odoo API error details:", response.data.error);
       throw new Error(`Odoo API Error: ${response.data.error.message || JSON.stringify(response.data.error)}`);
     }
 
@@ -123,7 +121,7 @@ class OdooService {
   async simpleTest(businessId) {
     try {
       const auth = await this.getAuthenticatedClient(businessId);
-      
+
       // Just try to authenticate first
       const payload = {
         jsonrpc: "2.0",
@@ -136,13 +134,11 @@ class OdooService {
         id: 1,
       };
 
-
       const response = await axios.post(`${auth.instance_url}/jsonrpc`, payload, {
         headers: {
           "Content-Type": "application/json",
         },
       });
-
 
       if (response.data.error) {
         throw new Error(`Simple test failed: ${response.data.error.message || JSON.stringify(response.data.error)}`);
@@ -160,7 +156,7 @@ class OdooService {
     try {
       // Test by getting current user info
       const auth = await this.getAuthenticatedClient(businessId);
-      
+
       const payload = {
         jsonrpc: "2.0",
         method: "call",
@@ -172,20 +168,14 @@ class OdooService {
         id: 1,
       };
 
-
-      const response = await axios.post(
-        `${auth.instance_url}/jsonrpc`,
-        payload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
+      const response = await axios.post(`${auth.instance_url}/jsonrpc`, payload, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
       if (response.data.error) {
-        console.error('Test connection failed:', response.data.error);
+        console.error("Test connection failed:", response.data.error);
         throw new Error(`Authentication failed: ${response.data.error.message || JSON.stringify(response.data.error)}`);
       }
 
@@ -232,24 +222,25 @@ class OdooService {
     try {
       const values = {
         partner_id: orderData.partner_id, // Customer ID
-        order_line: orderData.order_lines.map(line => [0, 0, {
-          product_id: line.product_id,
-          product_uom_qty: line.quantity,
-          price_unit: line.price_unit,
-        }]),
+        order_line: orderData.order_lines.map((line) => [
+          0,
+          0,
+          {
+            product_id: line.product_id,
+            product_uom_qty: line.quantity,
+            price_unit: line.price_unit,
+          },
+        ]),
       };
 
-      const result = await this.makeJsonRpcCall(
-        businessId,
-        "create",
-        "sale.order",
-        [values]
-      );
+      const result = await this.makeJsonRpcCall(businessId, "create", "sale.order", [values]);
 
       return { id: result, success: true };
     } catch (error) {
       if (error.message.includes("Object sale.order doesn't exist")) {
-        throw new Error("Sales module is not installed in this Odoo instance. Please install the Sales module to enable order management.");
+        throw new Error(
+          "Sales module is not installed in this Odoo instance. Please install the Sales module to enable order management."
+        );
       }
       throw error;
     }
@@ -311,11 +302,11 @@ class OdooService {
             ],
             { limit }
           );
-          
+
           // Add default price for products without price field
-          products = products.map(product => ({
+          products = products.map((product) => ({
             ...product,
-            list_price: 0 // Default price if list_price field is not available
+            list_price: 0, // Default price if list_price field is not available
           }));
         } else {
           throw fieldError;
@@ -325,13 +316,17 @@ class OdooService {
       return products || [];
     } catch (error) {
       if (error.message.includes("Object product.product doesn't exist")) {
-        throw new Error("Sales module is not installed in this Odoo instance. Please install the Sales module to enable product management.");
+        throw new Error(
+          "Sales module is not installed in this Odoo instance. Please install the Sales module to enable product management."
+        );
       }
-      
+
       if (error.message.includes("Invalid field")) {
-        throw new Error("Product fields are not accessible. This might indicate missing modules or insufficient permissions in Odoo.");
+        throw new Error(
+          "Product fields are not accessible. This might indicate missing modules or insufficient permissions in Odoo."
+        );
       }
-      
+
       throw error;
     }
   }
@@ -367,7 +362,7 @@ class OdooService {
       hasCRM: false,
       hasHelpdesk: false,
       hasPartners: false,
-      availableModels: []
+      availableModels: [],
     };
 
     // Test each model individually with a simple search
@@ -376,7 +371,7 @@ class OdooService {
       { model: "sale.order", key: "hasSales" },
       { model: "crm.lead", key: "hasCRM" },
       { model: "helpdesk.ticket", key: "hasHelpdesk" },
-      { model: "res.partner", key: "hasPartners" }
+      { model: "res.partner", key: "hasPartners" },
     ];
 
     for (const { model, key } of modelsToTest) {

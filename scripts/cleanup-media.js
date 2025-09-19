@@ -1,11 +1,11 @@
-require('dotenv').config();
-const fs = require('fs-extra');
-const path = require('path');
-const pool = require('../config/database');
+require("dotenv").config();
+const fs = require("fs-extra");
+const path = require("path");
+const pool = require("../config/database");
 
 const cleanupMediaFiles = async () => {
   try {
-    console.log('Starting media files cleanup...');
+    console.log("Starting media files cleanup...");
 
     // Get old media files (older than 30 days)
     const result = await pool.query(`
@@ -42,9 +42,8 @@ const cleanupMediaFiles = async () => {
     console.log(`- Files deleted: ${deletedCount}`);
     console.log(`- Database records cleaned: ${cleanupResult.rowCount}`);
     console.log(`- Errors encountered: ${errorCount}`);
-
   } catch (error) {
-    console.error('Error during cleanup:', error);
+    console.error("Error during cleanup:", error);
     throw error;
   }
 };
@@ -52,10 +51,10 @@ const cleanupMediaFiles = async () => {
 const initCleanup = async () => {
   try {
     await cleanupMediaFiles();
-    console.log('Media cleanup completed successfully');
+    console.log("Media cleanup completed successfully");
     process.exit(0);
   } catch (error) {
-    console.error('Media cleanup failed:', error);
+    console.error("Media cleanup failed:", error);
     process.exit(1);
   }
 };
@@ -65,4 +64,4 @@ if (require.main === module) {
   initCleanup();
 }
 
-module.exports = { cleanupMediaFiles }; 
+module.exports = { cleanupMediaFiles };

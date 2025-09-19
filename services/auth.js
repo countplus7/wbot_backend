@@ -1,11 +1,11 @@
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const pool = require('../config/database');
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const pool = require("../config/database");
 
 class AuthService {
   constructor() {
-    this.jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
-    this.jwtExpiry = process.env.JWT_EXPIRY || '24h';
+    this.jwtSecret = process.env.JWT_SECRET || "your-secret-key";
+    this.jwtExpiry = process.env.JWT_EXPIRY || "24h";
   }
 
   /**
@@ -35,11 +35,11 @@ class AuthService {
    */
   generateToken(user) {
     return jwt.sign(
-      { 
-        id: user.id, 
-        username: user.username, 
-        email: user.email, 
-        role: user.role 
+      {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
       },
       this.jwtSecret,
       { expiresIn: this.jwtExpiry }
@@ -61,12 +61,12 @@ class AuthService {
    */
   async adminExists() {
     try {
-      const query = 'SELECT COUNT(*) FROM users WHERE role = $1';
-      const result = await pool.query(query, ['admin']);
+      const query = "SELECT COUNT(*) FROM users WHERE role = $1";
+      const result = await pool.query(query, ["admin"]);
       return parseInt(result.rows[0].count) > 0;
     } catch (error) {
-      console.error('Error checking if admin exists:', error);
-      throw new Error('Failed to check admin existence');
+      console.error("Error checking if admin exists:", error);
+      throw new Error("Failed to check admin existence");
     }
   }
 
@@ -80,13 +80,13 @@ class AuthService {
       // Check if admin already exists
       const adminExists = await this.adminExists();
       if (adminExists) {
-        throw new Error('Admin user already exists');
+        throw new Error("Admin user already exists");
       }
 
       // Check if username or email already exists
       const existingUser = await this.findUserByUsernameOrEmail(userData.username, userData.email);
       if (existingUser) {
-        throw new Error('Username or email already exists');
+        throw new Error("Username or email already exists");
       }
 
       // Hash password
@@ -98,19 +98,13 @@ class AuthService {
         VALUES ($1, $2, $3, $4, $5)
         RETURNING id, username, email, role, status, created_at, updated_at
       `;
-      
-      const values = [
-        userData.username,
-        userData.email,
-        passwordHash,
-        'admin',
-        'active'
-      ];
+
+      const values = [userData.username, userData.email, passwordHash, "admin", "active"];
 
       const result = await pool.query(query, values);
       return result.rows[0];
     } catch (error) {
-      console.error('Error creating admin:', error);
+      console.error("Error creating admin:", error);
       throw error;
     }
   }
@@ -123,12 +117,12 @@ class AuthService {
    */
   async findUserByUsernameOrEmail(username, email) {
     try {
-      const query = 'SELECT * FROM users WHERE username = $1 OR email = $2';
+      const query = "SELECT * FROM users WHERE username = $1 OR email = $2";
       const result = await pool.query(query, [username, email]);
       return result.rows[0] || null;
     } catch (error) {
-      console.error('Error finding user:', error);
-      throw new Error('Failed to find user');
+      console.error("Error finding user:", error);
+      throw new Error("Failed to find user");
     }
   }
 
@@ -139,12 +133,12 @@ class AuthService {
    */
   async findUserByUsername(username) {
     try {
-      const query = 'SELECT * FROM users WHERE username = $1';
+      const query = "SELECT * FROM users WHERE username = $1";
       const result = await pool.query(query, [username]);
       return result.rows[0] || null;
     } catch (error) {
-      console.error('Error finding user by username:', error);
-      throw new Error('Failed to find user');
+      console.error("Error finding user by username:", error);
+      throw new Error("Failed to find user");
     }
   }
 
@@ -159,18 +153,18 @@ class AuthService {
       // Find user
       const user = await this.findUserByUsername(username);
       if (!user) {
-        throw new Error('Invalid credentials');
+        throw new Error("Invalid credentials");
       }
 
       // Check if user is active
-      if (user.status !== 'active') {
-        throw new Error('Account is inactive');
+      if (user.status !== "active") {
+        throw new Error("Account is inactive");
       }
 
       // Verify password
       const isValidPassword = await this.comparePassword(password, user.password_hash);
       if (!isValidPassword) {
-        throw new Error('Invalid credentials');
+        throw new Error("Invalid credentials");
       }
 
       // Generate token
@@ -180,10 +174,10 @@ class AuthService {
       const { password_hash, ...userWithoutPassword } = user;
       return {
         user: userWithoutPassword,
-        token
+        token,
       };
     } catch (error) {
-      console.error('Error during login:', error);
+      console.error("Error during login:", error);
       throw error;
     }
   }
@@ -211,12 +205,12 @@ class AuthService {
       // Handle other fields
       if (updateData.username) {
         // Check if username already exists (excluding current user)
-        const existingUser = await pool.query(
-          'SELECT id FROM users WHERE username = $1 AND id != $2',
-          [updateData.username, userId]
-        );
+        const existingUser = await pool.query("SELECT id FROM users WHERE username = $1 AND id != $2", [
+          updateData.username,
+          userId,
+        ]);
         if (existingUser.rows.length > 0) {
-          throw new Error('Username already exists');
+          throw new Error("Username already exists");
         }
         updates.push(`username = $${paramCount}`);
         values.push(updateData.username);
@@ -225,12 +219,12 @@ class AuthService {
 
       if (updateData.email) {
         // Check if email already exists (excluding current user)
-        const existingUser = await pool.query(
-          'SELECT id FROM users WHERE email = $1 AND id != $2',
-          [updateData.email, userId]
-        );
+        const existingUser = await pool.query("SELECT id FROM users WHERE email = $1 AND id != $2", [
+          updateData.email,
+          userId,
+        ]);
         if (existingUser.rows.length > 0) {
-          throw new Error('Email already exists');
+          throw new Error("Email already exists");
         }
         updates.push(`email = $${paramCount}`);
         values.push(updateData.email);
@@ -244,7 +238,7 @@ class AuthService {
       }
 
       if (updates.length === 0) {
-        throw new Error('No valid fields to update');
+        throw new Error("No valid fields to update");
       }
 
       // Add updated_at
@@ -255,19 +249,19 @@ class AuthService {
 
       const query = `
         UPDATE users 
-        SET ${updates.join(', ')}
+        SET ${updates.join(", ")}
         WHERE id = $${paramCount}
         RETURNING id, username, email, role, status, created_at, updated_at
       `;
 
       const result = await pool.query(query, values);
       if (result.rows.length === 0) {
-        throw new Error('User not found');
+        throw new Error("User not found");
       }
 
       return result.rows[0];
     } catch (error) {
-      console.error('Error updating admin:', error);
+      console.error("Error updating admin:", error);
       throw error;
     }
   }
@@ -279,14 +273,14 @@ class AuthService {
    */
   async getAdminProfile(userId) {
     try {
-      const query = 'SELECT id, username, email, role, status, created_at, updated_at FROM users WHERE id = $1';
+      const query = "SELECT id, username, email, role, status, created_at, updated_at FROM users WHERE id = $1";
       const result = await pool.query(query, [userId]);
       return result.rows[0] || null;
     } catch (error) {
-      console.error('Error getting admin profile:', error);
-      throw new Error('Failed to get admin profile');
+      console.error("Error getting admin profile:", error);
+      throw new Error("Failed to get admin profile");
     }
   }
 }
 
-module.exports = new AuthService(); 
+module.exports = new AuthService();

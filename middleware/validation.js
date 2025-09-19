@@ -13,13 +13,6 @@ const validate = (validations) => {
     // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      const formattedErrors = errors.array().map((error) => ({
-        field: error.param,
-        message: error.msg,
-        value: error.value,
-        location: error.location,
-      }));
-
       return res.status(400).json(createResponse(false, null, "Validation failed", null, "VALIDATION_ERROR"));
     }
 
@@ -74,8 +67,12 @@ const commonValidations = {
   refreshToken: body("refresh_token").isLength({ min: 10 }).withMessage("Refresh token must be at least 10 characters"),
 
   // HubSpot validations
-  hubspotClientId: body("client_id").isLength({ min: 10 }).withMessage("HubSpot Client ID must be at least 10 characters"),
-  hubspotClientSecret: body("client_secret").isLength({ min: 10 }).withMessage("HubSpot Client secret must be at least 10 characters"),
+  hubspotClientId: body("client_id")
+    .isLength({ min: 10 })
+    .withMessage("HubSpot Client ID must be at least 10 characters"),
+  hubspotClientSecret: body("client_secret")
+    .isLength({ min: 10 })
+    .withMessage("HubSpot Client secret must be at least 10 characters"),
 
   // Odoo validations
   odooUrl: body("instance_url").isURL().withMessage("Odoo instance URL must be a valid URL"),
@@ -84,7 +81,9 @@ const commonValidations = {
   odooApiKey: body("api_key").isLength({ min: 1 }).withMessage("API key is required"),
 
   // Airtable validations
-  airtableToken: body("access_token").isLength({ min: 10 }).withMessage("Airtable access token must be at least 10 characters"),
+  airtableToken: body("access_token")
+    .isLength({ min: 10 })
+    .withMessage("Airtable access token must be at least 10 characters"),
   airtableBaseId: body("base_id").isLength({ min: 10 }).withMessage("Airtable base ID must be at least 10 characters"),
   airtableTableName: body("table_name").isLength({ min: 1 }).withMessage("Table name is required"),
 

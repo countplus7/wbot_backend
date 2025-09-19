@@ -13,7 +13,7 @@ const executeWithRetry = async (query, params = [], retries = 3) => {
     } catch (error) {
       if (i === retries - 1) throw error;
       console.log(`Retry ${i + 1}/${retries} for query: ${query.substring(0, 50)}...`);
-      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
     }
   }
 };
@@ -27,7 +27,7 @@ const dropAllTables = async () => {
     // Drop tables in reverse order of dependencies with CASCADE for faster cleanup
     const tables = [
       "intent_cache",
-      "intent_examples", 
+      "intent_examples",
       "intents",
       "conversation_embeddings",
       "faq_embeddings",
@@ -55,7 +55,7 @@ const dropAllTables = async () => {
     });
 
     await Promise.all(dropPromises);
-    
+
     const dropTime = Date.now() - dropStartTime;
     console.log(`✅ All tables dropped successfully in ${dropTime}ms`);
   } catch (error) {
@@ -85,7 +85,7 @@ const createTables = async () => {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           )
-        `
+        `,
       },
       {
         name: "businesses",
@@ -98,7 +98,7 @@ const createTables = async () => {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           )
-        `
+        `,
       },
       {
         name: "whatsapp_configs",
@@ -115,7 +115,7 @@ const createTables = async () => {
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
             UNIQUE(business_id, phone_number_id)
           )
-        `
+        `,
       },
       {
         name: "business_tones",
@@ -130,7 +130,7 @@ const createTables = async () => {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
           )
-        `
+        `,
       },
       {
         name: "conversations",
@@ -144,7 +144,7 @@ const createTables = async () => {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
           )
-        `
+        `,
       },
       {
         name: "messages",
@@ -168,7 +168,7 @@ const createTables = async () => {
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
             FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
           )
-        `
+        `,
       },
       {
         name: "media_files",
@@ -184,7 +184,7 @@ const createTables = async () => {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
           )
-        `
+        `,
       },
       {
         name: "google_workspace_integrations",
@@ -200,7 +200,7 @@ const createTables = async () => {
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
             UNIQUE(business_id)
           )
-        `
+        `,
       },
       {
         name: "hubspot_integrations",
@@ -218,7 +218,7 @@ const createTables = async () => {
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
             UNIQUE(business_id)
           )
-        `
+        `,
       },
       {
         name: "odoo_integrations",
@@ -235,7 +235,7 @@ const createTables = async () => {
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
             UNIQUE(business_id)
           )
-        `
+        `,
       },
       {
         name: "airtable_integrations",
@@ -251,7 +251,7 @@ const createTables = async () => {
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
             UNIQUE(business_id)
           )
-        `
+        `,
       },
       {
         name: "faq_embeddings",
@@ -269,7 +269,7 @@ const createTables = async () => {
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
             UNIQUE(business_id, faq_id)
           )
-        `
+        `,
       },
       {
         name: "conversation_embeddings",
@@ -285,7 +285,7 @@ const createTables = async () => {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
           )
-        `
+        `,
       },
       {
         name: "intents",
@@ -299,7 +299,7 @@ const createTables = async () => {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           )
-        `
+        `,
       },
       {
         name: "intent_examples",
@@ -315,7 +315,7 @@ const createTables = async () => {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (intent_id) REFERENCES intents(id) ON DELETE CASCADE
           )
-        `
+        `,
       },
       {
         name: "intent_cache",
@@ -331,8 +331,8 @@ const createTables = async () => {
             expires_at TIMESTAMP DEFAULT (NOW() + INTERVAL '24 hours'),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           )
-        `
-      }
+        `,
+      },
     ];
 
     // Create tables sequentially to maintain foreign key dependencies
@@ -369,16 +369,16 @@ const createIndexes = async () => {
           "CREATE INDEX IF NOT EXISTS idx_intent_examples_intent_id ON intent_examples(intent_id)",
           "CREATE INDEX IF NOT EXISTS idx_intent_examples_active ON intent_examples(active)",
           "CREATE INDEX IF NOT EXISTS idx_intent_cache_expires ON intent_cache(expires_at)",
-          "CREATE INDEX IF NOT EXISTS idx_intent_cache_hash ON intent_cache(message_hash)"
-        ]
+          "CREATE INDEX IF NOT EXISTS idx_intent_cache_hash ON intent_cache(message_hash)",
+        ],
       },
       {
         name: "Business Indexes",
         queries: [
           "CREATE INDEX IF NOT EXISTS idx_businesses_status ON businesses(status)",
           "CREATE INDEX IF NOT EXISTS idx_whatsapp_configs_business_id ON whatsapp_configs(business_id)",
-          "CREATE INDEX IF NOT EXISTS idx_business_tones_business_id ON business_tones(business_id)"
-        ]
+          "CREATE INDEX IF NOT EXISTS idx_business_tones_business_id ON business_tones(business_id)",
+        ],
       },
       {
         name: "Conversation Indexes",
@@ -388,8 +388,8 @@ const createIndexes = async () => {
           "CREATE INDEX IF NOT EXISTS idx_messages_business_id ON messages(business_id)",
           "CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)",
           "CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id)",
-          "CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)"
-        ]
+          "CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)",
+        ],
       },
       {
         name: "Integration Indexes",
@@ -397,8 +397,8 @@ const createIndexes = async () => {
           "CREATE INDEX IF NOT EXISTS idx_google_workspace_integrations_business_id ON google_workspace_integrations(business_id)",
           "CREATE INDEX IF NOT EXISTS idx_hubspot_integrations_business_id ON hubspot_integrations(business_id)",
           "CREATE INDEX IF NOT EXISTS idx_odoo_integrations_business_id ON odoo_integrations(business_id)",
-          "CREATE INDEX IF NOT EXISTS idx_airtable_integrations_business_id ON airtable_integrations(business_id)"
-        ]
+          "CREATE INDEX IF NOT EXISTS idx_airtable_integrations_business_id ON airtable_integrations(business_id)",
+        ],
       },
       {
         name: "Embedding Indexes",
@@ -406,17 +406,17 @@ const createIndexes = async () => {
           "CREATE INDEX IF NOT EXISTS idx_faq_embeddings_business_id ON faq_embeddings(business_id)",
           "CREATE INDEX IF NOT EXISTS idx_faq_embeddings_source ON faq_embeddings(source)",
           "CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_business_id ON conversation_embeddings(business_id)",
-          "CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_conversation_id ON conversation_embeddings(conversation_id)"
-        ]
+          "CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_conversation_id ON conversation_embeddings(conversation_id)",
+        ],
       },
       {
         name: "Media Indexes",
         queries: [
           "CREATE INDEX IF NOT EXISTS idx_media_files_business_id ON media_files(business_id)",
           "CREATE INDEX IF NOT EXISTS idx_media_files_message_id ON media_files(message_id)",
-          "CREATE INDEX IF NOT EXISTS idx_media_files_file_type ON media_files(file_type)"
-        ]
-      }
+          "CREATE INDEX IF NOT EXISTS idx_media_files_file_type ON media_files(file_type)",
+        ],
+      },
     ];
 
     // Create indexes in parallel within each group
@@ -430,7 +430,7 @@ const createIndexes = async () => {
           console.warn(`⚠️  Warning: Could not create index: ${query.substring(0, 50)}...`);
         }
       });
-      
+
       await Promise.all(groupPromises);
     }
 
@@ -447,22 +447,22 @@ const initDatabase = async () => {
   try {
     console.log("🚀 Starting database initialization...");
     console.log("⚠️  WARNING: This will completely delete all existing data!");
-    
+
     const totalStartTime = Date.now();
-    
+
     await dropAllTables();
     await createTables();
     await createIndexes();
-    
+
     const totalTime = Date.now() - totalStartTime;
-    
+
     console.log("\n🎉 Database initialization completed successfully!");
     console.log(` Performance Summary:`);
     console.log(`   • Tables created: ${tablesCreated}`);
     console.log(`   • Indexes created: ${indexesCreated}`);
     console.log(`   • Total time: ${totalTime}ms`);
     console.log(`   • Average per table: ${Math.round(totalTime / tablesCreated)}ms`);
-    
+
     process.exit(0);
   } catch (error) {
     console.error("❌ Database initialization failed:", error);

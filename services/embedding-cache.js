@@ -1,5 +1,5 @@
-const EmbeddingsService = require('./embeddings');
-const pool = require('../config/database');
+const EmbeddingsService = require("./embeddings");
+const pool = require("../config/database");
 
 class EmbeddingCacheService {
   constructor() {
@@ -15,11 +15,11 @@ class EmbeddingCacheService {
   async getEmbedding(text, useCache = true) {
     try {
       const cacheKey = this.generateCacheKey(text);
-      
+
       if (useCache && this.cache.has(cacheKey)) {
         const cached = this.cache.get(cacheKey);
         if (Date.now() - cached.timestamp < this.cacheExpiry) {
-          console.log('Using cached embedding for:', text.substring(0, 50) + '...');
+          console.log("Using cached embedding for:", text.substring(0, 50) + "...");
           return cached.embedding;
         } else {
           this.cache.delete(cacheKey);
@@ -27,17 +27,17 @@ class EmbeddingCacheService {
       }
 
       // Generate new embedding
-      console.log('Generating new embedding for:', text.substring(0, 50) + '...');
+      console.log("Generating new embedding for:", text.substring(0, 50) + "...");
       const embedding = await this.embeddingsService.generateEmbedding(text);
-      
+
       // Cache the result
       if (useCache) {
         this.cacheEmbedding(cacheKey, embedding);
       }
-      
+
       return embedding;
     } catch (error) {
-      console.error('Error getting embedding:', error);
+      console.error("Error getting embedding:", error);
       throw error;
     }
   }
@@ -54,7 +54,7 @@ class EmbeddingCacheService {
       // Check cache first
       for (let i = 0; i < texts.length; i++) {
         const cacheKey = this.generateCacheKey(texts[i]);
-        
+
         if (useCache && this.cache.has(cacheKey)) {
           const cached = this.cache.get(cacheKey);
           if (Date.now() - cached.timestamp < this.cacheExpiry) {
@@ -64,22 +64,24 @@ class EmbeddingCacheService {
             this.cache.delete(cacheKey);
           }
         }
-        
+
         textsToGenerate.push(texts[i]);
         indicesToGenerate.push(i);
       }
 
       // Generate embeddings for uncached texts
       if (textsToGenerate.length > 0) {
-        console.log(`Generating ${textsToGenerate.length} new embeddings, using ${results.filter(r => r).length} cached`);
+        console.log(
+          `Generating ${textsToGenerate.length} new embeddings, using ${results.filter((r) => r).length} cached`
+        );
         const newEmbeddings = await this.embeddingsService.generateEmbeddingsBatch(textsToGenerate);
-        
+
         // Store results and cache new embeddings
         for (let i = 0; i < newEmbeddings.length; i++) {
           const originalIndex = indicesToGenerate[i];
           const embedding = newEmbeddings[i];
           results[originalIndex] = embedding;
-          
+
           if (useCache) {
             this.cacheEmbedding(this.generateCacheKey(textsToGenerate[i]), embedding);
           }
@@ -88,7 +90,7 @@ class EmbeddingCacheService {
 
       return results;
     } catch (error) {
-      console.error('Error getting batch embeddings:', error);
+      console.error("Error getting batch embeddings:", error);
       throw error;
     }
   }
@@ -105,7 +107,7 @@ class EmbeddingCacheService {
 
     this.cache.set(cacheKey, {
       embedding: embedding,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -117,7 +119,7 @@ class EmbeddingCacheService {
     let hash = 0;
     for (let i = 0; i < text.length; i++) {
       const char = text.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
     return hash.toString();
@@ -129,11 +131,10 @@ class EmbeddingCacheService {
   async preloadFAQEmbeddings(businessId) {
     try {
       console.log(`Preloading FAQ embeddings for business ${businessId}`);
-      
-      const result = await pool.query(
-        'SELECT faq_id, question, embedding FROM faq_embeddings WHERE business_id = $1',
-        [businessId]
-      );
+
+      const result = await pool.query("SELECT faq_id, question, embedding FROM faq_embeddings WHERE business_id = $1", [
+        businessId,
+      ]);
 
       for (const row of result.rows) {
         const cacheKey = this.generateCacheKey(row.question);
@@ -142,7 +143,7 @@ class EmbeddingCacheService {
 
       console.log(`Preloaded ${result.rows.length} FAQ embeddings for business ${businessId}`);
     } catch (error) {
-      console.error('Error preloading FAQ embeddings:', error);
+      console.error("Error preloading FAQ embeddings:", error);
     }
   }
 
@@ -163,7 +164,7 @@ class EmbeddingCacheService {
     return {
       size: this.cache.size,
       maxSize: this.maxCacheSize,
-      expiry: this.cacheExpiry
+      expiry: this.cacheExpiry,
     };
   }
 
@@ -176,12 +177,12 @@ class EmbeddingCacheService {
 
       // Get all FAQ embeddings from database
       const result = await pool.query(
-        'SELECT faq_id, question, answer, embedding FROM faq_embeddings WHERE business_id = $1',
+        "SELECT faq_id, question, answer, embedding FROM faq_embeddings WHERE business_id = $1",
         [businessId]
       );
 
       if (result.rows.length === 0) {
-        console.log('No FAQ embeddings found in database');
+        console.log("No FAQ embeddings found in database");
         return null;
       }
 
@@ -195,7 +196,7 @@ class EmbeddingCacheService {
       for (const row of result.rows) {
         const storedEmbedding = JSON.parse(row.embedding);
         const similarity = this.embeddingsService.calculateCosineSimilarity(queryEmbedding, storedEmbedding);
-        
+
         if (similarity > highestSimilarity && similarity >= threshold) {
           highestSimilarity = similarity;
           bestMatch = {
@@ -203,7 +204,7 @@ class EmbeddingCacheService {
             question: row.question,
             answer: row.answer,
             semanticSimilarity: similarity,
-            matchType: 'semantic_cached'
+            matchType: "semantic_cached",
           };
         }
       }
@@ -214,8 +215,8 @@ class EmbeddingCacheService {
 
       return bestMatch;
     } catch (error) {
-      console.error('Error in optimized FAQ search:', error);
-      throw new Error('Failed to perform optimized FAQ search');
+      console.error("Error in optimized FAQ search:", error);
+      throw new Error("Failed to perform optimized FAQ search");
     }
   }
 
@@ -225,14 +226,14 @@ class EmbeddingCacheService {
   async batchPreloadEmbeddings(businessIds) {
     try {
       console.log(`Batch preloading embeddings for ${businessIds.length} businesses`);
-      
+
       for (const businessId of businessIds) {
         await this.preloadFAQEmbeddings(businessId);
       }
-      
-      console.log('Batch preloading completed');
+
+      console.log("Batch preloading completed");
     } catch (error) {
-      console.error('Error in batch preloading:', error);
+      console.error("Error in batch preloading:", error);
     }
   }
 }

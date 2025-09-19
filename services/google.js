@@ -80,16 +80,8 @@ class GoogleService {
    */
   async saveIntegration(integrationData) {
     try {
-      const {
-        business_id,
-        access_token,
-        refresh_token,
-        token_type,
-        expiry_date,
-        scope,
-        created_at,
-        updated_at,
-      } = integrationData;
+      const { business_id, access_token, refresh_token, token_type, expiry_date, scope, created_at, updated_at } =
+        integrationData;
 
       // Check if integration already exists
       const existingIntegration = await pool.query(
@@ -105,15 +97,7 @@ class GoogleService {
                expiry_date = $5, scope = $6, updated_at = $7
            WHERE business_id = $1
            RETURNING *`,
-          [
-            business_id,
-            access_token,
-            refresh_token,
-            token_type,
-            expiry_date,
-            scope,
-            updated_at,
-          ]
+          [business_id, access_token, refresh_token, token_type, expiry_date, scope, updated_at]
         );
         return result.rows[0];
       } else {
@@ -123,16 +107,7 @@ class GoogleService {
            (business_id, access_token, refresh_token, token_type, expiry_date, scope, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            RETURNING *`,
-          [
-            business_id,
-            access_token,
-            refresh_token,
-            token_type,
-            expiry_date,
-            scope,
-            created_at,
-            updated_at,
-          ]
+          [business_id, access_token, refresh_token, token_type, expiry_date, scope, created_at, updated_at]
         );
         return result.rows[0];
       }
@@ -149,10 +124,9 @@ class GoogleService {
    */
   async getIntegration(businessId) {
     try {
-      const result = await pool.query(
-        "SELECT * FROM google_workspace_integrations WHERE business_id = $1",
-        [businessId]
-      );
+      const result = await pool.query("SELECT * FROM google_workspace_integrations WHERE business_id = $1", [
+        businessId,
+      ]);
       return result.rows.length > 0 ? result.rows[0] : null;
     } catch (error) {
       console.error("Error getting integration:", error);
@@ -203,10 +177,7 @@ class GoogleService {
    */
   async removeIntegration(businessId) {
     try {
-      const result = await pool.query(
-        "DELETE FROM google_workspace_integrations WHERE business_id = $1",
-        [businessId]
-      );
+      const result = await pool.query("DELETE FROM google_workspace_integrations WHERE business_id = $1", [businessId]);
       return result.rowCount > 0;
     } catch (error) {
       console.error("Error removing integration:", error);
@@ -277,16 +248,16 @@ class GoogleService {
    */
   createEmailMessage(message) {
     const { to, subject, body, isHtml } = message;
-    
+
     const headers = [
       `To: ${to}`,
       `Subject: ${subject}`,
-      `Content-Type: ${isHtml ? 'text/html' : 'text/plain'}; charset=utf-8`,
+      `Content-Type: ${isHtml ? "text/html" : "text/plain"}; charset=utf-8`,
       `MIME-Version: 1.0`,
-    ].join('\r\n');
+    ].join("\r\n");
 
     const email = `${headers}\r\n\r\n${body}`;
-    return Buffer.from(email).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return Buffer.from(email).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   }
 
   /**
@@ -556,15 +527,17 @@ class GoogleService {
 
       for (let hour = workingHours.start; hour < workingHours.end; hour++) {
         for (let minute = 0; minute < 60; minute += 30) {
-          const slotStart = new Date(`${date}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`);
+          const slotStart = new Date(
+            `${date}T${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:00`
+          );
           const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60000);
 
           if (slotEnd.getHours() > workingHours.end) break;
 
-          const isSlotAvailable = !busyTimes.some(busy => {
+          const isSlotAvailable = !busyTimes.some((busy) => {
             const busyStart = new Date(busy.start);
             const busyEnd = new Date(busy.end);
-            return (slotStart < busyEnd && slotEnd > busyStart);
+            return slotStart < busyEnd && slotEnd > busyStart;
           });
 
           if (isSlotAvailable) {
@@ -722,10 +695,10 @@ class GoogleService {
       for (let day = 0; day < maxDays; day++) {
         const checkDate = new Date(today);
         checkDate.setDate(today.getDate() + day);
-        const dateString = checkDate.toISOString().split('T')[0];
+        const dateString = checkDate.toISOString().split("T")[0];
 
         const availableSlots = await this.findAvailableSlots(businessId, dateString, durationMinutes, options);
-        
+
         if (availableSlots.length > 0) {
           return {
             date: dateString,
@@ -751,7 +724,7 @@ class GoogleService {
   async bulkCreateCalendarEvents(businessId, events) {
     try {
       const results = [];
-      
+
       for (const eventData of events) {
         try {
           const event = await this.createCalendarEvent(businessId, eventData);
@@ -777,7 +750,7 @@ class GoogleService {
   async bulkDeleteCalendarEvents(businessId, eventIds) {
     try {
       const results = [];
-      
+
       for (const eventId of eventIds) {
         try {
           await this.deleteCalendarEvent(businessId, eventId);
@@ -903,12 +876,15 @@ class GoogleService {
     try {
       const drive = await this.getDriveService(businessId);
 
-      const result = await drive.files.get({
-        fileId: fileId,
-        alt: "media",
-      }, {
-        responseType: "stream",
-      });
+      const result = await drive.files.get(
+        {
+          fileId: fileId,
+          alt: "media",
+        },
+        {
+          responseType: "stream",
+        }
+      );
 
       return result.data;
     } catch (error) {
@@ -996,10 +972,9 @@ class GoogleService {
    */
   async getConfig(businessId) {
     try {
-      const result = await pool.query(
-        "SELECT * FROM google_workspace_integrations WHERE business_id = $1",
-        [businessId]
-      );
+      const result = await pool.query("SELECT * FROM google_workspace_integrations WHERE business_id = $1", [
+        businessId,
+      ]);
 
       return result.rows.length > 0 ? result.rows[0] : null;
     } catch (error) {

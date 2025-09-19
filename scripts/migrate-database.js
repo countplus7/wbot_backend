@@ -14,30 +14,36 @@ const executeWithRetry = async (query, params = [], retries = 3) => {
     } catch (error) {
       if (i === retries - 1) throw error;
       console.log(`Retry ${i + 1}/${retries} for query: ${query.substring(0, 50)}...`);
-      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
     }
   }
 };
 
 // Check if table exists
 const tableExists = async (tableName) => {
-  const result = await executeWithRetry(`
+  const result = await executeWithRetry(
+    `
     SELECT EXISTS (
       SELECT FROM information_schema.tables 
       WHERE table_name = $1
     );
-  `, [tableName]);
+  `,
+    [tableName]
+  );
   return result.rows[0].exists;
 };
 
 // Check if column exists
 const columnExists = async (tableName, columnName) => {
-  const result = await executeWithRetry(`
+  const result = await executeWithRetry(
+    `
     SELECT EXISTS (
       SELECT FROM information_schema.columns 
       WHERE table_name = $1 AND column_name = $2
     );
-  `, [tableName, columnName]);
+  `,
+    [tableName, columnName]
+  );
   return result.rows[0].exists;
 };
 
@@ -77,8 +83,10 @@ const migrateDatabase = async () => {
 
     // ===== CORE TABLES =====
     console.log("\n📋 Creating core tables...");
-    
-    await createTableIfNotExists("users", `
+
+    await createTableIfNotExists(
+      "users",
+      `
       CREATE TABLE users (
         id SERIAL PRIMARY KEY,
         username VARCHAR(100) UNIQUE NOT NULL,
@@ -89,9 +97,12 @@ const migrateDatabase = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `);
+    `
+    );
 
-    await createTableIfNotExists("businesses", `
+    await createTableIfNotExists(
+      "businesses",
+      `
       CREATE TABLE businesses (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -100,12 +111,15 @@ const migrateDatabase = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `);
+    `
+    );
 
     // ===== INTEGRATION TABLES =====
     console.log("\n Creating integration tables...");
-    
-    await createTableIfNotExists("hubspot_integrations", `
+
+    await createTableIfNotExists(
+      "hubspot_integrations",
+      `
       CREATE TABLE hubspot_integrations (
         id SERIAL PRIMARY KEY,
         business_id INTEGER NOT NULL,
@@ -120,9 +134,12 @@ const migrateDatabase = async () => {
         FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
         UNIQUE(business_id)
       )
-    `);
+    `
+    );
 
-    await createTableIfNotExists("whatsapp_configs", `
+    await createTableIfNotExists(
+      "whatsapp_configs",
+      `
       CREATE TABLE whatsapp_configs (
         id SERIAL PRIMARY KEY,
         business_id INTEGER NOT NULL,
@@ -135,9 +152,12 @@ const migrateDatabase = async () => {
         FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
         UNIQUE(business_id, phone_number_id)
       )
-    `);
+    `
+    );
 
-    await createTableIfNotExists("business_tones", `
+    await createTableIfNotExists(
+      "business_tones",
+      `
       CREATE TABLE business_tones (
         id SERIAL PRIMARY KEY,
         business_id INTEGER NOT NULL,
@@ -148,9 +168,12 @@ const migrateDatabase = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
       )
-    `);
+    `
+    );
 
-    await createTableIfNotExists("google_workspace_integrations", `
+    await createTableIfNotExists(
+      "google_workspace_integrations",
+      `
       CREATE TABLE google_workspace_integrations (
         id SERIAL PRIMARY KEY,
         business_id INTEGER NOT NULL,
@@ -164,9 +187,12 @@ const migrateDatabase = async () => {
         FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
         UNIQUE(business_id, provider, email)
       )
-    `);
+    `
+    );
 
-    await createTableIfNotExists("odoo_integrations", `
+    await createTableIfNotExists(
+      "odoo_integrations",
+      `
       CREATE TABLE odoo_integrations (
         id SERIAL PRIMARY KEY,
         business_id INTEGER NOT NULL,
@@ -179,9 +205,12 @@ const migrateDatabase = async () => {
         FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
         UNIQUE(business_id)
       )
-    `);
+    `
+    );
 
-    await createTableIfNotExists("airtable_integrations", `
+    await createTableIfNotExists(
+      "airtable_integrations",
+      `
       CREATE TABLE airtable_integrations (
         id SERIAL PRIMARY KEY,
         business_id INTEGER NOT NULL,
@@ -193,12 +222,15 @@ const migrateDatabase = async () => {
         FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
         UNIQUE(business_id)
       )
-    `);
+    `
+    );
 
     // ===== EMBEDDING TABLES =====
     console.log("\n Creating embedding tables...");
-    
-    await createTableIfNotExists("faq_embeddings", `
+
+    await createTableIfNotExists(
+      "faq_embeddings",
+      `
       CREATE TABLE faq_embeddings (
         id SERIAL PRIMARY KEY,
         business_id INTEGER NOT NULL,
@@ -212,9 +244,12 @@ const migrateDatabase = async () => {
         FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
         UNIQUE(business_id, faq_id)
       )
-    `);
+    `
+    );
 
-    await createTableIfNotExists("conversation_embeddings", `
+    await createTableIfNotExists(
+      "conversation_embeddings",
+      `
       CREATE TABLE conversation_embeddings (
         id SERIAL PRIMARY KEY,
         business_id INTEGER NOT NULL,
@@ -226,12 +261,15 @@ const migrateDatabase = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
       )
-    `);
+    `
+    );
 
     // ===== INTENT DETECTION TABLES =====
     console.log("\n Creating intent detection tables...");
-    
-    await createTableIfNotExists("intents", `
+
+    await createTableIfNotExists(
+      "intents",
+      `
       CREATE TABLE intents (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL UNIQUE,
@@ -241,9 +279,12 @@ const migrateDatabase = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `);
+    `
+    );
 
-    await createTableIfNotExists("intent_examples", `
+    await createTableIfNotExists(
+      "intent_examples",
+      `
       CREATE TABLE intent_examples (
         id SERIAL PRIMARY KEY,
         intent_id INTEGER NOT NULL,
@@ -255,9 +296,12 @@ const migrateDatabase = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (intent_id) REFERENCES intents(id) ON DELETE CASCADE
       )
-    `);
+    `
+    );
 
-    await createTableIfNotExists("intent_cache", `
+    await createTableIfNotExists(
+      "intent_cache",
+      `
       CREATE TABLE intent_cache (
         id SERIAL PRIMARY KEY,
         message_hash VARCHAR(64) NOT NULL UNIQUE,
@@ -269,17 +313,18 @@ const migrateDatabase = async () => {
         expires_at TIMESTAMP DEFAULT (NOW() + INTERVAL '24 hours'),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `);
+    `
+    );
 
     // ===== TABLE MIGRATIONS =====
     console.log("\n🔄 Migrating existing tables...");
-    
+
     // Migrate conversations table
     if (await tableExists("conversations")) {
       const hasBusinessId = await columnExists("conversations", "business_id");
       if (!hasBusinessId) {
         console.log("📝 Adding business_id to conversations table...");
-        
+
         await executeWithRetry(`
           ALTER TABLE conversations 
           ADD COLUMN business_id INTEGER,
@@ -294,11 +339,14 @@ const migrateDatabase = async () => {
         `);
 
         // Update existing conversations with default business
-        await executeWithRetry(`
+        await executeWithRetry(
+          `
           UPDATE conversations 
           SET business_id = $1 
           WHERE business_id IS NULL
-        `, [defaultBusiness.rows[0].id]);
+        `,
+          [defaultBusiness.rows[0].id]
+        );
 
         // Make business_id NOT NULL and add foreign key
         await executeWithRetry(`
@@ -310,7 +358,7 @@ const migrateDatabase = async () => {
 
         // Remove temporary column
         await executeWithRetry(`ALTER TABLE conversations DROP COLUMN temp_id`);
-        
+
         console.log("✅ Updated conversations table with business_id");
         columnsAdded++;
       }
@@ -321,7 +369,7 @@ const migrateDatabase = async () => {
       const hasBusinessId = await columnExists("messages", "business_id");
       if (!hasBusinessId) {
         console.log("📝 Adding business_id to messages table...");
-        
+
         await executeWithRetry(`
           ALTER TABLE messages 
           ADD COLUMN business_id INTEGER,
@@ -333,11 +381,14 @@ const migrateDatabase = async () => {
 
         if (defaultBusiness.rows.length > 0) {
           // Update existing messages with default business
-          await executeWithRetry(`
+          await executeWithRetry(
+            `
             UPDATE messages 
             SET business_id = $1 
             WHERE business_id IS NULL
-          `, [defaultBusiness.rows[0].id]);
+          `,
+            [defaultBusiness.rows[0].id]
+          );
 
           // Make business_id NOT NULL and add foreign key
           await executeWithRetry(`
@@ -350,7 +401,7 @@ const migrateDatabase = async () => {
 
         // Remove temporary column
         await executeWithRetry(`ALTER TABLE messages DROP COLUMN temp_id`);
-        
+
         console.log("✅ Updated messages table with business_id");
         columnsAdded++;
       }
@@ -364,7 +415,7 @@ const migrateDatabase = async () => {
       const hasBusinessId = await columnExists("media_files", "business_id");
       if (!hasBusinessId) {
         console.log("📝 Adding business_id to media_files table...");
-        
+
         await executeWithRetry(`
           ALTER TABLE media_files 
           ADD COLUMN business_id INTEGER,
@@ -376,11 +427,14 @@ const migrateDatabase = async () => {
 
         if (defaultBusiness.rows.length > 0) {
           // Update existing media files with default business
-          await executeWithRetry(`
+          await executeWithRetry(
+            `
             UPDATE media_files 
             SET business_id = $1 
             WHERE business_id IS NULL
-          `, [defaultBusiness.rows[0].id]);
+          `,
+            [defaultBusiness.rows[0].id]
+          );
 
           // Make business_id NOT NULL and add foreign key
           await executeWithRetry(`
@@ -393,7 +447,7 @@ const migrateDatabase = async () => {
 
         // Remove temporary column
         await executeWithRetry(`ALTER TABLE media_files DROP COLUMN temp_id`);
-        
+
         console.log("✅ Updated media_files table with business_id");
         columnsAdded++;
       }
@@ -410,16 +464,16 @@ const migrateDatabase = async () => {
           "CREATE INDEX IF NOT EXISTS idx_intent_examples_intent_id ON intent_examples(intent_id)",
           "CREATE INDEX IF NOT EXISTS idx_intent_examples_active ON intent_examples(active)",
           "CREATE INDEX IF NOT EXISTS idx_intent_cache_expires ON intent_cache(expires_at)",
-          "CREATE INDEX IF NOT EXISTS idx_intent_cache_hash ON intent_cache(message_hash)"
-        ]
+          "CREATE INDEX IF NOT EXISTS idx_intent_cache_hash ON intent_cache(message_hash)",
+        ],
       },
       {
         name: "Business Indexes",
         queries: [
           "CREATE INDEX IF NOT EXISTS idx_businesses_status ON businesses(status)",
           "CREATE INDEX IF NOT EXISTS idx_whatsapp_configs_business_id ON whatsapp_configs(business_id)",
-          "CREATE INDEX IF NOT EXISTS idx_business_tones_business_id ON business_tones(business_id)"
-        ]
+          "CREATE INDEX IF NOT EXISTS idx_business_tones_business_id ON business_tones(business_id)",
+        ],
       },
       {
         name: "Conversation Indexes",
@@ -429,8 +483,8 @@ const migrateDatabase = async () => {
           "CREATE INDEX IF NOT EXISTS idx_messages_business_id ON messages(business_id)",
           "CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)",
           "CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id)",
-          "CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)"
-        ]
+          "CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)",
+        ],
       },
       {
         name: "Integration Indexes",
@@ -438,8 +492,8 @@ const migrateDatabase = async () => {
           "CREATE INDEX IF NOT EXISTS idx_google_workspace_integrations_business_id ON google_workspace_integrations(business_id)",
           "CREATE INDEX IF NOT EXISTS idx_hubspot_integrations_business_id ON hubspot_integrations(business_id)",
           "CREATE INDEX IF NOT EXISTS idx_odoo_integrations_business_id ON odoo_integrations(business_id)",
-          "CREATE INDEX IF NOT EXISTS idx_airtable_integrations_business_id ON airtable_integrations(business_id)"
-        ]
+          "CREATE INDEX IF NOT EXISTS idx_airtable_integrations_business_id ON airtable_integrations(business_id)",
+        ],
       },
       {
         name: "Embedding Indexes",
@@ -447,17 +501,17 @@ const migrateDatabase = async () => {
           "CREATE INDEX IF NOT EXISTS idx_faq_embeddings_business_id ON faq_embeddings(business_id)",
           "CREATE INDEX IF NOT EXISTS idx_faq_embeddings_source ON faq_embeddings(source)",
           "CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_business_id ON conversation_embeddings(business_id)",
-          "CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_conversation_id ON conversation_embeddings(conversation_id)"
-        ]
+          "CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_conversation_id ON conversation_embeddings(conversation_id)",
+        ],
       },
       {
         name: "Media Indexes",
         queries: [
           "CREATE INDEX IF NOT EXISTS idx_media_files_business_id ON media_files(business_id)",
           "CREATE INDEX IF NOT EXISTS idx_media_files_message_id ON media_files(message_id)",
-          "CREATE INDEX IF NOT EXISTS idx_media_files_file_type ON media_files(file_type)"
-        ]
-      }
+          "CREATE INDEX IF NOT EXISTS idx_media_files_file_type ON media_files(file_type)",
+        ],
+      },
     ];
 
     // Create indexes in parallel within each group
@@ -471,13 +525,13 @@ const migrateDatabase = async () => {
           console.warn(`⚠️  Warning: Could not create index: ${query.substring(0, 50)}...`);
         }
       });
-      
+
       await Promise.all(groupPromises);
     }
 
     const indexTime = Date.now() - indexStartTime;
     const totalTime = Date.now() - migrationStartTime;
-    
+
     console.log("\n🎉 Database migration completed successfully!");
     console.log(` Performance Summary:`);
     console.log(`   • Tables created: ${tablesCreated}`);
@@ -486,7 +540,6 @@ const migrateDatabase = async () => {
     console.log(`   • Total time: ${totalTime}ms`);
     console.log(`   • Index creation time: ${indexTime}ms`);
     console.log("\n✅ You can now run: npm run init-db");
-    
   } catch (error) {
     console.error("❌ Error during migration:", error);
     throw error;

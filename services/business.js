@@ -233,10 +233,9 @@ class BusinessService {
 
   async getGoogleWorkspaceConfig(businessId) {
     try {
-      const result = await pool.query(
-        "SELECT * FROM google_workspace_integrations WHERE business_id = $1",
-        [businessId]
-      );
+      const result = await pool.query("SELECT * FROM google_workspace_integrations WHERE business_id = $1", [
+        businessId,
+      ]);
 
       return result.rows.length > 0 ? result.rows[0] : null;
     } catch (error) {

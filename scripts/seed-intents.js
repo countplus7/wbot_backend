@@ -13,7 +13,7 @@ const executeWithRetry = async (query, params = [], retries = 3) => {
     } catch (error) {
       if (i === retries - 1) throw error;
       console.log(`🔄 Retry ${i + 1}/${retries} for query...`);
-      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
     }
   }
 };
@@ -34,8 +34,8 @@ const sampleIntents = [
       "Hi",
       "Hello there",
       "Greetings",
-      "How are you?"
-    ]
+      "How are you?",
+    ],
   },
   {
     name: "goodbye",
@@ -51,8 +51,8 @@ const sampleIntents = [
       "Bye bye",
       "Have a good day",
       "Talk to you later",
-      "Catch you later"
-    ]
+      "Catch you later",
+    ],
   },
   {
     name: "question",
@@ -68,8 +68,8 @@ const sampleIntents = [
       "What services do you offer?",
       "Can I get more information?",
       "What do you recommend?",
-      "Is this available?"
-    ]
+      "Is this available?",
+    ],
   },
   {
     name: "complaint",
@@ -85,8 +85,8 @@ const sampleIntents = [
       "I want a refund",
       "This is unacceptable",
       "I'm frustrated",
-      "This is terrible"
-    ]
+      "This is terrible",
+    ],
   },
   {
     name: "compliment",
@@ -102,8 +102,8 @@ const sampleIntents = [
       "I love this",
       "Perfect",
       "Outstanding",
-      "Fantastic work"
-    ]
+      "Fantastic work",
+    ],
   },
   {
     name: "appointment",
@@ -119,8 +119,8 @@ const sampleIntents = [
       "What times do you have?",
       "Can I reserve a slot?",
       "I need to book",
-      "When can we meet?"
-    ]
+      "When can we meet?",
+    ],
   },
   {
     name: "information_request",
@@ -136,8 +136,8 @@ const sampleIntents = [
       "I need to know",
       "What can you tell me",
       "I'm looking for information",
-      "Can you help me understand"
-    ]
+      "Can you help me understand",
+    ],
   },
   {
     name: "confirmation",
@@ -153,8 +153,8 @@ const sampleIntents = [
       "That's right",
       "I confirm",
       "Yes, please",
-      "That works for me"
-    ]
+      "That works for me",
+    ],
   },
   {
     name: "cancellation",
@@ -170,8 +170,8 @@ const sampleIntents = [
       "I won't",
       "I refuse",
       "I'm not interested",
-      "I don't need this"
-    ]
+      "I don't need this",
+    ],
   },
   {
     name: "help_request",
@@ -187,9 +187,9 @@ const sampleIntents = [
       "Help me please",
       "I'm stuck",
       "I need assistance",
-      "Can you help?"
-    ]
-  }
+      "Can you help?",
+    ],
+  },
 ];
 
 // Seed intents and examples
@@ -208,38 +208,43 @@ const seedIntents = async () => {
     // Insert intents and examples
     for (const intent of sampleIntents) {
       console.log(`📝 Creating intent: ${intent.name}`);
-      
+
       // Insert intent
-      const intentResult = await executeWithRetry(`
+      const intentResult = await executeWithRetry(
+        `
         INSERT INTO intents (name, description, confidence_threshold, active)
         VALUES ($1, $2, $3, $4)
         RETURNING id
-      `, [intent.name, intent.description, intent.confidence_threshold, true]);
-      
+      `,
+        [intent.name, intent.description, intent.confidence_threshold, true]
+      );
+
       const intentId = intentResult.rows[0].id;
       intentsCreated++;
 
       // Insert examples for this intent
       for (const exampleText of intent.examples) {
-        await executeWithRetry(`
+        await executeWithRetry(
+          `
           INSERT INTO intent_examples (intent_id, text, weight, active)
           VALUES ($1, $2, $3, $4)
-        `, [intentId, exampleText, 1.0, true]);
+        `,
+          [intentId, exampleText, 1.0, true]
+        );
         examplesCreated++;
       }
-      
+
       console.log(`✅ Created ${intent.examples.length} examples for ${intent.name}`);
     }
 
     const seedTime = Date.now() - seedStartTime;
-    
+
     console.log("\n🎉 Intent seeding completed successfully!");
     console.log(`📊 Seeding Summary:`);
     console.log(`   • Intents created: ${intentsCreated}`);
     console.log(`   • Examples created: ${examplesCreated}`);
     console.log(`   • Total time: ${seedTime}ms`);
     console.log(`   • Average per intent: ${Math.round(seedTime / intentsCreated)}ms`);
-    
   } catch (error) {
     console.error("❌ Error seeding intents:", error);
     throw error;

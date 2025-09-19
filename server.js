@@ -52,7 +52,7 @@ app.use(
     level: 6,
     filter: (req, res) => {
       // Don't compress already compressed files
-      if (req.path.includes('/uploads/')) return false;
+      if (req.path.includes("/uploads/")) return false;
       return compression.filter(req, res);
     },
   })
@@ -64,7 +64,7 @@ app.use(
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
     dnsPrefetchControl: false,
-    frameguard: { action: 'deny' },
+    frameguard: { action: "deny" },
     hidePoweredBy: true,
     hsts: {
       maxAge: 31536000,
@@ -97,10 +97,11 @@ app.use(cors(corsOptions));
 if (isDev) {
   app.use((req, res, next) => {
     const startTime = Date.now();
-    
+
     res.on("finish", () => {
       const duration = Date.now() - startTime;
-      if (duration > 1000) { // Only log slow requests in production
+      if (duration > 1000) {
+        // Only log slow requests in production
         console.log(`SLOW: ${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`);
       }
     });
@@ -111,7 +112,7 @@ if (isDev) {
   // Production: only log errors and slow requests
   app.use((req, res, next) => {
     const startTime = Date.now();
-    
+
     res.on("finish", () => {
       const duration = Date.now() - startTime;
       if (duration > 5000 || res.statusCode >= 500) {
@@ -124,19 +125,23 @@ if (isDev) {
 }
 
 // 5. Optimized body parsing middleware
-app.use(express.json({
-  limit: "10mb",
-  type: ["application/json", "text/plain"],
-  verify: (req, res, buf) => {
-    req.rawBody = buf;
-  },
-}));
+app.use(
+  express.json({
+    limit: "10mb",
+    type: ["application/json", "text/plain"],
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
-app.use(express.urlencoded({ 
-  extended: true, 
-  limit: "10mb",
-  parameterLimit: 1000,
-}));
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "10mb",
+    parameterLimit: 1000,
+  })
+);
 
 // 6. Request ID middleware (optimized)
 let requestCounter = 0;
@@ -158,10 +163,10 @@ app.use(
     setHeaders: (res, filePath) => {
       // Set specific cache headers based on file type
       const ext = path.extname(filePath).toLowerCase();
-      if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
-        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
-      } else if (['.mp3', '.wav', '.ogg', '.m4a'].includes(ext)) {
-        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      if ([".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext)) {
+        res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+      } else if ([".mp3", ".wav", ".ogg", ".m4a"].includes(ext)) {
+        res.setHeader("Cache-Control", "public, max-age=604800, immutable");
       }
     },
   })
@@ -179,7 +184,7 @@ const createRateLimiter = (windowMs, max, message, skipPaths = []) =>
     max,
     standardHeaders: true,
     legacyHeaders: false,
-    skip: (req) => skipPaths.some(path => req.path.startsWith(path)),
+    skip: (req) => skipPaths.some((path) => req.path.startsWith(path)),
     handler: (req, res) => {
       if (isDev) {
         console.log(`Rate limit exceeded for ${req.ip} on ${req.path}`);
@@ -237,11 +242,11 @@ const HEALTH_CACHE_TTL = 5000; // 5 seconds
 
 app.get("/health", (req, res) => {
   const now = Date.now();
-  
-  if (healthCache && (now - healthCacheTime) < HEALTH_CACHE_TTL) {
+
+  if (healthCache && now - healthCacheTime < HEALTH_CACHE_TTL) {
     return res.status(200).json(healthCache);
   }
-  
+
   const healthStatus = {
     status: "OK",
     timestamp: new Date().toISOString(),
@@ -256,7 +261,7 @@ app.get("/health", (req, res) => {
 
   healthCache = createResponse(true, healthStatus);
   healthCacheTime = now;
-  
+
   res.status(200).json(healthCache);
 });
 
@@ -341,12 +346,12 @@ const gracefulShutdown = (signal) => {
 
   server.close(() => {
     console.log("HTTP server closed.");
-    
+
     // Clear any timers or intervals
     if (global.gc) {
       global.gc(); // Force garbage collection if available
     }
-    
+
     console.log("Graceful shutdown completed.");
     process.exit(0);
   });
@@ -363,9 +368,9 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   // Set server keep-alive timeout
   server.keepAliveTimeout = 65000; // 65 seconds
   server.headersTimeout = 66000; // 66 seconds
-  
+
   console.log(`Server running on port ${PORT}`);
-  
+
   if (isDev) {
     console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
     console.log(`Health check: http://localhost:${PORT}/health`);
@@ -409,8 +414,9 @@ if (isDev) {
   setInterval(() => {
     const memUsage = process.memoryUsage();
     const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-    
-    if (heapUsedMB > 500) { // Alert if over 500MB
+
+    if (heapUsedMB > 500) {
+      // Alert if over 500MB
       console.warn(`High memory usage detected: ${heapUsedMB}MB`);
     }
   }, 60000); // Check every minute

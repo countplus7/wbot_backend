@@ -1,4 +1,4 @@
-﻿const logger = require('./logger');
+﻿const logger = require("./logger");
 
 /**
  * Performance Monitoring Utility
@@ -33,13 +33,13 @@ class Performance {
 
     const end = process.hrtime.bigint();
     const duration = Number(end - start) / 1_000_000; // Convert to milliseconds
-    
+
     this.timers.delete(name);
     logger.performance(name, duration, meta);
-    
+
     // Store metric for analysis
     this.recordMetric(name, duration);
-    
+
     return duration;
   }
 
@@ -55,7 +55,7 @@ class Performance {
         total: 0,
         min: Infinity,
         max: -Infinity,
-        average: 0
+        average: 0,
       });
     }
 
@@ -77,7 +77,7 @@ class Performance {
       summary[name] = {
         ...metric,
         min: metric.min === Infinity ? 0 : metric.min,
-        max: metric.max === -Infinity ? 0 : metric.max
+        max: metric.max === -Infinity ? 0 : metric.max,
       };
     }
     return summary;
@@ -100,7 +100,7 @@ class Performance {
     return (target, propertyKey, descriptor) => {
       const originalMethod = descriptor.value;
 
-      descriptor.value = async function(...args) {
+      descriptor.value = async function (...args) {
         performance.startTimer(name);
         try {
           const result = await originalMethod.apply(this, args);
@@ -123,21 +123,21 @@ class Performance {
   getSystemMetrics() {
     const memUsage = process.memoryUsage();
     const cpuUsage = process.cpuUsage();
-    
+
     return {
       memory: {
         rss: Math.round(memUsage.rss / 1024 / 1024),
         heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
         heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
         external: Math.round(memUsage.external / 1024 / 1024),
-        heapUtilization: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100)
+        heapUtilization: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100),
       },
       cpu: {
         user: cpuUsage.user,
-        system: cpuUsage.system
+        system: cpuUsage.system,
       },
       uptime: Math.round(process.uptime()),
-      eventLoopDelay: this.getEventLoopDelay()
+      eventLoopDelay: this.getEventLoopDelay(),
     };
   }
 
@@ -149,9 +149,9 @@ class Performance {
     const start = process.hrtime.bigint();
     setImmediate(() => {
       const delay = Number(process.hrtime.bigint() - start) / 1_000_000;
-      this.recordMetric('eventLoopDelay', delay);
+      this.recordMetric("eventLoopDelay", delay);
     });
-    return this.metrics.get('eventLoopDelay')?.average || 0;
+    return this.metrics.get("eventLoopDelay")?.average || 0;
   }
 }
 

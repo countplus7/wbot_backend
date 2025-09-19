@@ -97,12 +97,7 @@ class HubSpotService {
           token_expires_at = $4,
           updated_at = CURRENT_TIMESTAMP
         RETURNING *`,
-        [
-          data.business_id,
-          data.access_token,
-          data.refresh_token,
-          data.token_expires_at,
-        ]
+        [data.business_id, data.access_token, data.refresh_token, data.token_expires_at]
       );
       return result.rows[0];
     } catch (err) {
@@ -113,10 +108,7 @@ class HubSpotService {
 
   async getIntegration(businessId) {
     try {
-      const result = await pool.query(
-        "SELECT * FROM hubspot_integrations WHERE business_id = $1",
-        [businessId]
-      );
+      const result = await pool.query("SELECT * FROM hubspot_integrations WHERE business_id = $1", [businessId]);
       return result.rows[0] || null;
     } catch (err) {
       console.error("Error getting HubSpot integration:", err);
@@ -149,12 +141,7 @@ class HubSpotService {
         `UPDATE hubspot_integrations 
         SET access_token = $1, refresh_token = $2, token_expires_at = $3, updated_at = CURRENT_TIMESTAMP 
         WHERE business_id = $4`,
-        [
-          tokens.access_token,
-          tokens.refresh_token,
-          new Date(Date.now() + tokens.expires_in * 1000),
-          businessId,
-        ]
+        [tokens.access_token, tokens.refresh_token, new Date(Date.now() + tokens.expires_in * 1000), businessId]
       );
 
       return tokens.access_token;

@@ -60,17 +60,17 @@ class DatabaseService {
           messageData.mediaUrl,
           messageData.isFromUser ? "inbound" : "outbound",
           "received",
-          messageData.localFilePath || null
+          messageData.localFilePath || null,
         ]
       );
-      
+
       console.log(`Message saved successfully: ${messageData.messageId}`);
       return result.rows[0];
     } catch (error) {
       console.error("Error saving message:", error);
-      
+
       // If it's a column doesn't exist error, try without local_file_path
-      if (error.code === '42703' && error.message.includes('local_file_path')) {
+      if (error.code === "42703" && error.message.includes("local_file_path")) {
         console.log("local_file_path column doesn't exist, saving without it");
         try {
           const result = await pool.query(
@@ -95,10 +95,10 @@ class DatabaseService {
               messageData.content,
               messageData.mediaUrl,
               messageData.isFromUser ? "inbound" : "outbound",
-              "received"
+              "received",
             ]
           );
-          
+
           console.log(`Message saved successfully (without local_file_path): ${messageData.messageId}`);
           return result.rows[0];
         } catch (fallbackError) {
@@ -106,7 +106,7 @@ class DatabaseService {
           throw fallbackError;
         }
       }
-      
+
       throw error;
     }
   }
@@ -290,7 +290,7 @@ class DatabaseService {
         LIMIT $2`,
         [conversationId, limit]
       );
-      
+
       // Return messages in chronological order (oldest first)
       return result.rows.reverse();
     } catch (error) {
@@ -309,11 +309,11 @@ class DatabaseService {
          RETURNING *`,
         [status, conversationId]
       );
-      
+
       if (result.rows.length === 0) {
         return null;
       }
-      
+
       console.log(`Conversation ${conversationId} status updated to ${status}`);
       return result.rows[0];
     } catch (error) {
@@ -347,48 +347,44 @@ class DatabaseService {
    */
   async cleanupMalformedEmbeddings(businessId = null) {
     try {
-      console.log('Cleaning up malformed embeddings...');
-      
-      let query = 'SELECT id, business_id, faq_id, embedding FROM faq_embeddings';
+      console.log("Cleaning up malformed embeddings...");
+
+      let query = "SELECT id, business_id, faq_id, embedding FROM faq_embeddings";
       let params = [];
-      
+
       if (businessId) {
-        query += ' WHERE business_id = $1';
+        query += " WHERE business_id = $1";
         params = [businessId];
       }
-      
+
       const result = await pool.query(query, params);
-      
+
       for (const row of result.rows) {
         try {
           // Try to parse the embedding
           let embedding;
-          if (typeof row.embedding === 'string') {
+          if (typeof row.embedding === "string") {
             embedding = JSON.parse(row.embedding);
           } else {
             embedding = row.embedding;
           }
-          
+
           // Validate the embedding
           if (!Array.isArray(embedding) || embedding.length === 0) {
             console.log(`Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id})`);
-            await pool.query(
-              'DELETE FROM faq_embeddings WHERE id = $1',
-              [row.id]
-            );
+            await pool.query("DELETE FROM faq_embeddings WHERE id = $1", [row.id]);
           }
         } catch (error) {
-          console.log(`Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id}): ${error.message}`);
-          await pool.query(
-            'DELETE FROM faq_embeddings WHERE id = $1',
-            [row.id]
+          console.log(
+            `Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id}): ${error.message}`
           );
+          await pool.query("DELETE FROM faq_embeddings WHERE id = $1", [row.id]);
         }
       }
-      
-      console.log('Malformed embeddings cleanup completed');
+
+      console.log("Malformed embeddings cleanup completed");
     } catch (error) {
-      console.error('Error cleaning up malformed embeddings:', error);
+      console.error("Error cleaning up malformed embeddings:", error);
       throw error;
     }
   }

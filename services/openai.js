@@ -40,7 +40,14 @@ class OpenAIService {
 
       // Handle detected intents with confidence threshold
       if (aiIntent && aiIntent.confidence >= 0.65) {
-        return await this.handleDetectedIntent(aiIntent, latestMessage, conversationHistory, businessTone, businessId, phoneNumber);
+        return await this.handleDetectedIntent(
+          aiIntent,
+          latestMessage,
+          conversationHistory,
+          businessTone,
+          businessId,
+          phoneNumber
+        );
       }
 
       // Fallback to general chat completion
@@ -68,15 +75,35 @@ class OpenAIService {
         case "compliment":
           return await this.handleComplimentIntent(latestMessage.content, conversationHistory, businessTone);
         case "appointment":
-          return await this.handleAppointmentIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+          return await this.handleAppointmentIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
         case "information_request":
-          return await this.handleInformationRequestIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+          return await this.handleInformationRequestIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
         case "confirmation":
           return await this.handleConfirmationIntent(latestMessage.content, conversationHistory, businessTone);
         case "cancellation":
-          return await this.handleCancellationIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+          return await this.handleCancellationIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
         case "help_request":
-          return await this.handleHelpRequestIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+          return await this.handleHelpRequestIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
         case "FAQ":
           return await this.handleFAQIntent(businessId, latestMessage.content, conversationHistory, businessTone);
         // Legacy intent support
@@ -103,11 +130,7 @@ class OpenAIService {
   async generateGeneralResponse(messages, conversationHistory = [], businessTone = null) {
     try {
       const systemPrompt = this.buildSystemPrompt(businessTone);
-      const allMessages = [
-        { role: "system", content: systemPrompt },
-        ...conversationHistory,
-        ...messages
-      ];
+      const allMessages = [{ role: "system", content: systemPrompt }, ...conversationHistory, ...messages];
 
       const response = await openai.chat.completions.create({
         model: this.chatModel,
@@ -127,12 +150,13 @@ class OpenAIService {
    * Build system prompt with business tone
    */
   buildSystemPrompt(businessTone = null) {
-    let prompt = "You are a helpful business assistant. Provide clear, professional, and helpful responses to customer inquiries.";
-    
+    let prompt =
+      "You are a helpful business assistant. Provide clear, professional, and helpful responses to customer inquiries.";
+
     if (businessTone && businessTone.tone_instructions) {
       prompt += `\n\nBusiness Tone: ${businessTone.tone_instructions}`;
     }
-    
+
     return prompt;
   }
 
@@ -147,7 +171,7 @@ class OpenAIService {
 
       const imageBuffer = fs.readFileSync(imagePath);
       const base64Image = imageBuffer.toString("base64");
-      
+
       const prompt = userMessage || "Please analyze this image and provide a helpful description.";
       const systemPrompt = this.buildSystemPrompt(businessTone);
 
@@ -203,25 +227,37 @@ class OpenAIService {
   /**
    * Process different message types
    */
-  async processMessage(messageType, content, filePath = null, conversationHistory = [], businessTone = null, businessId = null) {
+  async processMessage(
+    messageType,
+    content,
+    filePath = null,
+    conversationHistory = [],
+    businessTone = null,
+    businessId = null
+  ) {
     try {
       switch (messageType) {
         case "text":
           return await this.chatCompletion([{ role: "user", content }], conversationHistory, businessTone, businessId);
-        
+
         case "image":
           if (!filePath) {
             throw new Error("Image file path is required for image analysis");
           }
           return await this.analyzeImage(filePath, content, businessTone);
-        
+
         case "audio":
           if (!filePath) {
             throw new Error("Audio file path is required for transcription");
           }
           const transcription = await this.transcribeAudio(filePath);
-          return await this.chatCompletion([{ role: "user", content: transcription }], conversationHistory, businessTone, businessId);
-        
+          return await this.chatCompletion(
+            [{ role: "user", content: transcription }],
+            conversationHistory,
+            businessTone,
+            businessId
+          );
+
         default:
           throw new Error(`Unsupported message type: ${messageType}`);
       }
@@ -236,15 +272,13 @@ class OpenAIService {
    */
   detectOdooOrderRequest(message) {
     const orderKeywords = ["order", "purchase", "buy", "place order", "create order"];
-    const hasOrderKeyword = orderKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword.toLowerCase())
-    );
-    
+    const hasOrderKeyword = orderKeywords.some((keyword) => message.toLowerCase().includes(keyword.toLowerCase()));
+
     if (hasOrderKeyword) {
       return {
         type: "order",
         message: message,
-        confidence: 0.7
+        confidence: 0.7,
       };
     }
     return null;
@@ -255,15 +289,13 @@ class OpenAIService {
    */
   detectOdooInvoiceRequest(message) {
     const invoiceKeywords = ["invoice", "bill", "payment", "invoice status", "check invoice"];
-    const hasInvoiceKeyword = invoiceKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword.toLowerCase())
-    );
-    
+    const hasInvoiceKeyword = invoiceKeywords.some((keyword) => message.toLowerCase().includes(keyword.toLowerCase()));
+
     if (hasInvoiceKeyword) {
       return {
         type: "invoice",
         message: message,
-        confidence: 0.7
+        confidence: 0.7,
       };
     }
     return null;
@@ -274,15 +306,13 @@ class OpenAIService {
    */
   detectOdooLeadRequest(message) {
     const leadKeywords = ["lead", "prospect", "potential customer", "new lead", "create lead"];
-    const hasLeadKeyword = leadKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword.toLowerCase())
-    );
-    
+    const hasLeadKeyword = leadKeywords.some((keyword) => message.toLowerCase().includes(keyword.toLowerCase()));
+
     if (hasLeadKeyword) {
       return {
         type: "lead",
         message: message,
-        confidence: 0.7
+        confidence: 0.7,
       };
     }
     return null;
@@ -293,15 +323,13 @@ class OpenAIService {
    */
   detectOdooTicketRequest(message) {
     const ticketKeywords = ["ticket", "support", "issue", "problem", "help", "complaint"];
-    const hasTicketKeyword = ticketKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword.toLowerCase())
-    );
-    
+    const hasTicketKeyword = ticketKeywords.some((keyword) => message.toLowerCase().includes(keyword.toLowerCase()));
+
     if (hasTicketKeyword) {
       return {
         type: "ticket",
         message: message,
-        confidence: 0.7
+        confidence: 0.7,
       };
     }
     return null;
@@ -314,9 +342,9 @@ class OpenAIService {
     try {
       const result = await OdooService.createOrder(businessId, {
         customer_phone: phoneNumber,
-        message: orderRequest.message
+        message: orderRequest.message,
       });
-      
+
       return `✅ Order created successfully. Order ID: ${result.id}`;
     } catch (error) {
       console.error("Error handling Odoo order:", error.message);
@@ -330,13 +358,13 @@ class OpenAIService {
   async detectFAQIntentWithEmbeddings(message) {
     try {
       const result = await this.embeddingsService.detectIntentWithEmbeddings(message, {
-        intentType: "FAQ"
+        intentType: "FAQ",
       });
-      
+
       return {
         isFAQ: result && result.confidence >= 0.7,
         confidence: result ? result.confidence : 0,
-        response: result ? result.response : null
+        response: result ? result.response : null,
       };
     } catch (error) {
       console.error("Error in FAQ intent detection:", error.message);
@@ -347,7 +375,14 @@ class OpenAIService {
   /**
    * Process message with embeddings (legacy compatibility)
    */
-  async processMessageWithEmbeddings(messageType, content, filePath = null, conversationHistory = [], businessTone = null, businessId = null) {
+  async processMessageWithEmbeddings(
+    messageType,
+    content,
+    filePath = null,
+    conversationHistory = [],
+    businessTone = null,
+    businessId = null
+  ) {
     try {
       if (messageType === "text" && content) {
         const faqResult = await this.detectFAQIntentWithEmbeddings(content);
@@ -355,7 +390,7 @@ class OpenAIService {
           return faqResult.response;
         }
       }
-      
+
       return await this.processMessage(messageType, content, filePath, conversationHistory, businessTone, businessId);
     } catch (error) {
       console.error("Error in enhanced message processing:", error.message);
@@ -368,15 +403,15 @@ class OpenAIService {
    */
   detectCalendarIntent(message) {
     const calendarKeywords = ["schedule", "meeting", "appointment", "calendar", "book", "reserve", "time"];
-    const hasCalendarKeyword = calendarKeywords.some(keyword => 
+    const hasCalendarKeyword = calendarKeywords.some((keyword) =>
       message.toLowerCase().includes(keyword.toLowerCase())
     );
-    
+
     if (hasCalendarKeyword) {
       return {
         type: "calendar",
         message: message,
-        confidence: 0.7
+        confidence: 0.7,
       };
     }
     return null;
@@ -387,7 +422,7 @@ class OpenAIService {
     try {
       const systemPrompt = `You are a friendly business assistant. Respond warmly to greetings.
 
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
 
 Acknowledge the greeting and offer assistance.`;
 
@@ -395,7 +430,7 @@ Acknowledge the greeting and offer assistance.`;
         model: this.chatModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message }
+          { role: "user", content: message },
         ],
         temperature: 0.7,
         max_tokens: 100,
@@ -412,7 +447,7 @@ Acknowledge the greeting and offer assistance.`;
     try {
       const systemPrompt = `You are a professional business assistant. Respond politely to goodbyes.
 
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
 
 Acknowledge the goodbye and offer final assistance.`;
 
@@ -420,7 +455,7 @@ Acknowledge the goodbye and offer final assistance.`;
         model: this.chatModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message }
+          { role: "user", content: message },
         ],
         temperature: 0.6,
         max_tokens: 100,
@@ -437,7 +472,7 @@ Acknowledge the goodbye and offer final assistance.`;
     try {
       const systemPrompt = `You are a knowledgeable business assistant. Answer questions clearly and helpfully.
 
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
 
 Provide accurate and helpful answers to customer questions.`;
 
@@ -445,7 +480,7 @@ Provide accurate and helpful answers to customer questions.`;
         model: this.chatModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message }
+          { role: "user", content: message },
         ],
         temperature: 0.7,
         max_tokens: 300,
@@ -462,7 +497,7 @@ Provide accurate and helpful answers to customer questions.`;
     try {
       const systemPrompt = `You are a professional business assistant. Handle complaints with empathy and professionalism.
 
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
 
 Acknowledge the complaint, show understanding, and offer solutions.`;
 
@@ -470,7 +505,7 @@ Acknowledge the complaint, show understanding, and offer solutions.`;
         model: this.chatModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message }
+          { role: "user", content: message },
         ],
         temperature: 0.6,
         max_tokens: 300,
@@ -487,7 +522,7 @@ Acknowledge the complaint, show understanding, and offer solutions.`;
     try {
       const systemPrompt = `You are a gracious business assistant. Respond warmly to compliments.
 
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
 
 Acknowledge the compliment graciously and express appreciation.`;
 
@@ -495,7 +530,7 @@ Acknowledge the compliment graciously and express appreciation.`;
         model: this.chatModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message }
+          { role: "user", content: message },
         ],
         temperature: 0.7,
         max_tokens: 100,
@@ -512,7 +547,7 @@ Acknowledge the compliment graciously and express appreciation.`;
     try {
       const systemPrompt = `You are a helpful business assistant. Handle appointment requests professionally.
 
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
 
 Help with appointment scheduling and provide relevant information.`;
 
@@ -520,7 +555,7 @@ Help with appointment scheduling and provide relevant information.`;
         model: this.chatModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message }
+          { role: "user", content: message },
         ],
         temperature: 0.7,
         max_tokens: 200,
@@ -537,7 +572,7 @@ Help with appointment scheduling and provide relevant information.`;
     try {
       const systemPrompt = `You are a helpful business assistant. Provide information clearly and accurately.
 
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
 
 Answer information requests with helpful and accurate details.`;
 
@@ -545,7 +580,7 @@ Answer information requests with helpful and accurate details.`;
         model: this.chatModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message }
+          { role: "user", content: message },
         ],
         temperature: 0.7,
         max_tokens: 200,
@@ -562,7 +597,7 @@ Answer information requests with helpful and accurate details.`;
     try {
       const systemPrompt = `You are a business assistant. Respond positively to confirmations and agreements.
 
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
 
 Acknowledge the confirmation and provide next steps if appropriate.`;
 
@@ -570,7 +605,7 @@ Acknowledge the confirmation and provide next steps if appropriate.`;
         model: this.chatModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message }
+          { role: "user", content: message },
         ],
         temperature: 0.7,
         max_tokens: 100,
@@ -587,7 +622,7 @@ Acknowledge the confirmation and provide next steps if appropriate.`;
     try {
       const systemPrompt = `You are a business assistant. Handle cancellations professionally and helpfully.
 
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
 
 Acknowledge the cancellation request and provide information about the cancellation process.`;
 
@@ -595,7 +630,7 @@ Acknowledge the cancellation request and provide information about the cancellat
         model: this.chatModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message }
+          { role: "user", content: message },
         ],
         temperature: 0.6,
         max_tokens: 200,
@@ -612,7 +647,7 @@ Acknowledge the cancellation request and provide information about the cancellat
     try {
       const systemPrompt = `You are a helpful business assistant. Provide assistance and guidance.
 
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
 
 Offer help and ask clarifying questions to better understand what the customer needs.`;
 
@@ -620,7 +655,7 @@ Offer help and ask clarifying questions to better understand what the customer n
         model: this.chatModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message }
+          { role: "user", content: message },
         ],
         temperature: 0.7,
         max_tokens: 200,
@@ -638,7 +673,7 @@ Offer help and ask clarifying questions to better understand what the customer n
       // Use embeddings service for FAQ detection
       const faqResult = await this.embeddingsService.detectIntentWithEmbeddings(message, {
         businessId,
-        intentType: "FAQ"
+        intentType: "FAQ",
       });
 
       if (faqResult && faqResult.confidence >= 0.7) {
@@ -646,10 +681,18 @@ Offer help and ask clarifying questions to better understand what the customer n
       }
 
       // Fallback to general response
-      return await this.generateGeneralResponse([{ role: "user", content: message }], conversationHistory, businessTone);
+      return await this.generateGeneralResponse(
+        [{ role: "user", content: message }],
+        conversationHistory,
+        businessTone
+      );
     } catch (error) {
       console.error("Error handling FAQ intent:", error.message);
-      return await this.generateGeneralResponse([{ role: "user", content: message }], conversationHistory, businessTone);
+      return await this.generateGeneralResponse(
+        [{ role: "user", content: message }],
+        conversationHistory,
+        businessTone
+      );
     }
   }
 
@@ -661,7 +704,7 @@ Offer help and ask clarifying questions to better understand what the customer n
           to: intent.user_email,
           subject: intent.subject,
           body: intent.body,
-          isHtml: false
+          isHtml: false,
         });
         return `✅ Email sent successfully to ${intent.user_email}`;
       }
@@ -679,9 +722,9 @@ Offer help and ask clarifying questions to better understand what the customer n
           title: intent.title || "Meeting",
           startTime: intent.startTime || new Date().toISOString(),
           endTime: intent.endTime || new Date(Date.now() + 3600000).toISOString(),
-          description: intent.description || ""
+          description: intent.description || "",
         };
-        
+
         const result = await GoogleService.createCalendarEvent(businessId, eventData);
         return `✅ Calendar event created successfully`;
       }

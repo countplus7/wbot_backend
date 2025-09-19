@@ -15,7 +15,6 @@ class EmbeddingsService {
    */
   async generateEmbedding(text) {
     try {
-
       const response = await this.openai.embeddings.create({
         model: this.embeddingModel,
         input: text,
@@ -36,7 +35,6 @@ class EmbeddingsService {
    */
   async generateEmbeddingsBatch(texts) {
     try {
-
       const response = await this.openai.embeddings.create({
         model: this.embeddingModel,
         input: texts,
@@ -90,7 +88,6 @@ class EmbeddingsService {
    */
   async findMostSimilar(queryText, candidateTexts, threshold = 0.7) {
     try {
-
       // Generate embedding for query
       const queryEmbedding = await this.generateEmbedding(queryText);
 
@@ -125,7 +122,6 @@ class EmbeddingsService {
    */
   async findBestFAQMatch(userQuestion, faqs, threshold = 0.75) {
     try {
-
       if (faqs.length === 0) {
         return null;
       }
@@ -158,7 +154,6 @@ class EmbeddingsService {
    */
   async detectIntentWithEmbeddings(message, intentExamples = {}) {
     try {
-
       // Default intent examples if none provided
       const defaultExamples = {
         FAQ: [
@@ -219,7 +214,6 @@ class EmbeddingsService {
         }
       }
 
-
       return {
         intent: bestIntent,
         confidence: highestSimilarity,
@@ -241,7 +235,6 @@ class EmbeddingsService {
    */
   async searchFAQEmbeddings(businessId, userQuestion, threshold = 0.75) {
     try {
-
       // Get all stored FAQ embeddings for this specific business
       const result = await pool.query(
         "SELECT faq_id, question, answer, embedding FROM faq_embeddings WHERE business_id = $1",
@@ -312,7 +305,6 @@ class EmbeddingsService {
    */
   async storeFAQEmbeddings(businessId, faqs) {
     try {
-
       // Generate embeddings for all FAQ questions
       const questions = faqs.map((faq) => faq.question);
       const embeddings = await this.generateEmbeddingsBatch(questions);
@@ -327,7 +319,6 @@ class EmbeddingsService {
           [businessId, faqs[i].id, questions[i], faqs[i].answer, JSON.stringify(embeddings[i])]
         );
       }
-
     } catch (error) {
       console.error("Error storing FAQ embeddings for business", businessId, ":", error);
       throw new Error("Failed to store FAQ embeddings");
@@ -339,7 +330,6 @@ class EmbeddingsService {
    */
   async analyzeConversationContext(conversationHistory, currentMessage) {
     try {
-
       if (conversationHistory.length === 0) {
         return {
           context: "new_conversation",
@@ -384,7 +374,6 @@ class EmbeddingsService {
         }
       }
 
-
       return {
         context,
         confidence: relevantHistory.length > 0 ? relevantHistory[0].relevance : 0,
@@ -412,7 +401,6 @@ class EmbeddingsService {
     role = "user"
   ) {
     try {
-
       // Generate embedding for the message
       const embedding = await this.generateEmbedding(messageContent);
 
@@ -422,7 +410,6 @@ class EmbeddingsService {
          VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
         [businessId, conversationId, messageId, messageContent, JSON.stringify(embedding), messageType]
       );
-
     } catch (error) {
       console.error("Error storing conversation embedding:", error);
       // Don't throw error as this is a background operation
@@ -434,7 +421,6 @@ class EmbeddingsService {
    */
   async cleanupMalformedEmbeddings(businessId = null) {
     try {
-
       let query = "SELECT id, business_id, faq_id, embedding FROM faq_embeddings";
       let params = [];
 
@@ -463,7 +449,6 @@ class EmbeddingsService {
           await pool.query("DELETE FROM faq_embeddings WHERE id = $1", [row.id]);
         }
       }
-
     } catch (error) {
       console.error("Error cleaning up malformed embeddings:", error);
       throw error;
