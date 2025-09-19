@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const AirtableService = require("../services/airtable");
 const { authMiddleware, adminMiddleware } = require("../middleware/auth");
-const { validate, validationSets } = require("../middleware/validation");
+const { validate, commonValidations, validationSets } = require("../middleware/validation");
 const { createResponse, asyncHandler } = require("../middleware/error-handler");
 
 /**
@@ -12,7 +12,7 @@ const { createResponse, asyncHandler } = require("../middleware/error-handler");
 router.get(
   "/config/:businessId",
   authMiddleware,
-  validate([validationSets.commonValidations.businessId]),
+  validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
     const config = await AirtableService.getConfig(parseInt(businessId));
@@ -22,22 +22,27 @@ router.get(
 );
 
 /**
- * Create or update Airtable configuration
+ * Create or update Airtable configuration for a business
  * POST /api/airtable/config/:businessId
  */
 router.post(
   "/config/:businessId",
   authMiddleware,
   adminMiddleware,
-  validate(validationSets.createAirtableConfig),
+  validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    const { access_token, base_id, table_name } = req.body;
+    const { api_key, base_id, table_name, fields } = req.body;
 
-    const config = await AirtableService.saveConfig(parseInt(businessId), {
-      access_token,
+    if (!api_key || !base_id || !table_name) {
+      return res.status(400).json(createResponse(false, null, "API key, base ID, and table name are required", null, "VALIDATION_ERROR"));
+    }
+
+    const config = await AirtableService.saveIntegration(parseInt(businessId), {
+      api_key,
       base_id,
       table_name,
+      fields: fields || {}
     });
 
     res.status(201).json(createResponse(true, config, "Airtable configuration saved successfully"));
@@ -45,25 +50,36 @@ router.post(
 );
 
 /**
- * Delete Airtable configuration
+ * Update Airtable configuration for a business
+ * PUT /api/airtable/config/:businessId
+ */
+router.put(
+  "/config/:businessId",
+  authMiddleware,
+  adminMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const config = await AirtableService.updateIntegration(parseInt(businessId), req.body);
+
+    res.json(createResponse(true, config, "Airtable configuration updated successfully"));
+  })
+);
+
+/**
+ * Delete Airtable configuration for a business
  * DELETE /api/airtable/config/:businessId
  */
 router.delete(
   "/config/:businessId",
   authMiddleware,
   adminMiddleware,
-  validate([validationSets.commonValidations.businessId]),
+  validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    const deleted = await AirtableService.deleteConfig(parseInt(businessId));
+    await AirtableService.removeIntegration(parseInt(businessId));
 
-    res.json(
-      createResponse(
-        true,
-        { deleted },
-        deleted ? "Airtable configuration deleted successfully" : "No Airtable configuration found to delete"
-      )
-    );
+    res.json(createResponse(true, null, "Airtable configuration deleted successfully"));
   })
 );
 
@@ -74,62 +90,105 @@ router.delete(
 router.post(
   "/test/:businessId",
   authMiddleware,
-  validate([validationSets.commonValidations.businessId]),
+  validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
     const result = await AirtableService.testConnection(parseInt(businessId));
 
-    res.json(createResponse(result.success, result, result.message));
+    res.json(createResponse(true, result, "Airtable connection test completed"));
   })
 );
 
 /**
- * Get all FAQs from Airtable
- * GET /api/airtable/faqs/:businessId
+ * Get Airtable records
+ * GET /api/airtable/records/:businessId
  */
 router.get(
-  "/faqs/:businessId",
+  "/records/:businessId",
   authMiddleware,
-  validate([validationSets.commonValidations.businessId]),
+  validate([commonValidations.businessId, ...validationSets.pagination]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    const faqs = await AirtableService.getFAQs(parseInt(businessId));
+    const { page = 1, limit = 20 } = req.query;
+    const records = await AirtableService.getRecords(parseInt(businessId), { page: parseInt(page), limit: parseInt(limit) });
 
-    res.json(createResponse(true, { faqs, count: faqs.length }, `Found ${faqs.length} FAQs`));
+    res.json(createResponse(true, records));
   })
 );
 
 /**
- * Search FAQs in Airtable
- * POST /api/airtable/faqs/:businessId/search
+ * Create Airtable record
+ * POST /api/airtable/records/:businessId
  */
 router.post(
-  "/faqs/:businessId/search",
+  "/records/:businessId",
   authMiddleware,
-  validate([validationSets.commonValidations.businessId, ...validationSets.search]),
+  validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    const { searchTerm } = req.body;
+    const record = await AirtableService.createRecord(parseInt(businessId), req.body);
 
-    const results = await AirtableService.searchFAQs(parseInt(businessId), searchTerm);
-
-    res.json(createResponse(true, { results, count: results.length }, `Found ${results.length} matching FAQs`));
+    res.status(201).json(createResponse(true, record, "Airtable record created successfully"));
   })
 );
 
 /**
- * Get FAQ statistics
- * GET /api/airtable/faqs/:businessId/stats
+ * Update Airtable record
+ * PUT /api/airtable/records/:businessId/:recordId
+ */
+router.put(
+  "/records/:businessId/:recordId",
+  authMiddleware,
+  validate([commonValidations.businessId, commonValidations.id]),
+  asyncHandler(async (req, res) => {
+    const { businessId, recordId } = req.params;
+    const record = await AirtableService.updateRecord(parseInt(businessId), recordId, req.body);
+
+    if (!record) {
+      return res.status(404).json(createResponse(false, null, "Airtable record not found", null, "NOT_FOUND_ERROR"));
+    }
+
+    res.json(createResponse(true, record, "Airtable record updated successfully"));
+  })
+);
+
+/**
+ * Delete Airtable record
+ * DELETE /api/airtable/records/:businessId/:recordId
+ */
+router.delete(
+  "/records/:businessId/:recordId",
+  authMiddleware,
+  validate([commonValidations.businessId, commonValidations.id]),
+  asyncHandler(async (req, res) => {
+    const { businessId, recordId } = req.params;
+    const success = await AirtableService.deleteRecord(parseInt(businessId), recordId);
+
+    if (!success) {
+      return res.status(404).json(createResponse(false, null, "Airtable record not found", null, "NOT_FOUND_ERROR"));
+    }
+
+    res.json(createResponse(true, null, "Airtable record deleted successfully"));
+  })
+);
+
+/**
+ * Get Airtable integration status
+ * GET /api/airtable/status/:businessId
  */
 router.get(
-  "/faqs/:businessId/stats",
+  "/status/:businessId",
   authMiddleware,
-  validate([validationSets.commonValidations.businessId]),
+  validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    const stats = await AirtableService.getFAQStats(parseInt(businessId));
+    const isIntegrated = await AirtableService.isIntegrated(parseInt(businessId));
+    const config = await AirtableService.getConfig(parseInt(businessId));
 
-    res.json(createResponse(true, stats, "FAQ statistics retrieved successfully"));
+    res.json(createResponse(true, { 
+      isIntegrated, 
+      config: config || null 
+    }));
   })
 );
 

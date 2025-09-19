@@ -2,14 +2,14 @@ const express = require("express");
 const router = express.Router();
 const HubSpotService = require("../services/hubspot");
 const { authMiddleware, adminMiddleware } = require("../middleware/auth");
-const { validate, validationSets } = require("../middleware/validation");
+const { validate, commonValidations, validationSets } = require("../middleware/validation");
 const { createResponse, asyncHandler } = require("../middleware/error-handler");
 
 // OAuth Integration
 router.get(
   "/auth/:businessId",
   authMiddleware,
-  validate([validationSets.commonValidations.businessId]),
+  validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
     const authUrl = HubSpotService.getAuthUrl(parseInt(businessId));
@@ -20,43 +20,146 @@ router.get(
 router.get(
   "/callback",
   asyncHandler(async (req, res) => {
-    const { code, state } = req.query;
+    const { code, state, error } = req.query;
 
-    if (!code || !state) {
-      return res
-        .status(400)
-        .json(createResponse(false, null, "Missing authorization code or state", null, "VALIDATION_ERROR"));
+    if (error) {
+      console.error("HubSpot OAuth error:", error);
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>HubSpot Authentication Error</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .error { color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 500px; }
+          </style>
+        </head>
+        <body>
+          <h1>HubSpot Authentication Error</h1>
+          <div class="error">
+            <p>Authentication failed: ${error}</p>
+            <p>Please try again or contact support.</p>
+          </div>
+        </body>
+        </html>
+      `);
     }
 
-    const { businessId } = JSON.parse(state);
-    const result = await HubSpotService.exchangeCodeForTokens(code, businessId);
+    if (!code || !state) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>HubSpot Authentication Error</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .error { color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 500px; }
+          </style>
+        </head>
+        <body>
+          <h1>HubSpot Authentication Error</h1>
+          <div class="error">
+            <p>Missing authorization code or state parameter.</p>
+            <p>Please try again.</p>
+          </div>
+        </body>
+        </html>
+      `);
+    }
 
-    res.json(createResponse(true, result, "HubSpot integration successful"));
+    try {
+      const stateData = JSON.parse(state);
+      const result = await HubSpotService.exchangeCodeForTokens(code, stateData.businessId);
+      
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>HubSpot Authentication Success</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .success { color: #2e7d32; background: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 500px; }
+          </style>
+        </head>
+        <body>
+          <h1>HubSpot Authentication Successful</h1>
+          <div class="success">
+            <p>HubSpot integration has been configured successfully!</p>
+            <p>Connected portal: ${result.portalId}</p>
+            <p>You can now close this window and return to the application.</p>
+          </div>
+        </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error("Error handling HubSpot OAuth callback:", error);
+      res.status(500).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>HubSpot Authentication Error</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .error { color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 500px; }
+          </style>
+        </head>
+        <body>
+          <h1>HubSpot Authentication Error</h1>
+          <div class="error">
+            <p>Failed to complete authentication: ${error.message}</p>
+            <p>Please try again or contact support.</p>
+          </div>
+        </body>
+        </html>
+      `);
+    }
   })
 );
 
 // Configuration Management
+router.post(
+  "/config/:businessId",
+  authMiddleware,
+  adminMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const { client_id, client_secret, redirect_uri } = req.body;
+
+    if (!client_id || !client_secret) {
+      return res.status(400).json(createResponse(false, null, "Client ID and Client Secret are required", null, "VALIDATION_ERROR"));
+    }
+
+    const config = await HubSpotService.saveIntegration(parseInt(businessId), {
+      client_id,
+      client_secret,
+      redirect_uri
+    });
+
+    res.status(201).json(createResponse(true, config, "HubSpot configuration saved successfully"));
+  })
+);
+
 router.get(
   "/config/:businessId",
   authMiddleware,
-  validate([validationSets.commonValidations.businessId]),
+  validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    const integration = await HubSpotService.getIntegration(parseInt(businessId));
+    const config = await HubSpotService.getConfig(parseInt(businessId));
+    res.json(createResponse(true, config));
+  })
+);
 
-    const response = integration
-      ? {
-          isIntegrated: true,
-          email: integration.email || "Unknown",
-          user_id: integration.user_id || "Unknown",
-          lastUpdated: integration.updated_at,
-        }
-      : {
-          isIntegrated: false,
-          message: "No HubSpot integration found",
-        };
-
-    res.json(createResponse(true, response));
+router.put(
+  "/config/:businessId",
+  authMiddleware,
+  adminMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const config = await HubSpotService.updateIntegration(parseInt(businessId), req.body);
+    res.json(createResponse(true, config, "HubSpot configuration updated successfully"));
   })
 );
 
@@ -64,65 +167,28 @@ router.delete(
   "/config/:businessId",
   authMiddleware,
   adminMiddleware,
-  validate([validationSets.commonValidations.businessId]),
+  validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    await HubSpotService.deleteIntegration(parseInt(businessId));
+    await HubSpotService.removeIntegration(parseInt(businessId));
     res.json(createResponse(true, null, "HubSpot integration removed successfully"));
   })
 );
 
-// CRM Operations
-router.post(
-  "/contacts/:businessId",
+// Integration Status
+router.get(
+  "/status/:businessId",
   authMiddleware,
-  validate([validationSets.commonValidations.businessId]),
+  validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    const contactData = req.body;
-    const result = await HubSpotService.createContact(parseInt(businessId), contactData);
-    res.status(201).json(createResponse(true, result, "Contact created successfully"));
-  })
-);
-
-router.post(
-  "/companies/:businessId",
-  authMiddleware,
-  validate([validationSets.commonValidations.businessId]),
-  asyncHandler(async (req, res) => {
-    const { businessId } = req.params;
-    const companyData = req.body;
-    const result = await HubSpotService.createCompany(parseInt(businessId), companyData);
-    res.status(201).json(createResponse(true, result, "Company created successfully"));
-  })
-);
-
-router.post(
-  "/deals/:businessId",
-  authMiddleware,
-  validate([validationSets.commonValidations.businessId]),
-  asyncHandler(async (req, res) => {
-    const { businessId } = req.params;
-    const dealData = req.body;
-    const result = await HubSpotService.createDeal(parseInt(businessId), dealData);
-    res.status(201).json(createResponse(true, result, "Deal created successfully"));
-  })
-);
-
-router.post(
-  "/contacts/search/:businessId",
-  authMiddleware,
-  validate([validationSets.commonValidations.businessId]),
-  asyncHandler(async (req, res) => {
-    const { businessId } = req.params;
-    const { searchTerm } = req.body;
-
-    if (!searchTerm) {
-      return res.status(400).json(createResponse(false, null, "Search term is required", null, "VALIDATION_ERROR"));
-    }
-
-    const result = await HubSpotService.searchContacts(parseInt(businessId), searchTerm);
-    res.json(createResponse(true, result));
+    const isIntegrated = await HubSpotService.isIntegrated(parseInt(businessId));
+    const config = await HubSpotService.getConfig(parseInt(businessId));
+    
+    res.json(createResponse(true, { 
+      isIntegrated, 
+      config: config || null 
+    }));
   })
 );
 

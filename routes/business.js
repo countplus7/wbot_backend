@@ -79,36 +79,40 @@ router.delete(
 
 // WhatsApp Configuration Routes
 router.get(
-  "/businesses/:businessId/whatsapp-config",
+  "/businesses/:businessId/whatsapp",
   authMiddleware,
   validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    const config = await businessService.getWhatsAppConfig(businessId);
+    const config = await businessService.getWhatsAppConfigByBusinessId(businessId);
     res.json(createResponse(true, config));
   })
 );
 
 router.post(
-  "/businesses/:businessId/whatsapp-config",
+  "/businesses/:businessId/whatsapp",
   authMiddleware,
   adminMiddleware,
   validate(validationSets.createWhatsAppConfig),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    const config = await businessService.createWhatsAppConfig(businessId, req.body);
+    const configData = {
+      ...req.body,
+      business_id: parseInt(businessId),
+    };
+    const config = await businessService.createWhatsAppConfig(configData);
     res.status(201).json(createResponse(true, config, "WhatsApp configuration created successfully"));
   })
 );
 
 router.put(
-  "/businesses/:businessId/whatsapp-config/:id",
+  "/businesses/:businessId/whatsapp",
   authMiddleware,
   adminMiddleware,
   validate(validationSets.updateWhatsAppConfig),
   asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const config = await businessService.updateWhatsAppConfig(id, req.body);
+    const { businessId } = req.params;
+    const config = await businessService.updateWhatsAppConfig(businessId, req.body);
 
     if (!config) {
       return res
@@ -121,13 +125,13 @@ router.put(
 );
 
 router.delete(
-  "/businesses/:businessId/whatsapp-config/:id",
+  "/businesses/:businessId/whatsapp",
   authMiddleware,
   adminMiddleware,
   validate([commonValidations.id]),
   asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const config = await businessService.deleteWhatsAppConfig(id);
+    const { businessId } = req.params;
+    const config = await businessService.deleteWhatsAppConfig(businessId);
 
     if (!config) {
       return res

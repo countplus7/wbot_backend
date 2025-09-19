@@ -100,14 +100,14 @@ class BusinessService {
     }
   }
 
-  async updateWhatsAppConfig(id, configData) {
+  async updateWhatsAppConfig(businessId, configData) {
     try {
       const { phone_number_id, access_token, verify_token, webhook_url } = configData;
       const result = await pool.query(
         `UPDATE whatsapp_configs 
         SET phone_number_id = $1, access_token = $2, verify_token = $3, webhook_url = $4, updated_at = CURRENT_TIMESTAMP 
-        WHERE id = $5 RETURNING *`,
-        [phone_number_id, access_token, verify_token, webhook_url, id]
+        WHERE business_id = $5 RETURNING *`,
+        [phone_number_id, access_token, verify_token, webhook_url, businessId]
       );
       return result.rows[0];
     } catch (error) {
@@ -116,9 +116,9 @@ class BusinessService {
     }
   }
 
-  async deleteWhatsAppConfig(id) {
+  async deleteWhatsAppConfig(businessId) {
     try {
-      const result = await pool.query("DELETE FROM whatsapp_configs WHERE id = $1 RETURNING *", [id]);
+      const result = await pool.query("DELETE FROM whatsapp_configs WHERE business_id = $1 RETURNING *", [businessId]);
       return result.rows[0];
     } catch (error) {
       console.error("Error deleting WhatsApp config:", error);
