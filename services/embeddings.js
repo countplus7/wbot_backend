@@ -300,12 +300,6 @@ class EmbeddingsService {
         }
       }
 
-      if (bestMatch) {
-        console.log(
-          `Found FAQ match in database for business ${businessId}: "${bestMatch.question}" (similarity: ${bestMatch.similarity})`
-        );
-      }
-
       return bestMatch;
     } catch (error) {
       console.error("Error searching FAQ embeddings for business", businessId, ":", error);
