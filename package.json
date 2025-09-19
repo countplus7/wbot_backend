@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "whatsapp-ai-bot-api",
   "version": "1.0.0",
   "description": "High-performance multi-tenant WhatsApp AI Bot API with business management",
@@ -17,8 +17,6 @@
     "health": "curl -s http://localhost:5000/health",
     "health:detailed": "curl -s http://localhost:5000/health/detailed",
     "test:health": "curl -f http://localhost:5000/health > /dev/null",
-    "benchmark": "node --expose-gc scripts/benchmark.js",
-    "memory:check": "node --expose-gc -e \"setInterval(() => { console.log(process.memoryUsage()); global.gc && global.gc(); }, 5000);\"",
     "setup:full": "npm run migrate-db && npm run init-db && npm run seed-intents",
     "setup:dev": "npm run migrate-db && npm run seed-intents"
   },
@@ -28,14 +26,15 @@
     "helmet": "^7.1.0",
     "compression": "^1.7.4",
     "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.3",
     "dotenv": "^16.3.1",
     "openai": "^4.20.1",
     "axios": "^1.6.2",
     "multer": "^1.4.5-lts.1",
-    "fs-extra": "^11.1.1",
-    "crypto": "^1.0.1",
-    "nodemon": "^3.0.2"
+    "fs-extra": "^11.1.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
