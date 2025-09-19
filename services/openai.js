@@ -42,6 +42,41 @@ class OpenAIService {
         console.log(`Routing to handler for intent: ${aiIntent.intent} (confidence: ${aiIntent.confidence}, method: ${aiIntent.method})`);
         
         switch (aiIntent.intent) {
+          case "greeting":
+            return await this.handleGreetingIntent(latestMessage.content, conversationHistory, businessTone);
+            
+          case "goodbye":
+            return await this.handleGoodbyeIntent(latestMessage.content, conversationHistory, businessTone);
+            
+          case "question":
+            return await this.handleQuestionIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+            
+          case "complaint":
+            return await this.handleComplaintIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+            
+          case "compliment":
+            return await this.handleComplimentIntent(latestMessage.content, conversationHistory, businessTone);
+            
+          case "appointment":
+            return await this.handleAppointmentIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+            
+          case "information_request":
+            return await this.handleInformationRequestIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+            
+          case "confirmation":
+            return await this.handleConfirmationIntent(latestMessage.content, conversationHistory, businessTone);
+            
+          case "cancellation":
+            return await this.handleCancellationIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+            
+          case "help_request":
+            return await this.handleHelpRequestIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+            
+          case "general":
+            // Fall through to regular chat completion
+            break;
+            
+          // Legacy intent support for backward compatibility
           case "GOOGLE_EMAIL":
             return await this.handleGoogleEmailWithAI(businessId, aiIntent, conversationHistory, businessTone);
 
@@ -55,12 +90,7 @@ class OpenAIService {
             return await this.handleOdooWithAI(businessId, aiIntent, phoneNumber, conversationHistory, businessTone);
 
           case "FAQ":
-            // Handle FAQ intents
             return await this.handleFAQIntent(businessId, latestMessage.content, conversationHistory, businessTone);
-
-          case "GENERAL":
-            // Fall through to regular chat completion
-            break;
         }
       }
 
@@ -2457,6 +2487,307 @@ Use this context to provide more relevant analysis of the image.`;
     } catch (error) {
       console.error("Error handling FAQ intent:", error);
       return "I'm sorry, I couldn't find an answer to your question. Please try rephrasing or contact support.";
+    }
+  }
+
+  /**
+   * Handle greeting intent
+   */
+  async handleGreetingIntent(message, conversationHistory, businessTone) {
+    try {
+      const systemPrompt = `You are a friendly business assistant. Respond warmly to greetings while maintaining a professional tone.
+
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+
+Respond naturally to greetings like "Hello", "Hi", "Good morning", etc. Keep it brief and friendly.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 100,
+      });
+
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Error handling greeting intent:', error);
+      return "Hello! How can I help you today?";
+    }
+  }
+
+  /**
+   * Handle goodbye intent
+   */
+  async handleGoodbyeIntent(message, conversationHistory, businessTone) {
+    try {
+      const systemPrompt = `You are a friendly business assistant. Respond warmly to farewells and goodbyes.
+
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+
+Respond naturally to goodbyes like "Bye", "Goodbye", "See you later", etc. Keep it brief and friendly.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 100,
+      });
+
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Error handling goodbye intent:', error);
+      return "Goodbye! Have a great day!";
+    }
+  }
+
+  /**
+   * Handle question intent
+   */
+  async handleQuestionIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      // First try to find relevant FAQ
+      const faqResponse = await this.handleFAQIntent(businessId, message, conversationHistory, businessTone);
+      if (faqResponse && !faqResponse.includes("I don't have specific information")) {
+        return faqResponse;
+      }
+
+      // Fallback to general question handling
+      const systemPrompt = `You are a helpful business assistant. Answer the customer's question as best you can.
+
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+
+If you don't have specific information, be honest and offer to help in other ways.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 200,
+      });
+
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Error handling question intent:', error);
+      return "I'd be happy to help with your question. Could you provide more details?";
+    }
+  }
+
+  /**
+   * Handle complaint intent
+   */
+  async handleComplaintIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      const systemPrompt = `You are a customer service representative. Handle complaints with empathy and professionalism.
+
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+
+Acknowledge the customer's concern, apologize if appropriate, and offer solutions. Be understanding and helpful.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
+        ],
+        temperature: 0.6,
+        max_tokens: 250,
+      });
+
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Error handling complaint intent:', error);
+      return "I'm sorry to hear about your concern. Let me help you resolve this issue. Could you provide more details?";
+    }
+  }
+
+  /**
+   * Handle compliment intent
+   */
+  async handleComplimentIntent(message, conversationHistory, businessTone) {
+    try {
+      const systemPrompt = `You are a friendly business assistant. Respond graciously to compliments and praise.
+
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+
+Thank the customer warmly and express appreciation for their feedback.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 100,
+      });
+
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Error handling compliment intent:', error);
+      return "Thank you so much for your kind words! I really appreciate your feedback.";
+    }
+  }
+
+  /**
+   * Handle appointment intent
+   */
+  async handleAppointmentIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      // Try Google Calendar integration first
+      const calendarRequest = this.detectCalendarRequest(message);
+      if (calendarRequest) {
+        return await this.handleGoogleCalendarWithAI(businessId, { intent: "GOOGLE_CALENDAR", action: "schedule", ...calendarRequest }, conversationHistory, businessTone);
+      }
+
+      // Fallback to general appointment handling
+      const systemPrompt = `You are a business assistant helping with appointment scheduling.
+
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+
+Help the customer with their appointment request. If you can't schedule directly, provide helpful information about how to book.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 200,
+      });
+
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Error handling appointment intent:', error);
+      return "I'd be happy to help you schedule an appointment. What time works best for you?";
+    }
+  }
+
+  /**
+   * Handle information request intent
+   */
+  async handleInformationRequestIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      // First try FAQ
+      const faqResponse = await this.handleFAQIntent(businessId, message, conversationHistory, businessTone);
+      if (faqResponse && !faqResponse.includes("I don't have specific information")) {
+        return faqResponse;
+      }
+
+      // Fallback to general information handling
+      const systemPrompt = `You are a helpful business assistant. Provide information as requested.
+
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+
+If you don't have specific information, be honest and offer to help find the information.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 200,
+      });
+
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Error handling information request intent:', error);
+      return "I'd be happy to provide you with information. What specifically would you like to know?";
+    }
+  }
+
+  /**
+   * Handle confirmation intent
+   */
+  async handleConfirmationIntent(message, conversationHistory, businessTone) {
+    try {
+      const systemPrompt = `You are a business assistant. Respond positively to confirmations and agreements.
+
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+
+Acknowledge the confirmation and provide next steps if appropriate.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 100,
+      });
+
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Error handling confirmation intent:', error);
+      return "Perfect! I've noted your confirmation. Is there anything else I can help you with?";
+    }
+  }
+
+  /**
+   * Handle cancellation intent
+   */
+  async handleCancellationIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      const systemPrompt = `You are a business assistant. Handle cancellations professionally and helpfully.
+
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+
+Acknowledge the cancellation request and provide information about the cancellation process.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
+        ],
+        temperature: 0.6,
+        max_tokens: 200,
+      });
+
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Error handling cancellation intent:', error);
+      return "I understand you'd like to cancel. Let me help you with that process. Could you provide more details?";
+    }
+  }
+
+  /**
+   * Handle help request intent
+   */
+  async handleHelpRequestIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      const systemPrompt = `You are a helpful business assistant. Provide assistance and guidance.
+
+${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ''}
+
+Offer help and ask clarifying questions to better understand what the customer needs.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 200,
+      });
+
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Error handling help request intent:', error);
+      return "I'm here to help! What specific assistance do you need? Please let me know how I can support you.";
     }
   }
 }

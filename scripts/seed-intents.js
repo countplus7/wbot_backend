@@ -1,78 +1,266 @@
-const IntentDetectionService = require('../services/intent-detection');
+const pool = require("../config/database");
 
-const intentExamples = [
-  // Email intents
-  { intent: 'GOOGLE_EMAIL', text: 'Send email to john@company.com about the meeting', weight: 1.0 },
-  { intent: 'GOOGLE_EMAIL', text: 'Email the client about project status', weight: 1.0 },
-  { intent: 'GOOGLE_EMAIL', text: 'Send a message to team@company.com', weight: 1.0 },
-  { intent: 'GOOGLE_EMAIL', text: 'Email the invoice to customer', weight: 1.0 },
-  { intent: 'GOOGLE_EMAIL', text: 'Forward this to manager@company.com', weight: 1.0 },
+// Performance monitoring
+const startTime = Date.now();
+let intentsCreated = 0;
+let examplesCreated = 0;
 
-  // Calendar intents
-  { intent: 'GOOGLE_CALENDAR', text: 'Schedule a meeting tomorrow at 2pm', weight: 1.0 },
-  { intent: 'GOOGLE_CALENDAR', text: 'Book an appointment next week', weight: 1.0 },
-  { intent: 'GOOGLE_CALENDAR', text: 'Check my availability for Friday', weight: 1.0 },
-  { intent: 'GOOGLE_CALENDAR', text: 'Create a calendar event for team meeting', weight: 1.0 },
-  { intent: 'GOOGLE_CALENDAR', text: 'What meetings do I have today?', weight: 1.0 },
-  { intent: 'GOOGLE_CALENDAR', text: 'Cancel my 3pm appointment', weight: 1.0 },
+// Enhanced error handling
+const executeWithRetry = async (query, params = [], retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await pool.query(query, params);
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      console.log(`🔄 Retry ${i + 1}/${retries} for query...`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+    }
+  }
+};
 
-  // HubSpot intents
-  { intent: 'HUBSPOT', text: 'Create a new contact for Sarah Johnson', weight: 1.0 },
-  { intent: 'HUBSPOT', text: 'Add a company called TechCorp to HubSpot', weight: 1.0 },
-  { intent: 'HUBSPOT', text: 'Create a new deal worth $5000', weight: 1.0 },
-  { intent: 'HUBSPOT', text: 'Search for contacts in New York', weight: 1.0 },
-  { intent: 'HUBSPOT', text: 'Update contact information for John', weight: 1.0 },
-  { intent: 'HUBSPOT', text: 'Check deal status for ABC project', weight: 1.0 },
-  { intent: 'HUBSPOT', text: 'Create a new lead from website', weight: 1.0 },
-  { intent: 'HUBSPOT', text: 'View my sales pipeline', weight: 1.0 },
-
-  // Odoo intents
-  { intent: 'ODOO', text: 'Create a new order for customer XYZ', weight: 1.0 },
-  { intent: 'ODOO', text: 'Generate an invoice for order #123', weight: 1.0 },
-  { intent: 'ODOO', text: 'Check inventory levels for product ABC', weight: 1.0 },
-  { intent: 'ODOO', text: 'Update product information for SKU-456', weight: 1.0 },
-  { intent: 'ODOO', text: 'Process a return for order #789', weight: 1.0 },
-  { intent: 'ODOO', text: 'Check stock availability', weight: 1.0 },
-  { intent: 'ODOO', text: 'Create purchase order', weight: 1.0 },
-
-  // FAQ intents
-  { intent: 'FAQ', text: 'What are your business hours?', weight: 1.0 },
-  { intent: 'FAQ', text: 'How do I return a product?', weight: 1.0 },
-  { intent: 'FAQ', text: 'What payment methods do you accept?', weight: 1.0 },
-  { intent: 'FAQ', text: 'Do you offer delivery?', weight: 1.0 },
-  { intent: 'FAQ', text: 'What is your refund policy?', weight: 1.0 },
-  { intent: 'FAQ', text: 'How can I contact support?', weight: 1.0 },
-  { intent: 'FAQ', text: 'What are your shipping options?', weight: 1.0 },
-  { intent: 'FAQ', text: 'Do you have a warranty?', weight: 1.0 },
-
-  // General intents
-  { intent: 'GENERAL', text: 'Hello, how are you?', weight: 1.0 },
-  { intent: 'GENERAL', text: 'Thank you for your help', weight: 1.0 },
-  { intent: 'GENERAL', text: 'I have a question', weight: 1.0 },
-  { intent: 'GENERAL', text: 'Can you help me?', weight: 1.0 },
-  { intent: 'GENERAL', text: 'Good morning', weight: 1.0 },
-  { intent: 'GENERAL', text: 'Have a great day', weight: 1.0 },
+// Sample intents with examples
+const sampleIntents = [
+  {
+    name: "greeting",
+    description: "User greetings and salutations",
+    confidence_threshold: 0.8,
+    examples: [
+      "Hello",
+      "Hi there",
+      "Good morning",
+      "Good afternoon",
+      "Good evening",
+      "Hey",
+      "Hi",
+      "Hello there",
+      "Greetings",
+      "How are you?"
+    ]
+  },
+  {
+    name: "goodbye",
+    description: "User farewells and goodbyes",
+    confidence_threshold: 0.8,
+    examples: [
+      "Goodbye",
+      "Bye",
+      "See you later",
+      "Take care",
+      "Farewell",
+      "See you soon",
+      "Bye bye",
+      "Have a good day",
+      "Talk to you later",
+      "Catch you later"
+    ]
+  },
+  {
+    name: "question",
+    description: "User asking questions",
+    confidence_threshold: 0.7,
+    examples: [
+      "What is this?",
+      "How does it work?",
+      "Can you help me?",
+      "What are your hours?",
+      "Where are you located?",
+      "How much does it cost?",
+      "What services do you offer?",
+      "Can I get more information?",
+      "What do you recommend?",
+      "Is this available?"
+    ]
+  },
+  {
+    name: "complaint",
+    description: "User complaints and issues",
+    confidence_threshold: 0.8,
+    examples: [
+      "This is not working",
+      "I'm not satisfied",
+      "There's a problem",
+      "This is broken",
+      "I'm disappointed",
+      "This doesn't meet my expectations",
+      "I want a refund",
+      "This is unacceptable",
+      "I'm frustrated",
+      "This is terrible"
+    ]
+  },
+  {
+    name: "compliment",
+    description: "User compliments and praise",
+    confidence_threshold: 0.8,
+    examples: [
+      "Great job",
+      "Excellent service",
+      "I'm very happy",
+      "This is amazing",
+      "Thank you so much",
+      "You're the best",
+      "I love this",
+      "Perfect",
+      "Outstanding",
+      "Fantastic work"
+    ]
+  },
+  {
+    name: "appointment",
+    description: "User requesting appointments or scheduling",
+    confidence_threshold: 0.7,
+    examples: [
+      "I'd like to schedule an appointment",
+      "Can I book a meeting?",
+      "When are you available?",
+      "I need to make an appointment",
+      "Can we set up a time?",
+      "I want to schedule something",
+      "What times do you have?",
+      "Can I reserve a slot?",
+      "I need to book",
+      "When can we meet?"
+    ]
+  },
+  {
+    name: "information_request",
+    description: "User requesting specific information",
+    confidence_threshold: 0.7,
+    examples: [
+      "Tell me more about",
+      "I need information about",
+      "Can you explain",
+      "What do you know about",
+      "I want to learn about",
+      "Can you provide details",
+      "I need to know",
+      "What can you tell me",
+      "I'm looking for information",
+      "Can you help me understand"
+    ]
+  },
+  {
+    name: "confirmation",
+    description: "User confirming or agreeing",
+    confidence_threshold: 0.8,
+    examples: [
+      "Yes",
+      "That's correct",
+      "I agree",
+      "Confirmed",
+      "Exactly",
+      "Right",
+      "That's right",
+      "I confirm",
+      "Yes, please",
+      "That works for me"
+    ]
+  },
+  {
+    name: "cancellation",
+    description: "User canceling or declining",
+    confidence_threshold: 0.8,
+    examples: [
+      "No",
+      "Cancel",
+      "I don't want to",
+      "Not interested",
+      "I decline",
+      "I can't",
+      "I won't",
+      "I refuse",
+      "I'm not interested",
+      "I don't need this"
+    ]
+  },
+  {
+    name: "help_request",
+    description: "User asking for help or assistance",
+    confidence_threshold: 0.7,
+    examples: [
+      "I need help",
+      "Can you assist me?",
+      "I'm having trouble",
+      "I don't understand",
+      "Can you guide me?",
+      "I need support",
+      "Help me please",
+      "I'm stuck",
+      "I need assistance",
+      "Can you help?"
+    ]
+  }
 ];
 
+// Seed intents and examples
 const seedIntents = async () => {
   try {
-    console.log('Seeding intent examples...');
+    console.log(" Starting intent seeding...");
+    const seedStartTime = Date.now();
+
+    // Clear existing intents and examples
+    console.log("🧹 Clearing existing intents and examples...");
+    await executeWithRetry("DELETE FROM intent_examples");
+    await executeWithRetry("DELETE FROM intent_cache");
+    await executeWithRetry("DELETE FROM intents");
+    console.log("✅ Cleared existing intent data");
+
+    // Insert intents and examples
+    for (const intent of sampleIntents) {
+      console.log(`📝 Creating intent: ${intent.name}`);
+      
+      // Insert intent
+      const intentResult = await executeWithRetry(`
+        INSERT INTO intents (name, description, confidence_threshold, active)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+      `, [intent.name, intent.description, intent.confidence_threshold, true]);
+      
+      const intentId = intentResult.rows[0].id;
+      intentsCreated++;
+
+      // Insert examples for this intent
+      for (const exampleText of intent.examples) {
+        await executeWithRetry(`
+          INSERT INTO intent_examples (intent_id, text, weight, active)
+          VALUES ($1, $2, $3, $4)
+        `, [intentId, exampleText, 1.0, true]);
+        examplesCreated++;
+      }
+      
+      console.log(`✅ Created ${intent.examples.length} examples for ${intent.name}`);
+    }
+
+    const seedTime = Date.now() - seedStartTime;
     
-    const results = await IntentDetectionService.bulkAddIntentExamples(intentExamples);
-    const successCount = results.filter(r => r).length;
+    console.log("\n🎉 Intent seeding completed successfully!");
+    console.log(`📊 Seeding Summary:`);
+    console.log(`   • Intents created: ${intentsCreated}`);
+    console.log(`   • Examples created: ${examplesCreated}`);
+    console.log(`   • Total time: ${seedTime}ms`);
+    console.log(`   • Average per intent: ${Math.round(seedTime / intentsCreated)}ms`);
     
-    console.log(`✅ Seeded ${successCount}/${intentExamples.length} intent examples`);
-    console.log('Intent seeding completed');
+  } catch (error) {
+    console.error("❌ Error seeding intents:", error);
+    throw error;
+  }
+};
+
+// Main seeding function
+const runSeeding = async () => {
+  try {
+    await seedIntents();
+    console.log("✅ Intent seeding completed successfully");
     process.exit(0);
   } catch (error) {
-    console.error('Error seeding intents:', error);
+    console.error("❌ Intent seeding failed:", error);
     process.exit(1);
   }
 };
 
 // Run if called directly
 if (require.main === module) {
-  seedIntents();
+  runSeeding();
 }
 
 module.exports = { seedIntents };
