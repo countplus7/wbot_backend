@@ -495,22 +495,28 @@ router.post("/webhook", async (req, res) => {
       // Get conversation history for context
       const conversationHistory = await DatabaseService.getConversationHistory(conversation.id);
 
-      // Use enhanced message processing with embeddings
-      const enhancedResult = await OpenAIService.processMessageWithEmbeddings(
-        messageData.messageType,
-        messageData.content,
-        localFilePath,
-        conversationHistory,
-        businessTone,
-        businessId
-      );
-
-      if (typeof enhancedResult === "string") {
-        aiResponse = enhancedResult;
-      } else if (enhancedResult.response) {
-        aiResponse = enhancedResult.response;
+      // Check if media processing failed and we don't have a file path
+      if ((messageData.messageType === "image" || messageData.messageType === "audio") && !localFilePath) {
+        // Provide a fallback response for failed media processing
+        aiResponse = `I received your ${messageData.messageType} message, but I'm having trouble processing it right now. Please try sending it again or describe what you'd like help with.`;
       } else {
-        aiResponse = enhancedResult;
+        // Use enhanced message processing with embeddings
+        const enhancedResult = await OpenAIService.processMessageWithEmbeddings(
+          messageData.messageType,
+          messageData.content,
+          localFilePath, // This can be null
+          conversationHistory,
+          businessTone,
+          businessId
+        );
+
+        if (typeof enhancedResult === "string") {
+          aiResponse = enhancedResult;
+        } else if (enhancedResult.response) {
+          aiResponse = enhancedResult.response;
+        } else {
+          aiResponse = enhancedResult;
+        }
       }
 
       // If media processing failed, add a note to the response

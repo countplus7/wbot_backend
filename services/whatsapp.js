@@ -114,56 +114,27 @@ class WhatsAppService {
         throw new Error("No media URL found in response");
       }
 
-      // Download the actual media file
+      // Download the actual media file as a stream
       const downloadResponse = await axios.get(mediaUrl, {
         headers: {
           Authorization: `Bearer ${this.accessToken}`,
         },
-        responseType: "arraybuffer",
+        responseType: "stream",
       });
 
-      // Extract file extension from content type
+      // Extract content type from response headers
       const contentType = downloadResponse.headers["content-type"];
-      let fileExtension = ".bin"; // default
-
-      if (contentType) {
-        if (contentType.includes("image/jpeg") || contentType.includes("image/jpg")) {
-          fileExtension = ".jpg";
-        } else if (contentType.includes("image/png")) {
-          fileExtension = ".png";
-        } else if (contentType.includes("audio/ogg")) {
-          fileExtension = ".ogg";
-        } else if (contentType.includes("audio/mpeg")) {
-          fileExtension = ".mp3";
-        } else if (contentType.includes("audio/wav")) {
-          fileExtension = ".wav";
-        } else if (contentType.includes("application/pdf")) {
-          fileExtension = ".pdf";
-        } else if (contentType.includes("application/msword")) {
-          fileExtension = ".doc";
-        } else if (contentType.includes("application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
-          fileExtension = ".docx";
-        }
-      }
-
-      // Create filename with timestamp
-      const filename = `media_${Date.now()}_${mediaId}${fileExtension}`;
-      const filepath = `uploads/${filename}`;
-
-      // Ensure uploads directory exists
-      if (!fs.existsSync("uploads")) {
-        fs.mkdirSync("uploads", { recursive: true });
-      }
-
-      // Save file to disk
-      fs.writeFileSync(filepath, downloadResponse.data);
+      const contentLength = downloadResponse.headers["content-length"];
 
       return {
-        buffer: downloadResponse.data,
-        filename: filename,
-        filepath: filepath,
-        contentType: contentType,
-        size: downloadResponse.data.length,
+        stream: downloadResponse.data,
+        mimeType: contentType,
+        fileSize: contentLength ? parseInt(contentLength) : undefined,
+        buffer: null, // Keep for backward compatibility
+        filename: null, // Keep for backward compatibility
+        filepath: null, // Keep for backward compatibility
+        contentType: contentType, // Keep for backward compatibility
+        size: contentLength ? parseInt(contentLength) : undefined, // Keep for backward compatibility
       };
     } catch (error) {
       console.error("Error downloading media:", error.response?.data || error.message);
