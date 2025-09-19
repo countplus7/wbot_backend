@@ -77,7 +77,6 @@ router.post('/webhook', async (req, res) => {
             console.log('Sending media download failure notification to user');
             
             // Send a helpful message to the user about the failed media
-            const WhatsAppService = require('../services/whatsapp');
             const recipientId = status.recipient_id;
             
             try {

@@ -15,7 +15,6 @@ class EmbeddingsService {
    */
   async generateEmbedding(text) {
     try {
-      console.log("Generating embedding for text:", text.substring(0, 100) + "...");
 
       const response = await this.openai.embeddings.create({
         model: this.embeddingModel,
@@ -24,7 +23,6 @@ class EmbeddingsService {
       });
 
       const embedding = response.data[0].embedding;
-      console.log("Generated embedding with dimensions:", embedding.length);
 
       return embedding;
     } catch (error) {
@@ -38,7 +36,6 @@ class EmbeddingsService {
    */
   async generateEmbeddingsBatch(texts) {
     try {
-      console.log(`Generating embeddings for ${texts.length} texts`);
 
       const response = await this.openai.embeddings.create({
         model: this.embeddingModel,
@@ -47,7 +44,6 @@ class EmbeddingsService {
       });
 
       const embeddings = response.data.map((item) => item.embedding);
-      console.log(`Generated ${embeddings.length} embeddings`);
 
       return embeddings;
     } catch (error) {
@@ -94,8 +90,6 @@ class EmbeddingsService {
    */
   async findMostSimilar(queryText, candidateTexts, threshold = 0.7) {
     try {
-      console.log(`Finding most similar text for query: "${queryText}"`);
-      console.log(`Comparing against ${candidateTexts.length} candidates`);
 
       // Generate embedding for query
       const queryEmbedding = await this.generateEmbedding(queryText);
@@ -119,7 +113,6 @@ class EmbeddingsService {
         }
       }
 
-      console.log(`Best match found with similarity: ${highestSimilarity}`);
       return bestMatch;
     } catch (error) {
       console.error("Error finding most similar text:", error);
@@ -132,8 +125,6 @@ class EmbeddingsService {
    */
   async findBestFAQMatch(userQuestion, faqs, threshold = 0.75) {
     try {
-      console.log(`Semantic FAQ search for: "${userQuestion}"`);
-      console.log(`Searching through ${faqs.length} FAQs`);
 
       if (faqs.length === 0) {
         return null;
@@ -147,7 +138,6 @@ class EmbeddingsService {
 
       if (bestMatch) {
         const matchedFAQ = faqs[bestMatch.index];
-        console.log(`Found semantic FAQ match: "${matchedFAQ.question}" (similarity: ${bestMatch.similarity})`);
 
         return {
           ...matchedFAQ,
@@ -156,7 +146,6 @@ class EmbeddingsService {
         };
       }
 
-      console.log("No semantic FAQ match found above threshold");
       return null;
     } catch (error) {
       console.error("Error in semantic FAQ matching:", error);
@@ -169,7 +158,6 @@ class EmbeddingsService {
    */
   async detectIntentWithEmbeddings(message, intentExamples = {}) {
     try {
-      console.log("Enhanced intent detection with embeddings for:", message);
 
       // Default intent examples if none provided
       const defaultExamples = {
@@ -231,7 +219,6 @@ class EmbeddingsService {
         }
       }
 
-      console.log(`Detected intent: ${bestIntent} (similarity: ${highestSimilarity})`);
 
       return {
         intent: bestIntent,
@@ -254,7 +241,6 @@ class EmbeddingsService {
    */
   async searchFAQEmbeddings(businessId, userQuestion, threshold = 0.75) {
     try {
-      console.log(`Searching FAQ embeddings for business ${businessId}`);
 
       // Get all stored FAQ embeddings for this specific business
       const result = await pool.query(
@@ -263,7 +249,6 @@ class EmbeddingsService {
       );
 
       if (result.rows.length === 0) {
-        console.log(`No FAQ embeddings found in database for business ${businessId}`);
         return null;
       }
 
@@ -333,7 +318,6 @@ class EmbeddingsService {
    */
   async storeFAQEmbeddings(businessId, faqs) {
     try {
-      console.log(`Storing embeddings for ${faqs.length} FAQs for business ${businessId}`);
 
       // Generate embeddings for all FAQ questions
       const questions = faqs.map((faq) => faq.question);
@@ -350,7 +334,6 @@ class EmbeddingsService {
         );
       }
 
-      console.log(`FAQ embeddings stored successfully for business ${businessId}`);
     } catch (error) {
       console.error("Error storing FAQ embeddings for business", businessId, ":", error);
       throw new Error("Failed to store FAQ embeddings");
@@ -362,7 +345,6 @@ class EmbeddingsService {
    */
   async analyzeConversationContext(conversationHistory, currentMessage) {
     try {
-      console.log("Analyzing conversation context with embeddings");
 
       if (conversationHistory.length === 0) {
         return {
@@ -408,7 +390,6 @@ class EmbeddingsService {
         }
       }
 
-      console.log(`Conversation context: ${context} (${relevantHistory.length} relevant messages)`);
 
       return {
         context,
@@ -437,7 +418,6 @@ class EmbeddingsService {
     role = "user"
   ) {
     try {
-      console.log(`Storing conversation embedding for business ${businessId}, conversation ${conversationId}`);
 
       // Generate embedding for the message
       const embedding = await this.generateEmbedding(messageContent);
@@ -449,7 +429,6 @@ class EmbeddingsService {
         [businessId, conversationId, messageId, messageContent, JSON.stringify(embedding), messageType]
       );
 
-      console.log("Conversation embedding stored successfully");
     } catch (error) {
       console.error("Error storing conversation embedding:", error);
       // Don't throw error as this is a background operation
@@ -461,7 +440,6 @@ class EmbeddingsService {
    */
   async cleanupMalformedEmbeddings(businessId = null) {
     try {
-      console.log("Cleaning up malformed embeddings...");
 
       let query = "SELECT id, business_id, faq_id, embedding FROM faq_embeddings";
       let params = [];
@@ -485,18 +463,13 @@ class EmbeddingsService {
 
           // Validate the embedding
           if (!Array.isArray(embedding) || embedding.length === 0) {
-            console.log(`Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id})`);
             await pool.query("DELETE FROM faq_embeddings WHERE id = $1", [row.id]);
           }
         } catch (error) {
-          console.log(
-            `Deleting malformed embedding for FAQ ${row.faq_id} (business ${row.business_id}): ${error.message}`
-          );
           await pool.query("DELETE FROM faq_embeddings WHERE id = $1", [row.id]);
         }
       }
 
-      console.log("Malformed embeddings cleanup completed");
     } catch (error) {
       console.error("Error cleaning up malformed embeddings:", error);
       throw error;

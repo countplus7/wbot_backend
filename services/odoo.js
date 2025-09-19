@@ -63,17 +63,6 @@ class OdooService {
   async makeJsonRpcCall(businessId, method, model, args = [], kwargs = {}) {
     const auth = await this.getAuthenticatedClient(businessId);
 
-    console.log('Odoo makeJsonRpcCall - businessId:', businessId);
-    console.log('Odoo makeJsonRpcCall - method:', method);
-    console.log('Odoo makeJsonRpcCall - model:', model);
-    console.log('Odoo makeJsonRpcCall - args:', args);
-    console.log('Odoo makeJsonRpcCall - auth:', {
-      instance_url: auth.instance_url,
-      db: auth.db,
-      username: auth.username,
-      api_key: auth.api_key ? '***' : 'null'
-    });
-
     // First, authenticate to get the user ID
     const authPayload = {
       jsonrpc: "2.0",
@@ -86,7 +75,6 @@ class OdooService {
       id: 1,
     };
 
-    console.log('Odoo auth payload:', JSON.stringify(authPayload, null, 2));
 
     const authResponse = await axios.post(`${auth.instance_url}/jsonrpc`, authPayload, {
       headers: {
@@ -94,7 +82,6 @@ class OdooService {
       },
     });
 
-    console.log('Odoo auth response:', JSON.stringify(authResponse.data, null, 2));
 
     if (authResponse.data.error) {
       console.error('Odoo authentication failed:', authResponse.data.error);
@@ -102,7 +89,6 @@ class OdooService {
     }
 
     const userId = authResponse.data.result;
-    console.log('Odoo authentication successful, userId:', userId);
 
     // Now make the actual API call
     const payload = {
@@ -117,7 +103,6 @@ class OdooService {
       id: Math.floor(Math.random() * 1000000),
     };
 
-    console.log('Odoo API payload:', JSON.stringify(payload, null, 2));
 
     const response = await axios.post(`${auth.instance_url}/jsonrpc`, payload, {
       headers: {
@@ -125,7 +110,6 @@ class OdooService {
       },
     });
 
-    console.log('Odoo API response:', JSON.stringify(response.data, null, 2));
 
     if (response.data.error) {
       console.error('Odoo API error details:', response.data.error);
@@ -152,7 +136,6 @@ class OdooService {
         id: 1,
       };
 
-      console.log('Simple test payload:', JSON.stringify(payload, null, 2));
 
       const response = await axios.post(`${auth.instance_url}/jsonrpc`, payload, {
         headers: {
@@ -160,7 +143,6 @@ class OdooService {
         },
       });
 
-      console.log('Simple test response:', JSON.stringify(response.data, null, 2));
 
       if (response.data.error) {
         throw new Error(`Simple test failed: ${response.data.error.message || JSON.stringify(response.data.error)}`);
@@ -179,14 +161,6 @@ class OdooService {
       // Test by getting current user info
       const auth = await this.getAuthenticatedClient(businessId);
       
-      console.log('Testing Odoo connection for businessId:', businessId);
-      console.log('Auth details:', {
-        instance_url: auth.instance_url,
-        db: auth.db,
-        username: auth.username,
-        api_key: auth.api_key ? '***' : 'null'
-      });
-
       const payload = {
         jsonrpc: "2.0",
         method: "call",
@@ -198,7 +172,6 @@ class OdooService {
         id: 1,
       };
 
-      console.log('Test connection payload:', JSON.stringify(payload, null, 2));
 
       const response = await axios.post(
         `${auth.instance_url}/jsonrpc`,
@@ -210,14 +183,12 @@ class OdooService {
         }
       );
 
-      console.log('Test connection response:', JSON.stringify(response.data, null, 2));
 
       if (response.data.error) {
         console.error('Test connection failed:', response.data.error);
         throw new Error(`Authentication failed: ${response.data.error.message || JSON.stringify(response.data.error)}`);
       }
 
-      console.log('Test connection successful, userId:', response.data.result);
       return { success: true, userId: response.data.result };
     } catch (error) {
       console.error("Odoo connection test failed:", error);
@@ -414,9 +385,7 @@ class OdooService {
         await this.makeJsonRpcCall(businessId, "search", model, [[]]);
         moduleStatus[key] = true;
         moduleStatus.availableModels.push(model);
-        console.log(`✅ ${model} is available`);
       } catch (error) {
-        console.log(`❌ ${model} is not available: ${error.message}`);
         moduleStatus[key] = false;
       }
     }
