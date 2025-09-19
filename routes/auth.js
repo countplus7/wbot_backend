@@ -109,7 +109,7 @@ router.get(
   "/verify",
   authMiddleware,
   asyncHandler(async (req, res) => {
-    res.json(createResponse(true, req.user));
+    res.json(createResponse(true, { user: req.user }));
   })
 );
 

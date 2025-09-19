@@ -127,9 +127,9 @@ class BusinessService {
   }
 
   // Business Tone Management
-  async createBusinessTone(toneData) {
+  async createBusinessTone(business_id, toneData) {
     try {
-      const { business_id, tone_name, description, tone_instructions } = toneData;
+      const { tone_name, description, tone_instructions } = toneData;
 
       // Use UPSERT to create or update the tone for this business
       const result = await pool.query(
