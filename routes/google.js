@@ -11,8 +11,8 @@ const { createResponse, asyncHandler } = require("../middleware/error-handler");
  */
 router.get(
   "/auth/:businessId",
-  authMiddleware,
-  validate([commonValidations.businessId]),
+  // authMiddleware,
+  // validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
     const authUrl = googleService.getAuthUrl(parseInt(businessId));
@@ -24,104 +24,145 @@ router.get(
  * Handle Google OAuth callback
  * GET /api/google/callback
  */
-router.get(
-  "/callback",
-  asyncHandler(async (req, res) => {
+router.get("/callback", async (req, res) => {
+  try {
     const { code, state, error } = req.query;
 
     if (error) {
       console.error("OAuth error:", error);
       return res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Google Authentication Error</title>
-        <style>
-          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-          .error { color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 500px; }
-        </style>
-      </head>
-      <body>
-        <h1>Google Authentication Error</h1>
-        <div class="error">
-          <p>Authentication failed: ${error}</p>
-          <p>Please try again or contact support.</p>
-        </div>
-      </body>
-      </html>
-    `);
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Google Authentication Error</title>
+        </head>
+        <body>
+          <script>
+            // Notify parent window of error
+            if (window.opener) {
+              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR' }, '*');
+            }
+            // Close the popup window
+            window.close();
+          </script>
+          <p>Authentication error! This window will close automatically.</p>
+        </body>
+        </html>
+      `);
     }
 
     if (!code || !state) {
-      return res.status(400).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Google Authentication Error</title>
-        <style>
-          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-          .error { color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 500px; }
-        </style>
-      </head>
-      <body>
-        <h1>Google Authentication Error</h1>
-        <div class="error">
-          <p>Missing authorization code or state parameter.</p>
-          <p>Please try again.</p>
-        </div>
-      </body>
-      </html>
-    `);
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Google Authentication Error</title>
+        </head>
+        <body>
+          <script>
+            // Notify parent window of error
+            if (window.opener) {
+              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR' }, '*');
+            }
+            // Close the popup window
+            window.close();
+          </script>
+          <p>Missing parameters! This window will close automatically.</p>
+        </body>
+        </html>
+      `);
     }
 
-    try {
-      const stateData = JSON.parse(state);
-      const result = await googleService.exchangeCodeForTokens(code, stateData.businessId);
+    const { businessId } = JSON.parse(state);
 
+    if (!businessId) {
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Google Authentication Error</title>
+        </head>
+        <body>
+          <script>
+            // Notify parent window of error
+            if (window.opener) {
+              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR' }, '*');
+            }
+            // Close the popup window
+            window.close();
+          </script>
+          <p>Invalid state! This window will close automatically.</p>
+        </body>
+        </html>
+      `);
+    }
+
+    const result = await googleService.exchangeCodeForTokens(code, businessId);
+
+    if (result.success) {
       res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Google Authentication Success</title>
-        <style>
-          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-          .success { color: #2e7d32; background: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 500px; }
-        </style>
-      </head>
-      <body>
-        <h1>Google Authentication Successful</h1>
-        <div class="success">
-          <p>Google Workspace integration has been configured successfully!</p>
-          <p>Connected email: ${result.email}</p>
-          <p>You can now close this window and return to the application.</p>
-        </div>
-      </body>
-      </html>
-    `);
-    } catch (error) {
-      console.error("Error handling OAuth callback:", error);
-      res.status(500).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Google Authentication Success</title>
+        </head>
+        <body>
+          <script>
+            // Notify parent window of success
+            if (window.opener) {
+              window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', email: '${result.email}' }, '*');
+            }
+            // Close the popup window
+            window.close();
+          </script>
+          <p>Authentication successful! This window will close automatically.</p>
+        </body>
+        </html>
+      `);
+    } else {
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Google Authentication Failed</title>
+        </head>
+        <body>
+          <script>
+            // Notify parent window of error
+            if (window.opener) {
+              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR' }, '*');
+            }
+            // Close the popup window
+            window.close();
+          </script>
+          <p>Authentication failed! This window will close automatically.</p>
+        </body>
+        </html>
+      `);
+    }
+  } catch (error) {
+    console.error("Error in OAuth callback:", error);
+    res.send(`
       <!DOCTYPE html>
       <html>
       <head>
         <title>Google Authentication Error</title>
-        <style>
-          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-          .error { color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 500px; }
-        </style>
       </head>
       <body>
-        <h1>Google Authentication Error</h1>
-        <div class="error">
-          <p>Failed to complete authentication: ${error.message}</p>
-          <p>Please try again or contact support.</p>
-        </div>
+        <script>
+          // Notify parent window of error
+          if (window.opener) {
+            window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR' }, '*');
+          }
+          // Close the popup window
+          window.close();
+        </script>
+        <p>Authentication failed! This window will close automatically.</p>
       </body>
       </html>
     `);
-    }
-  })
-);
+  }
+});
 
 /**
  * Get Google Workspace integration status
@@ -129,16 +170,20 @@ router.get(
  */
 router.get(
   "/status/:businessId",
-  authMiddleware,
-  validate([commonValidations.businessId]),
+  // authMiddleware,
+  // validate([commonValidations.businessId]),
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
     const isIntegrated = await googleService.isIntegrated(parseInt(businessId));
     const config = await googleService.getConfig(parseInt(businessId));
 
+    // Match frontend expected format
     res.json(
       createResponse(true, {
+        success: true,
         isIntegrated,
+        email: config?.email || "",
+        lastUpdated: config?.last_sync || new Date().toISOString(),
         config: config || null,
       })
     );
@@ -146,19 +191,87 @@ router.get(
 );
 
 /**
+ * Create Google Workspace configuration
+ * POST /api/google/config/:businessId
+ */
+router.post(
+  "/config/:businessId",
+  // authMiddleware,
+  adminMiddleware,
+  // validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const config = await googleService.saveIntegration(parseInt(businessId), req.body);
+    res.status(201).json(createResponse(true, config, "Google Workspace configuration saved successfully"));
+  })
+);
+
+/**
+ * Update Google Workspace configuration
+ * PUT /api/google/config/:businessId
+ */
+router.put(
+  "/config/:businessId",
+  // authMiddleware,
+  adminMiddleware,
+  // validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const config = await googleService.updateIntegration(parseInt(businessId), req.body);
+    res.json(createResponse(true, config, "Google Workspace configuration updated successfully"));
+  })
+);
+
+/**
  * Get Google Workspace configuration
  * GET /api/google/config/:businessId
  */
-router.get(
-  "/config/:businessId",
-  authMiddleware,
-  validate([commonValidations.businessId]),
-  asyncHandler(async (req, res) => {
+router.get("/config/:businessId", async (req, res) => {
+  try {
     const { businessId } = req.params;
-    const config = await googleService.getConfig(parseInt(businessId));
-    res.json(createResponse(true, config));
-  })
-);
+
+    if (!businessId || isNaN(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid business ID is required",
+      });
+    }
+
+    const integration = await googleService.getIntegration(parseInt(businessId));
+
+    if (integration) {
+      // Get user email from Google API if we have valid tokens
+      let email = null;
+      try {
+        const userInfo = await googleService.getUserInfo(parseInt(businessId));
+        email = userInfo?.email || null;
+      } catch (error) {
+        console.log("Could not get user email:", error.message);
+        // Integration exists but tokens might be expired
+      }
+
+      res.json({
+        success: true,
+        isIntegrated: true,
+        email: email,
+        lastUpdated: integration.updated_at,
+      });
+    } else {
+      res.json({
+        success: true,
+        isIntegrated: false,
+        email: null,
+        lastUpdated: null,
+      });
+    }
+  } catch (error) {
+    console.error("Error getting integration status:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to get integration status",
+    });
+  }
+});
 
 /**
  * Remove Google Workspace integration
@@ -563,6 +676,118 @@ router.get(
 
     const results = await googleService.searchFAQs(parseInt(businessId), spreadsheetId, question, range);
     res.json(createResponse(true, results));
+  })
+);
+
+/**
+ * Get FAQs
+ * GET /api/airtable/faqs/:businessId
+ */
+router.get(
+  "/faqs/:businessId",
+  authMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    try {
+      const faqs = await AirtableService.getFAQs(parseInt(businessId));
+      res.json(createResponse(true, faqs));
+    } catch (error) {
+      console.error("Error fetching FAQs:", error);
+      res.status(500).json(createResponse(false, null, "Failed to fetch FAQs", null, "EXTERNAL_SERVICE_ERROR"));
+    }
+  })
+);
+
+/**
+ * Search FAQs
+ * POST /api/airtable/search/:businessId
+ */
+router.post(
+  "/search/:businessId",
+  authMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const { question } = req.body;
+
+    if (!question) {
+      return res.status(400).json(createResponse(false, null, "Question is required", null, "VALIDATION_ERROR"));
+    }
+
+    try {
+      const result = await AirtableService.searchFAQs(parseInt(businessId), question);
+      res.json(createResponse(true, result));
+    } catch (error) {
+      console.error("Error searching FAQs:", error);
+      res.status(500).json(createResponse(false, null, "Failed to search FAQs", null, "EXTERNAL_SERVICE_ERROR"));
+    }
+  })
+);
+
+/**
+ * Create Contact
+ * POST /api/hubspot/contacts/:businessId
+ */
+router.post(
+  "/contacts/:businessId",
+  authMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const contact = await HubSpotService.createContact(parseInt(businessId), req.body);
+    res.status(201).json(createResponse(true, contact, "Contact created successfully"));
+  })
+);
+
+/**
+ * Search Contacts
+ * POST /api/hubspot/contacts/search/:businessId
+ */
+router.post(
+  "/contacts/search/:businessId",
+  authMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const { searchTerm } = req.body;
+
+    if (!searchTerm) {
+      return res.status(400).json(createResponse(false, null, "Search term is required", null, "VALIDATION_ERROR"));
+    }
+
+    const contacts = await HubSpotService.searchContacts(parseInt(businessId), searchTerm);
+    res.json(createResponse(true, contacts));
+  })
+);
+
+/**
+ * Create Company
+ * POST /api/hubspot/companies/:businessId
+ */
+router.post(
+  "/companies/:businessId",
+  authMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const company = await HubSpotService.createCompany(parseInt(businessId), req.body);
+    res.status(201).json(createResponse(true, company, "Company created successfully"));
+  })
+);
+
+/**
+ * Create Deal
+ * POST /api/hubspot/deals/:businessId
+ */
+router.post(
+  "/deals/:businessId",
+  authMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const deal = await HubSpotService.createDeal(parseInt(businessId), req.body);
+    res.status(201).json(createResponse(true, deal, "Deal created successfully"));
   })
 );
 

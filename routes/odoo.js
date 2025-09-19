@@ -6,42 +6,82 @@ const { validate, commonValidations, validationSets } = require("../middleware/v
 const { createResponse, asyncHandler } = require("../middleware/error-handler");
 
 // Configuration Management
-router.post(
-  "/config/:businessId",
-  authMiddleware,
-  adminMiddleware,
-  validate([commonValidations.businessId]),
-  asyncHandler(async (req, res) => {
+router.post("/config/:businessId", async (req, res) => {
+  try {
     const { businessId } = req.params;
     const { instance_url, db, username, api_key } = req.body;
 
-    if (!instance_url || !db || !username || !api_key) {
-      return res
-        .status(400)
-        .json(createResponse(false, null, "All Odoo configuration fields are required", null, "VALIDATION_ERROR"));
+    if (!businessId || isNaN(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid business ID is required",
+      });
     }
 
-    const config = await odooService.saveIntegration(parseInt(businessId), {
-      instance_url,
-      db,
-      username,
-      api_key
+    if (!instance_url || !db || !username || !api_key) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required fields: instance_url, db, username, api_key",
+      });
+    }
+
+    const configData = {
+      business_id: parseInt(businessId),
+      url: instance_url.trim(),
+      database: db.trim(),
+      username: username.trim(),  // This was missing!
+      password: api_key.trim(),
+    };
+
+    // Test connection before saving
+    await odooService.saveIntegration(configData);
+
+    res.json({
+      success: true,
+      message: "Odoo integration configured successfully",
     });
+  } catch (error) {
+    console.error("Error configuring Odoo integration:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to configure Odoo integration",
+    });
+  }
+});
 
-    res.status(201).json(createResponse(true, config, "Odoo configuration saved successfully"));
-  })
-);
-
-router.get(
-  "/config/:businessId",
-  authMiddleware,
-  validate([commonValidations.businessId]),
-  asyncHandler(async (req, res) => {
+router.get("/config/:businessId", async (req, res) => {
+  try {
     const { businessId } = req.params;
-    const config = await odooService.getConfig(parseInt(businessId));
-    res.json(createResponse(true, config));
-  })
-);
+
+    const config = await odooService.getIntegration(parseInt(businessId));
+
+    if (config) {
+      res.json({
+        success: true,
+        data: {
+          isIntegrated: true,
+          instance_url: config.url,
+          db: config.database,
+          username: config.username,
+          lastUpdated: config.updated_at,
+        },
+      });
+    } else {
+      res.json({
+        success: true,
+        data: {
+          isIntegrated: false,
+        },
+      });
+    }
+  } catch (error) {
+    console.error("Error getting Odoo integration:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to get Odoo integration",
+    });
+  }
+});
 
 router.put(
   "/config/:businessId",
@@ -76,11 +116,13 @@ router.get(
     const { businessId } = req.params;
     const isIntegrated = await odooService.isIntegrated(parseInt(businessId));
     const config = await odooService.getConfig(parseInt(businessId));
-    
-    res.json(createResponse(true, { 
-      isIntegrated, 
-      config: config || null 
-    }));
+
+    res.json(
+      createResponse(true, {
+        isIntegrated,
+        config: config || null,
+      })
+    );
   })
 );
 
@@ -127,11 +169,11 @@ router.get(
   asyncHandler(async (req, res) => {
     const { businessId, leadId } = req.params;
     const lead = await odooService.getLead(parseInt(businessId), parseInt(leadId));
-    
+
     if (!lead) {
       return res.status(404).json(createResponse(false, null, "Lead not found", null, "NOT_FOUND_ERROR"));
     }
-    
+
     res.json(createResponse(true, lead));
   })
 );
@@ -143,11 +185,11 @@ router.put(
   asyncHandler(async (req, res) => {
     const { businessId, leadId } = req.params;
     const lead = await odooService.updateLead(parseInt(businessId), parseInt(leadId), req.body);
-    
+
     if (!lead) {
       return res.status(404).json(createResponse(false, null, "Lead not found", null, "NOT_FOUND_ERROR"));
     }
-    
+
     res.json(createResponse(true, lead, "Lead updated successfully"));
   })
 );
@@ -183,11 +225,11 @@ router.get(
   asyncHandler(async (req, res) => {
     const { businessId, orderId } = req.params;
     const order = await odooService.getOrder(parseInt(businessId), parseInt(orderId));
-    
+
     if (!order) {
       return res.status(404).json(createResponse(false, null, "Order not found", null, "NOT_FOUND_ERROR"));
     }
-    
+
     res.json(createResponse(true, order));
   })
 );
@@ -200,7 +242,10 @@ router.get(
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
     const { page = 1, limit = 20 } = req.query;
-    const invoices = await odooService.getInvoices(parseInt(businessId), { page: parseInt(page), limit: parseInt(limit) });
+    const invoices = await odooService.getInvoices(parseInt(businessId), {
+      page: parseInt(page),
+      limit: parseInt(limit),
+    });
     res.json(createResponse(true, invoices));
   })
 );
@@ -212,11 +257,11 @@ router.get(
   asyncHandler(async (req, res) => {
     const { businessId, invoiceId } = req.params;
     const invoice = await odooService.getInvoice(parseInt(businessId), parseInt(invoiceId));
-    
+
     if (!invoice) {
       return res.status(404).json(createResponse(false, null, "Invoice not found", null, "NOT_FOUND_ERROR"));
     }
-    
+
     res.json(createResponse(true, invoice));
   })
 );
@@ -229,7 +274,10 @@ router.get(
   asyncHandler(async (req, res) => {
     const { businessId } = req.params;
     const { page = 1, limit = 20 } = req.query;
-    const tickets = await odooService.getTickets(parseInt(businessId), { page: parseInt(page), limit: parseInt(limit) });
+    const tickets = await odooService.getTickets(parseInt(businessId), {
+      page: parseInt(page),
+      limit: parseInt(limit),
+    });
     res.json(createResponse(true, tickets));
   })
 );
@@ -252,11 +300,11 @@ router.get(
   asyncHandler(async (req, res) => {
     const { businessId, ticketId } = req.params;
     const ticket = await odooService.getTicket(parseInt(businessId), parseInt(ticketId));
-    
+
     if (!ticket) {
       return res.status(404).json(createResponse(false, null, "Ticket not found", null, "NOT_FOUND_ERROR"));
     }
-    
+
     res.json(createResponse(true, ticket));
   })
 );

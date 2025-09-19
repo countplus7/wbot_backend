@@ -221,12 +221,22 @@ const validationSets = {
   ],
 
   // Business tone validations
-  createBusinessTone: [commonValidations.businessId, commonValidations.toneName, commonValidations.toneInstructions],
+  createBusinessTone: [
+    commonValidations.businessId,
+    body("name")
+      .trim()
+      .isLength({ min: 1, max: 50 })
+      .withMessage("Tone name must be between 1 and 50 characters"),
+    body("tone_instructions")
+      .trim()
+      .isLength({ min: 10, max: 1000 })
+      .withMessage("Tone instructions must be between 10 and 1000 characters"),
+  ],
 
   updateBusinessTone: [
     commonValidations.businessId,
     commonValidations.id,
-    body("tone_name")
+    body("name")
       .optional()
       .trim()
       .isLength({ min: 1, max: 50 })

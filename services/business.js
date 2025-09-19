@@ -129,7 +129,7 @@ class BusinessService {
   // Business Tone Management
   async createBusinessTone(business_id, toneData) {
     try {
-      const { tone_name, description, tone_instructions } = toneData;
+      const { name, description, tone_instructions } = toneData;
 
       // Use UPSERT to create or update the tone for this business
       const result = await pool.query(
@@ -143,23 +143,11 @@ class BusinessService {
           tone_instructions = EXCLUDED.tone_instructions,
           updated_at = CURRENT_TIMESTAMP
         RETURNING *`,
-        [business_id, tone_name, description, tone_instructions]
+        [business_id, name, description, tone_instructions]
       );
       return result.rows[0];
     } catch (error) {
       console.error("Error creating/updating business tone:", error);
-      throw error;
-    }
-  }
-
-  async getBusinessTones(businessId) {
-    try {
-      const result = await pool.query("SELECT * FROM business_tones WHERE business_id = $1 ORDER BY created_at DESC", [
-        businessId,
-      ]);
-      return result.rows;
-    } catch (error) {
-      console.error("Error getting business tones:", error);
       throw error;
     }
   }
@@ -174,29 +162,52 @@ class BusinessService {
     }
   }
 
-  async getDefaultTone(businessId) {
+  async updateBusinessTone(businessId, toneId, toneData) {
     try {
-      const result = await pool.query("SELECT * FROM business_tones WHERE business_id = $1", [businessId]);
-      return result.rows[0];
-    } catch (error) {
-      console.error("Error getting default tone:", error);
-      throw error;
-    }
-  }
+      const { name, description, tone_instructions } = toneData;
 
-  async updateBusinessTone(id, toneData) {
-    try {
-      const { name, description, tone_instructions, business_id } = toneData;
+      // First verify the tone belongs to the business
+      const existingTone = await pool.query("SELECT * FROM business_tones WHERE id = $1 AND business_id = $2", [
+        toneId,
+        businessId,
+      ]);
+
+      if (existingTone.rows.length === 0) {
+        return null; // Tone not found or doesn't belong to business
+      }
 
       const result = await pool.query(
         `UPDATE business_tones 
         SET name = $1, description = $2, tone_instructions = $3, updated_at = CURRENT_TIMESTAMP 
-        WHERE id = $4 RETURNING *`,
-        [name, description, tone_instructions, id]
+        WHERE id = $4 AND business_id = $5 RETURNING *`,
+        [name, description, tone_instructions, toneId, businessId]
       );
       return result.rows[0];
     } catch (error) {
       console.error("Error updating business tone:", error);
+      throw error;
+    }
+  }
+
+  async deleteBusinessTone(businessId, toneId) {
+    try {
+      // First verify the tone belongs to the business
+      const existingTone = await pool.query("SELECT * FROM business_tones WHERE id = $1 AND business_id = $2", [
+        toneId,
+        businessId,
+      ]);
+
+      if (existingTone.rows.length === 0) {
+        return null; // Tone not found or doesn't belong to business
+      }
+
+      const result = await pool.query("DELETE FROM business_tones WHERE id = $1 AND business_id = $2 RETURNING *", [
+        toneId,
+        businessId,
+      ]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error deleting business tone:", error);
       throw error;
     }
   }
@@ -208,12 +219,12 @@ class BusinessService {
       if (!business) return null;
 
       const whatsappConfig = await this.getWhatsAppConfigByBusinessId(businessId);
-      const tones = await this.getBusinessTones(businessId);
+      const tone = await this.getBusinessTone(businessId); // Single tone object
 
       return {
         ...business,
         whatsapp_config: whatsappConfig,
-        tones: tones,
+        tone: tone, // Single object, not array
       };
     } catch (error) {
       console.error("Error getting business with config and tones:", error);
@@ -241,6 +252,19 @@ class BusinessService {
     } catch (error) {
       console.error("Error getting Google config:", error);
       throw new Error("Failed to get Google Workspace configuration");
+    }
+  }
+
+  async getBusinessToneById(businessId, toneId) {
+    try {
+      const result = await pool.query("SELECT * FROM business_tones WHERE id = $1 AND business_id = $2", [
+        toneId,
+        businessId,
+      ]);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error("Error getting business tone by ID:", error);
+      throw error;
     }
   }
 }

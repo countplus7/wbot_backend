@@ -83,21 +83,43 @@ router.put(
   "/profile",
   authMiddleware,
   asyncHandler(async (req, res) => {
-    const { username, email, password, status } = req.body;
+    const { username, email, password, currentPassword, status } = req.body;
     const updateData = {};
 
     if (username) updateData.username = username;
     if (email) updateData.email = email;
-    if (password) updateData.password = password;
     if (status) updateData.status = status;
+
+    // If password is being updated, validate current password
+    if (password) {
+      if (!currentPassword) {
+        return res
+          .status(400)
+          .json(
+            createResponse(false, null, "Current password is required to change password", null, "VALIDATION_ERROR")
+          );
+      }
+
+      // Verify current password
+      const user = await authService.getAdminProfile(req.user.id);
+      const isCurrentPasswordValid = await authService.comparePassword(currentPassword, user.password);
+
+      if (!isCurrentPasswordValid) {
+        return res
+          .status(400)
+          .json(createResponse(false, null, "Current password is incorrect", null, "VALIDATION_ERROR"));
+      }
+
+      updateData.password = password;
+    }
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json(createResponse(false, null, "No valid fields to update", null, "VALIDATION_ERROR"));
     }
 
-    const user = await authService.updateAdmin(req.user.id, updateData);
+    const updatedUser = await authService.updateAdmin(req.user.id, updateData);
 
-    res.json(createResponse(true, user, "Profile updated successfully"));
+    res.json(createResponse(true, updatedUser, "Profile updated successfully"));
   })
 );
 

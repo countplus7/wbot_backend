@@ -17,8 +17,7 @@
     "health": "curl -s http://localhost:5000/health",
     "health:detailed": "curl -s http://localhost:5000/health/detailed",
     "test:health": "curl -f http://localhost:5000/health > /dev/null",
-    "setup:full": "npm run migrate-db && npm run init-db && npm run seed-intents",
-    "setup:dev": "npm run migrate-db && npm run seed-intents"
+    "setup:db": "npm run init-db && npm run migrate-db && npm run seed-intents"
   },
   "dependencies": {
     "axios": "^1.6.2",

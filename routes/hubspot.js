@@ -192,4 +192,70 @@ router.get(
   })
 );
 
+/**
+ * Create Contact
+ * POST /api/hubspot/contacts/:businessId
+ */
+router.post(
+  "/contacts/:businessId",
+  authMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const contact = await HubSpotService.createContact(parseInt(businessId), req.body);
+    res.status(201).json(createResponse(true, contact, "Contact created successfully"));
+  })
+);
+
+/**
+ * Search Contacts
+ * POST /api/hubspot/contacts/search/:businessId
+ */
+router.post(
+  "/contacts/search/:businessId",
+  authMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const { searchTerm } = req.body;
+    
+    if (!searchTerm) {
+      return res.status(400).json(createResponse(false, null, "Search term is required", null, "VALIDATION_ERROR"));
+    }
+    
+    const contacts = await HubSpotService.searchContacts(parseInt(businessId), searchTerm);
+    res.json(createResponse(true, contacts));
+  })
+);
+
+/**
+ * Create Company
+ * POST /api/hubspot/companies/:businessId
+ */
+router.post(
+  "/companies/:businessId",
+  authMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const company = await HubSpotService.createCompany(parseInt(businessId), req.body);
+    res.status(201).json(createResponse(true, company, "Company created successfully"));
+  })
+);
+
+/**
+ * Create Deal
+ * POST /api/hubspot/deals/:businessId
+ */
+router.post(
+  "/deals/:businessId",
+  authMiddleware,
+  validate([commonValidations.businessId]),
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.params;
+    const deal = await HubSpotService.createDeal(parseInt(businessId), req.body);
+    res.status(201).json(createResponse(true, deal, "Deal created successfully"));
+  })
+);
+
 module.exports = router;
