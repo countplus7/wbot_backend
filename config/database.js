@@ -7,12 +7,12 @@ const pool = new Pool({
   database: process.env.DB_NAME || 'whatsapp_bot',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || '',
-  max: 20,
+  max: 30, // Increased connection pool size
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-  acquireTimeoutMillis: 10000, // Add acquire timeout
-  keepAlive: true, // Keep connections alive
-  keepAliveInitialDelayMillis: 0, // Start keep-alive immediately
+  connectionTimeoutMillis: 5000, // Reduced timeout
+  acquireTimeoutMillis: 5000, // Reduced timeout
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 0,
 });
 
 // Test the connection

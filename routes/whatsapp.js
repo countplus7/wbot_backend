@@ -10,6 +10,7 @@ const EmbeddingsService = require('../services/embeddings');
 const pool = require('../config/database');
 const path = require('path');
 const fs = require('fs-extra');
+const IntentDetectionService = require('../services/intent-detection');
 
 // Webhook verification endpoint
 router.get('/webhook', async (req, res) => {
@@ -291,6 +292,31 @@ router.post('/webhook', async (req, res) => {
         
         // Continue processing even if media handling fails
         localFilePath = null;
+      }
+    }
+
+    // Enhanced fast intent detection
+    if (messageData.messageType === 'text' && messageData.content) {
+      try {
+        console.log('Fast intent detection starting...');
+        
+        const intentResult = await IntentDetectionService.detectIntent(
+          messageData.content, 
+          businessId
+        );
+        
+        console.log('Intent detection result:', intentResult);
+        
+        // Log performance metrics
+        if (intentResult.detectionTime) {
+          console.log(`Intent detection took ${intentResult.detectionTime}ms using ${intentResult.method}`);
+        }
+        
+        // Store intent result for analytics
+        messageData.detectedIntent = intentResult;
+        
+      } catch (error) {
+        console.error('Error in fast intent detection:', error);
       }
     }
 

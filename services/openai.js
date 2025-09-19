@@ -5,6 +5,7 @@ const path = require("path");
 const GoogleService = require("./google");
 const OdooService = require("./odoo");
 const EmbeddingsService = require("./embeddings");
+const IntentDetectionService = require('./intent-detection');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -13,31 +14,33 @@ const openai = new OpenAI({
 class OpenAIService {
   constructor() {
     this.model = "gpt-4";
-    this.visionModel = "gpt-4o"; // Updated from deprecated gpt-4-vision-preview
+    this.visionModel = "gpt-4-vision-preview";
     this.embeddingsService = EmbeddingsService;
+    this.intentDetectionService = IntentDetectionService;
   }
 
   async chatCompletion(messages, conversationHistory = [], businessTone = null, businessId = null, phoneNumber = null) {
     try {
       const latestMessage = messages[messages.length - 1];
 
-      // Enhanced AI-powered intent detection with better error handling
+      // Use new fast intent detection system
       let aiIntent = null;
       if (businessId) {
         try {
-          console.log("Attempting AI intent detection for message:", latestMessage.content);
-          aiIntent = await this.detectIntentWithAI(latestMessage.content, conversationHistory, businessId);
-          console.log("AI Intent detected:", aiIntent);
+          console.log("Using new fast intent detection for message:", latestMessage.content);
+          aiIntent = await this.intentDetectionService.detectIntent(latestMessage.content, businessId);
+          console.log("Intent detected:", aiIntent);
         } catch (error) {
-          console.error("Error in AI intent detection:", error);
+          console.error("Error in fast intent detection:", error);
           console.log("Falling back to keyword-based detection");
           aiIntent = null;
         }
       }
 
-      // Handle AI-detected intents first
-      if (aiIntent && aiIntent.confidence >= 0.7) {
-        console.log(`Routing to AI handler for intent: ${aiIntent.intent}`);
+      // Handle detected intents with improved confidence threshold
+      if (aiIntent && aiIntent.confidence >= 0.65) { // Lowered threshold for better sensitivity
+        console.log(`Routing to handler for intent: ${aiIntent.intent} (confidence: ${aiIntent.confidence}, method: ${aiIntent.method})`);
+        
         switch (aiIntent.intent) {
           case "GOOGLE_EMAIL":
             return await this.handleGoogleEmailWithAI(businessId, aiIntent, conversationHistory, businessTone);
@@ -50,6 +53,10 @@ class OpenAIService {
 
           case "ODOO":
             return await this.handleOdooWithAI(businessId, aiIntent, phoneNumber, conversationHistory, businessTone);
+
+          case "FAQ":
+            // Handle FAQ intents
+            return await this.handleFAQIntent(businessId, latestMessage.content, conversationHistory, businessTone);
 
           case "GENERAL":
             // Fall through to regular chat completion
@@ -2428,6 +2435,29 @@ Use this context to provide more relevant analysis of the image.`;
       return 0;
     }
     // ... rest of the function
+  }
+
+  // Add new FAQ handler method
+  async handleFAQIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      // Use existing FAQ handling logic or integrate with Airtable
+      // This can use the existing AirtableService.searchFAQs method
+      const faqMatch = await this.embeddingsService.findBestFAQMatch(message, [], 0.75);
+      
+      if (faqMatch) {
+        return faqMatch.answer;
+      } else {
+        // Fallback to general response
+        return await this.chatCompletion(
+          [{ role: "user", content: message }],
+          conversationHistory,
+          businessTone
+        );
+      }
+    } catch (error) {
+      console.error("Error handling FAQ intent:", error);
+      return "I'm sorry, I couldn't find an answer to your question. Please try rephrasing or contact support.";
+    }
   }
 }
 

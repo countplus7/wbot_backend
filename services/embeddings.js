@@ -6,8 +6,8 @@ class EmbeddingsService {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
-    this.embeddingModel = "text-embedding-3-large"; // Latest and most capable embedding model
-    this.dimensions = 3072; // Maximum dimensions for better performance
+    this.embeddingModel = "text-embedding-3-small"; // Faster model for better performance
+    this.dimensions = 1536; // Optimized dimensions for speed
   }
 
   /**
