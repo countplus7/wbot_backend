@@ -214,20 +214,50 @@ class OpenAIService {
    */
   async transcribeAudio(audioPath) {
     try {
+      console.log(`[DEBUG] Starting audio transcription for: ${audioPath}`);
+      
       if (!fs.existsSync(audioPath)) {
+        console.error(`[DEBUG] Audio file not found: ${audioPath}`);
         throw new Error(`Audio file not found: ${audioPath}`);
       }
 
+      // Check if the file is in a supported format
+      const supportedFormats = ['.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm'];
+      const fileExtension = path.extname(audioPath).toLowerCase();
+      
+      if (!supportedFormats.includes(fileExtension)) {
+        console.error(`[DEBUG] Unsupported audio format: ${fileExtension}`);
+        return `I received your audio message, but I'm unable to transcribe ${fileExtension} files. Please try sending the audio in MP3, WAV, or M4A format.`;
+      }
+
+      console.log(`[DEBUG] Supported format ${fileExtension}, proceeding with transcription...`);
       const audioFile = fs.createReadStream(audioPath);
       const response = await openai.audio.transcriptions.create({
         file: audioFile,
         model: "whisper-1",
       });
 
+      console.log(`[DEBUG] Transcription successful: ${response.text}`);
       return response.text;
     } catch (error) {
-      console.error("Error transcribing audio:", error.message);
+      console.error(`[DEBUG] Error transcribing audio:`, error.message);
+      console.error(`[DEBUG] Full error:`, error);
       return "I apologize, but I could not transcribe the audio. Please try again.";
+    }
+  }
+
+  // Add this helper method for audio conversion
+  async convertAudioToWav(inputPath, outputPath) {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
+    
+    try {
+      await execAsync(`ffmpeg -i "${inputPath}" -ar 16000 -ac 1 "${outputPath}"`);
+      console.log(`[DEBUG] Audio converted successfully: ${outputPath}`);
+    } catch (error) {
+      console.error(`[DEBUG] Audio conversion failed:`, error.message);
+      throw new Error(`Failed to convert audio: ${error.message}`);
     }
   }
 
