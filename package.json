@@ -8,16 +8,13 @@
     "start:dev": "node --inspect --max-old-space-size=2048 server.js",
     "dev": "nodemon --inspect --max-old-space-size=2048 server.js",
     "dev:fast": "nodemon --max-old-space-size=2048 server.js",
-    "init-db": "node scripts/init-database.js",
-    "reset-db": "node scripts/reset-database.js",
-    "migrate-db": "node scripts/migrate-database.js",
-    "seed-intents": "node scripts/seed-intents.js",
+    "db-setup": "node scripts/db-setup.js",
+    "db-seed": "node scripts/db-seed.js",
     "cleanup": "node scripts/cleanup-media.js",
     "cleanup:force": "node scripts/cleanup-media.js --force",
     "health": "curl -s http://localhost:5000/health",
     "health:detailed": "curl -s http://localhost:5000/health/detailed",
-    "test:health": "curl -f http://localhost:5000/health > /dev/null",
-    "setup:db": "npm run init-db && npm run migrate-db && npm run seed-intents"
+    "test:health": "curl -f http://localhost:5000/health > /dev/null"
   },
   "dependencies": {
     "axios": "^1.6.2",
