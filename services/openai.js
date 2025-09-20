@@ -227,7 +227,7 @@ class OpenAIService {
       
       if (!supportedFormats.includes(fileExtension)) {
         console.error(`[DEBUG] Unsupported audio format: ${fileExtension}`);
-        return `I received your audio message, but I'm unable to transcribe ${fileExtension} files. Please try sending the audio in MP3, WAV, or M4A format.`;
+        throw new Error(`Unsupported audio format: ${fileExtension}. Please try sending the audio in MP3, WAV, or M4A format.`);
       }
 
       console.log(`[DEBUG] Supported format ${fileExtension}, proceeding with transcription...`);
@@ -242,7 +242,7 @@ class OpenAIService {
     } catch (error) {
       console.error(`[DEBUG] Error transcribing audio:`, error.message);
       console.error(`[DEBUG] Full error:`, error);
-      return "I apologize, but I could not transcribe the audio. Please try again.";
+      throw error; // Re-throw the error instead of returning a message
     }
   }
 
