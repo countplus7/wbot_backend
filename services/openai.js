@@ -2,6 +2,7 @@
 const { OpenAI } = require("openai");
 const fs = require("fs-extra");
 const path = require("path");
+const ffmpeg = require("fluent-ffmpeg");
 const GoogleService = require("./google");
 const OdooService = require("./odoo");
 const EmbeddingsService = require("./embeddings");
@@ -226,39 +227,60 @@ class OpenAIService {
       const fileExtension = path.extname(audioPath).toLowerCase();
       
       if (!supportedFormats.includes(fileExtension)) {
-        console.error(`[DEBUG] Unsupported audio format: ${fileExtension}`);
-        throw new Error(`Unsupported audio format: ${fileExtension}. Please try sending the audio in MP3, WAV, or M4A format.`);
+        console.log(`[DEBUG] Unsupported format ${fileExtension}, attempting to convert...`);
+        
+        // Convert OGG to WAV using ffmpeg
+        const wavPath = audioPath.replace(fileExtension, '.wav');
+        await this.convertAudioToWav(audioPath, wavPath);
+        
+        // Use the converted WAV file for transcription
+        const audioFile = fs.createReadStream(wavPath);
+        const response = await openai.audio.transcriptions.create({
+          file: audioFile,
+          model: "whisper-1",
+        });
+        
+        // Clean up the temporary WAV file
+        fs.unlinkSync(wavPath);
+        
+        console.log(`[DEBUG] Transcription successful: ${response.text}`);
+        return response.text;
+      } else {
+        console.log(`[DEBUG] Supported format ${fileExtension}, proceeding with transcription...`);
+        const audioFile = fs.createReadStream(audioPath);
+        const response = await openai.audio.transcriptions.create({
+          file: audioFile,
+          model: "whisper-1",
+        });
+
+        console.log(`[DEBUG] Transcription successful: ${response.text}`);
+        return response.text;
       }
-
-      console.log(`[DEBUG] Supported format ${fileExtension}, proceeding with transcription...`);
-      const audioFile = fs.createReadStream(audioPath);
-      const response = await openai.audio.transcriptions.create({
-        file: audioFile,
-        model: "whisper-1",
-      });
-
-      console.log(`[DEBUG] Transcription successful: ${response.text}`);
-      return response.text;
     } catch (error) {
       console.error(`[DEBUG] Error transcribing audio:`, error.message);
       console.error(`[DEBUG] Full error:`, error);
-      throw error; // Re-throw the error instead of returning a message
+      throw error;
     }
   }
 
-  // Add this helper method for audio conversion
+  // Add this helper method for audio conversion using fluent-ffmpeg
   async convertAudioToWav(inputPath, outputPath) {
-    const { exec } = require('child_process');
-    const util = require('util');
-    const execAsync = util.promisify(exec);
-    
-    try {
-      await execAsync(`ffmpeg -i "${inputPath}" -ar 16000 -ac 1 "${outputPath}"`);
-      console.log(`[DEBUG] Audio converted successfully: ${outputPath}`);
-    } catch (error) {
-      console.error(`[DEBUG] Audio conversion failed:`, error.message);
-      throw new Error(`Failed to convert audio: ${error.message}`);
-    }
+    return new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .audioFrequency(16000) // Set sample rate to 16kHz (optimal for Whisper)
+        .audioChannels(1) // Convert to mono
+        .audioCodec('pcm_s16le') // Use PCM 16-bit little-endian (WAV format)
+        .format('wav')
+        .on('end', () => {
+          console.log(`[DEBUG] Audio converted successfully: ${outputPath}`);
+          resolve();
+        })
+        .on('error', (error) => {
+          console.error(`[DEBUG] Audio conversion failed:`, error.message);
+          reject(new Error(`Failed to convert audio: ${error.message}`));
+        })
+        .save(outputPath);
+    });
   }
 
   /**
