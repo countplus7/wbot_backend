@@ -15,7 +15,7 @@ class OpenAIService {
   constructor() {
     this.model = "gpt-4";
     this.chatModel = "gpt-4";
-    this.visionModel = "gpt-4-vision-preview";
+    this.visionModel = "gpt-4o";
     this.embeddingsService = EmbeddingsService;
     this.intentDetectionService = IntentDetectionService;
   }
