@@ -6,34 +6,55 @@ class DatabaseService {
     return pool;
   }
 
+  /**
+   * Execute multiple queries in a transaction for better performance
+   */
+  async executeTransaction(queries) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const results = [];
+      
+      for (const query of queries) {
+        const result = await client.query(query.text, query.values);
+        results.push(result);
+      }
+      
+      await client.query('COMMIT');
+      return results;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Optimized conversation creation/retrieval with single query
+   */
   async createOrGetConversation(businessId, whatsappNumber) {
     try {
-      // Check if conversation exists
-      const existingConversation = await pool.query(
-        "SELECT * FROM conversations WHERE business_id = $1 AND phone_number = $2 ORDER BY updated_at DESC LIMIT 1",
+      // Use UPSERT to handle both create and update in one query
+      const result = await pool.query(
+        `INSERT INTO conversations (business_id, phone_number, created_at, updated_at) 
+         VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT (business_id, phone_number) 
+         DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+         RETURNING *`,
         [businessId, whatsappNumber]
       );
 
-      if (existingConversation.rows.length > 0) {
-        // Update the existing conversation
-        await pool.query("UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = $1", [
-          existingConversation.rows[0].id,
-        ]);
-        return existingConversation.rows[0];
-      } else {
-        // Create new conversation
-        const newConversation = await pool.query(
-          "INSERT INTO conversations (business_id, phone_number) VALUES ($1, $2) RETURNING *",
-          [businessId, whatsappNumber]
-        );
-        return newConversation.rows[0];
-      }
+      return result.rows[0];
     } catch (error) {
       console.error("Error creating/getting conversation:", error);
       throw error;
     }
   }
 
+  /**
+   * Optimized message saving with better conflict handling
+   */
   async saveMessage(messageData) {
     try {
       const result = await pool.query(
@@ -47,7 +68,7 @@ class DatabaseService {
           media_url = EXCLUDED.media_url,
           local_file_path = EXCLUDED.local_file_path,
           status = EXCLUDED.status,
-          updated_at = NOW()
+          updated_at = CURRENT_TIMESTAMP
         RETURNING *`,
         [
           messageData.businessId,
@@ -83,7 +104,7 @@ class DatabaseService {
               content = EXCLUDED.content,
               media_url = EXCLUDED.media_url,
               status = EXCLUDED.status,
-              updated_at = NOW()
+              updated_at = CURRENT_TIMESTAMP
             RETURNING *`,
             [
               messageData.businessId,
@@ -101,13 +122,67 @@ class DatabaseService {
 
           console.log(`Message saved successfully (without local_file_path): ${messageData.messageId}`);
           return result.rows[0];
-        } catch (fallbackError) {
-          console.error("Error saving message (fallback):", fallbackError);
-          throw fallbackError;
+        } catch (retryError) {
+          console.error("Error saving message (retry):", retryError);
+          throw retryError;
         }
       }
 
       throw error;
+    }
+  }
+
+  /**
+   * Batch save multiple messages for better performance
+   */
+  async saveMessagesBatch(messagesData) {
+    if (messagesData.length === 0) return [];
+    
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const results = [];
+      for (const messageData of messagesData) {
+        const result = await client.query(
+          `INSERT INTO messages (
+            business_id, conversation_id, message_id, from_number, to_number, 
+            message_type, content, media_url, direction, status, local_file_path
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+          ON CONFLICT (message_id) 
+          DO UPDATE SET 
+            content = EXCLUDED.content,
+            media_url = EXCLUDED.media_url,
+            local_file_path = EXCLUDED.local_file_path,
+            status = EXCLUDED.status,
+            updated_at = CURRENT_TIMESTAMP
+          RETURNING *`,
+          [
+            messageData.businessId,
+            messageData.conversationId,
+            messageData.messageId,
+            messageData.fromNumber,
+            messageData.toNumber,
+            messageData.messageType,
+            messageData.content,
+            messageData.mediaUrl,
+            messageData.isFromUser ? "inbound" : "outbound",
+            "received",
+            messageData.localFilePath || null,
+          ]
+        );
+        results.push(result.rows[0]);
+      }
+      
+      await client.query('COMMIT');
+      console.log(`Batch saved ${messagesData.length} messages successfully`);
+      return results;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error("Error batch saving messages:", error);
+      throw error;
+    } finally {
+      client.release();
     }
   }
 

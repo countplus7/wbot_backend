@@ -301,7 +301,24 @@ class OpenAIService {
   }
 
   /**
-   * Transcribe audio file
+   * Check if ffmpeg is available on the system
+   */
+  async isFfmpegAvailable() {
+    return new Promise((resolve) => {
+      ffmpeg.getAvailableFormats((err, formats) => {
+        if (err) {
+          console.warn(`[DEBUG] FFmpeg not available: ${err.message}`);
+          resolve(false);
+        } else {
+          console.log(`[DEBUG] FFmpeg is available`);
+          resolve(true);
+        }
+      });
+    });
+  }
+
+  /**
+   * Transcribe audio file with fallback handling
    */
   async transcribeAudio(audioPath) {
     try {
@@ -317,9 +334,17 @@ class OpenAIService {
       const fileExtension = path.extname(audioPath).toLowerCase();
 
       if (!supportedFormats.includes(fileExtension)) {
-        console.log(`[DEBUG] Unsupported format ${fileExtension}, attempting to convert...`);
+        console.log(`[DEBUG] Unsupported format ${fileExtension}, checking if conversion is possible...`);
 
-        // Convert OGG to WAV using ffmpeg
+        // Check if ffmpeg is available before attempting conversion
+        const ffmpegAvailable = await this.isFfmpegAvailable();
+        
+        if (!ffmpegAvailable) {
+          console.warn(`[DEBUG] FFmpeg not available, cannot convert ${fileExtension} format`);
+          throw new Error(`Audio format ${fileExtension} is not supported and ffmpeg is not available for conversion. Please install ffmpeg or send audio in a supported format (mp3, wav, m4a, etc.)`);
+        }
+
+        // Convert to WAV using ffmpeg
         const wavPath = audioPath.replace(fileExtension, ".wav");
         await this.convertAudioToWav(audioPath, wavPath);
 
@@ -356,33 +381,42 @@ class OpenAIService {
   // Add this helper method for audio conversion using fluent-ffmpeg
   async convertAudioToWav(inputPath, outputPath) {
     return new Promise((resolve, reject) => {
-      // Set ffmpeg path if needed (uncomment and modify if ffmpeg is not in PATH)
-      // ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
+      // Check if ffmpeg is available
+      ffmpeg.getAvailableFormats((err, formats) => {
+        if (err) {
+          console.warn(`[DEBUG] FFmpeg not available: ${err.message}`);
+          reject(new Error(`FFmpeg is not installed or not accessible. Please install ffmpeg on your server: sudo apt install ffmpeg`));
+          return;
+        }
 
-      ffmpeg(inputPath)
-        .audioFrequency(16000) // Set sample rate to 16kHz (optimal for Whisper)
-        .audioChannels(1) // Convert to mono
-        .audioCodec("pcm_s16le") // Use PCM 16-bit little-endian (WAV format)
-        .format("wav")
-        .on("start", (commandLine) => {
-          console.log(`[DEBUG] FFmpeg command: ${commandLine}`);
-        })
-        .on("progress", (progress) => {
-          console.log(`[DEBUG] Conversion progress: ${progress.percent}% done`);
-        })
-        .on("end", () => {
-          console.log(`[DEBUG] Audio converted successfully: ${outputPath}`);
-          resolve();
-        })
-        .on("error", (error) => {
-          console.error(`[DEBUG] Audio conversion failed:`, error.message);
-          if (error.message.includes("Cannot find ffmpeg")) {
-            reject(new Error(`FFmpeg is not installed. Please install ffmpeg on your server: sudo apt install ffmpeg`));
-          } else {
-            reject(new Error(`Failed to convert audio: ${error.message}`));
-          }
-        })
-        .save(outputPath);
+        // Set ffmpeg path if needed (uncomment and modify if ffmpeg is not in PATH)
+        // ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
+
+        ffmpeg(inputPath)
+          .audioFrequency(16000) // Set sample rate to 16kHz (optimal for Whisper)
+          .audioChannels(1) // Convert to mono
+          .audioCodec("pcm_s16le") // Use PCM 16-bit little-endian (WAV format)
+          .format("wav")
+          .on("start", (commandLine) => {
+            console.log(`[DEBUG] FFmpeg command: ${commandLine}`);
+          })
+          .on("progress", (progress) => {
+            console.log(`[DEBUG] Conversion progress: ${progress.percent}% done`);
+          })
+          .on("end", () => {
+            console.log(`[DEBUG] Audio converted successfully: ${outputPath}`);
+            resolve();
+          })
+          .on("error", (error) => {
+            console.error(`[DEBUG] Audio conversion failed:`, error.message);
+            if (error.message.includes("Cannot find ffmpeg")) {
+              reject(new Error(`FFmpeg is not installed. Please install ffmpeg on your server: sudo apt install ffmpeg`));
+            } else {
+              reject(new Error(`Failed to convert audio: ${error.message}`));
+            }
+          })
+          .save(outputPath);
+      });
     });
   }
 
@@ -560,23 +594,91 @@ class OpenAIService {
     }
   }
 
-  /**
-   * Detect calendar intent (legacy compatibility)
+    /**
+   * Detect calendar intent with better parsing
    */
   detectCalendarIntent(message) {
-    const calendarKeywords = ["schedule", "meeting", "appointment", "calendar", "book", "reserve", "time"];
+    const calendarKeywords = ["schedule", "meeting", "appointment", "calendar", "book", "reserve", "time", "tomorrow", "today", "next week"];
     const hasCalendarKeyword = calendarKeywords.some((keyword) =>
       message.toLowerCase().includes(keyword.toLowerCase())
     );
 
     if (hasCalendarKeyword) {
+      // Try to extract more specific information
+      const lowerMessage = message.toLowerCase();
+      
+      // Determine the type of calendar request
+      let intent = "schedule_meeting"; // default
+      if (lowerMessage.includes("appointment") || lowerMessage.includes("book")) {
+        intent = "book_appointment";
+      } else if (lowerMessage.includes("meeting")) {
+        intent = "schedule_meeting";
+      } else if (lowerMessage.includes("remind")) {
+        intent = "create_reminder";
+      } else if (lowerMessage.includes("available") || lowerMessage.includes("free")) {
+        intent = "check_availability";
+      }
+
+      // Try to extract basic data
+      const extractedData = this.extractCalendarData(message);
+
       return {
         type: "calendar",
+        intent: intent,
         message: message,
-        confidence: 0.7,
+        extractedData: extractedData,
+        confidence: 0.8,
       };
     }
     return null;
+  }
+
+  /**
+   * Extract calendar data from message
+   */
+  extractCalendarData(message) {
+    const data = {};
+    const lowerMessage = message.toLowerCase();
+
+    // Extract time references
+    if (lowerMessage.includes("tomorrow")) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      data.date = tomorrow.toISOString().split('T')[0];
+    } else if (lowerMessage.includes("today")) {
+      data.date = new Date().toISOString().split('T')[0];
+    }
+
+    // Extract time
+    const timeMatch = message.match(/(\d{1,2}):?(\d{2})?\s*(am|pm|AM|PM)?/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
+
+      // Convert to 24-hour format
+      if (period === 'pm' && hours !== 12) {
+        hours += 12;
+      } else if (period === 'am' && hours === 12) {
+        hours = 0;
+      }
+
+      data.time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+
+    // Extract title/description
+    const titleMatch = message.match(/(?:with|meeting with|appointment with)\s+([A-Za-z\s]+?)(?:\s+at|\s+on|\s+tomorrow|\s+today|$)/i);
+    if (titleMatch) {
+      data.title = titleMatch[1].trim();
+    } else {
+      // Try to extract from the beginning
+      const words = message.split(' ');
+      if (words.length > 2) {
+        data.title = words.slice(0, 3).join(' ');
+      }
+    }
+
+    return data;
   }
 
   // Intent-specific handlers

@@ -8,6 +8,29 @@ class WhatsAppService {
   }
 
   /**
+   * Sanitize and validate access token
+   * @param {string} token - The access token to sanitize
+   * @returns {string} Sanitized token
+   */
+  sanitizeAccessToken(token) {
+    if (!token) {
+      throw new Error("Access token is required");
+    }
+    
+    // Remove any whitespace, newlines, or control characters
+    const sanitized = token.toString().trim().replace(/[\r\n\t\f\v]/g, '');
+    
+    // Validate token format (should be alphanumeric with some special chars)
+    if (!/^[A-Za-z0-9\-_\.]+$/.test(sanitized)) {
+      console.warn("Access token contains unexpected characters, attempting to clean...");
+      // Remove any non-printable characters except valid token characters
+      return sanitized.replace(/[^\x20-\x7E]/g, '');
+    }
+    
+    return sanitized;
+  }
+
+  /**
    * Set configuration for a specific business
    * @param {Object} config - Business WhatsApp configuration
    * @param {string} config.phone_number_id - WhatsApp phone number ID
@@ -16,8 +39,11 @@ class WhatsAppService {
    */
   setBusinessConfig(config) {
     this.phoneNumberId = config.phone_number_id;
-    this.accessToken = config.access_token;
+    this.accessToken = this.sanitizeAccessToken(config.access_token);
     this.verifyToken = config.verify_token;
+    
+    // Log token info for debugging (without exposing the actual token)
+    console.log(`WhatsApp config set - Phone ID: ${this.phoneNumberId}, Token length: ${this.accessToken.length}`);
   }
 
   /**
@@ -47,6 +73,9 @@ class WhatsAppService {
         throw new Error("WhatsApp configuration not set. Please set business config first.");
       }
 
+      // Ensure token is still sanitized
+      const cleanToken = this.sanitizeAccessToken(this.accessToken);
+
       const response = await axios.post(
         `${this.baseURL}/${this.phoneNumberId}/messages`,
         {
@@ -59,7 +88,7 @@ class WhatsAppService {
         },
         {
           headers: {
-            Authorization: `Bearer ${this.accessToken}`,
+            Authorization: `Bearer ${cleanToken}`,
             "Content-Type": "application/json",
           },
         }

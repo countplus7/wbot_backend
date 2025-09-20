@@ -10,6 +10,7 @@
     "dev:fast": "nodemon --max-old-space-size=2048 server.js",
     "db-setup": "node scripts/db-setup.js",
     "db-seed": "node scripts/db-seed.js",
+    "install-ffmpeg": "node scripts/install-ffmpeg.js",
     "cleanup": "node scripts/cleanup-media.js",
     "cleanup:force": "node scripts/cleanup-media.js --force",
     "health": "curl -s http://localhost:5000/health",
