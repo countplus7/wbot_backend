@@ -143,14 +143,11 @@ class WhatsAppService {
         stream: downloadResponse.data,
         mimeType: contentType,
         fileSize: contentLength ? parseInt(contentLength) : undefined,
-        buffer: null, // Keep for backward compatibility
-        filename: null, // Keep for backward compatibility
-        filepath: null, // Keep for backward compatibility
-        contentType: contentType, // Keep for backward compatibility
-        size: contentLength ? parseInt(contentLength) : undefined, // Keep for backward compatibility
+        contentType: contentType,
+        size: contentLength ? parseInt(contentLength) : undefined,
       };
 
-      console.log(`[DEBUG] Returning media data:`, JSON.stringify(result, null, 2));
+      console.log(`[DEBUG] Returning media data - Type: ${contentType}, Size: ${contentLength}`);
       return result;
     } catch (error) {
       console.error("[DEBUG] Error downloading media:", error.response?.data || error.message);
