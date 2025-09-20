@@ -7,6 +7,7 @@ const GoogleService = require("./google");
 const OdooService = require("./odoo");
 const EmbeddingsService = require("./embeddings");
 const IntentDetectionService = require("./intent-detection");
+const HubSpotService = require("./hubspot");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -65,46 +66,6 @@ class OpenAIService {
   async handleDetectedIntent(aiIntent, latestMessage, conversationHistory, businessTone, businessId, phoneNumber) {
     try {
       switch (aiIntent.intent) {
-        case "greeting":
-          return await this.handleGreetingIntent(latestMessage.content, conversationHistory, businessTone);
-        case "goodbye":
-          return await this.handleGoodbyeIntent(latestMessage.content, conversationHistory, businessTone);
-        case "question":
-          return await this.handleQuestionIntent(businessId, latestMessage.content, conversationHistory, businessTone);
-        case "complaint":
-          return await this.handleComplaintIntent(businessId, latestMessage.content, conversationHistory, businessTone);
-        case "compliment":
-          return await this.handleComplimentIntent(latestMessage.content, conversationHistory, businessTone);
-        case "appointment":
-          return await this.handleAppointmentIntent(
-            businessId,
-            latestMessage.content,
-            conversationHistory,
-            businessTone
-          );
-        case "information_request":
-          return await this.handleInformationRequestIntent(
-            businessId,
-            latestMessage.content,
-            conversationHistory,
-            businessTone
-          );
-        case "confirmation":
-          return await this.handleConfirmationIntent(latestMessage.content, conversationHistory, businessTone);
-        case "cancellation":
-          return await this.handleCancellationIntent(
-            businessId,
-            latestMessage.content,
-            conversationHistory,
-            businessTone
-          );
-        case "help_request":
-          return await this.handleHelpRequestIntent(
-            businessId,
-            latestMessage.content,
-            conversationHistory,
-            businessTone
-          );
         case "faq":
           return await this.handleFAQIntent(businessId, latestMessage.content, conversationHistory, businessTone);
         case "gmail_send":
@@ -137,11 +98,107 @@ class OpenAIService {
             conversationHistory,
             businessTone
           );
+        // HubSpot intents
+        case "hubspot_contact_create":
+          return await this.handleHubSpotContactCreateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "hubspot_contact_search":
+          return await this.handleHubSpotContactSearchIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "hubspot_contact_update":
+          return await this.handleHubSpotContactUpdateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "hubspot_deal_create":
+          return await this.handleHubSpotDealCreateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "hubspot_deal_update":
+          return await this.handleHubSpotDealUpdateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "hubspot_company_create":
+          return await this.handleHubSpotCompanyCreateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "hubspot_pipeline_view":
+          return await this.handleHubSpotPipelineViewIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        // Odoo intents
+        case "odoo_customer_create":
+          return await this.handleOdooCustomerCreateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "odoo_customer_search":
+          return await this.handleOdooCustomerSearchIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "odoo_product_create":
+          return await this.handleOdooProductCreateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "odoo_sale_order_create":
+          return await this.handleOdooSaleOrderCreateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "odoo_invoice_create":
+          return await this.handleOdooInvoiceCreateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "odoo_inventory_check":
+          return await this.handleOdooInventoryCheckIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "odoo_lead_create":
+          return await this.handleOdooLeadCreateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
         // Legacy intent support
-        case "GOOGLE_EMAIL":
-          return await this.handleGoogleEmailWithAI(businessId, aiIntent, conversationHistory, businessTone);
-        case "GOOGLE_CALENDAR":
-          return await this.handleGoogleCalendarWithAI(businessId, aiIntent, conversationHistory, businessTone);
         case "HUBSPOT":
           return await this.handleHubSpotWithAI(businessId, aiIntent, conversationHistory, businessTone);
         case "ODOO":
@@ -521,257 +578,7 @@ class OpenAIService {
     return null;
   }
 
-  // Intent-specific handlers (simplified and cleaned up)
-  async handleGreetingIntent(message, conversationHistory, businessTone) {
-    try {
-      const systemPrompt = `You are a friendly business assistant. Respond warmly to greetings.
-
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
-
-Acknowledge the greeting and offer assistance.`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        temperature: 0.7,
-        max_tokens: 100,
-      });
-
-      return response.choices[0].message.content.trim();
-    } catch (error) {
-      console.error("Error handling greeting intent:", error.message);
-      return "Hello! How can I help you today?";
-    }
-  }
-
-  async handleGoodbyeIntent(message, conversationHistory, businessTone) {
-    try {
-      const systemPrompt = `You are a professional business assistant. Respond politely to goodbyes.
-
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
-
-Acknowledge the goodbye and offer final assistance.`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        temperature: 0.6,
-        max_tokens: 100,
-      });
-
-      return response.choices[0].message.content.trim();
-    } catch (error) {
-      console.error("Error handling goodbye intent:", error.message);
-      return "Thank you for contacting us! Have a great day!";
-    }
-  }
-
-  async handleQuestionIntent(businessId, message, conversationHistory, businessTone) {
-    try {
-      const systemPrompt = `You are a knowledgeable business assistant. Answer questions clearly and helpfully.
-
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
-
-Provide accurate and helpful answers to customer questions.`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        temperature: 0.7,
-        max_tokens: 300,
-      });
-
-      return response.choices[0].message.content.trim();
-    } catch (error) {
-      console.error("Error handling question intent:", error.message);
-      return "I would be happy to help answer your question. Could you please provide more details?";
-    }
-  }
-
-  async handleComplaintIntent(businessId, message, conversationHistory, businessTone) {
-    try {
-      const systemPrompt = `You are a professional business assistant. Handle complaints with empathy and professionalism.
-
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
-
-Acknowledge the complaint, show understanding, and offer solutions.`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        temperature: 0.6,
-        max_tokens: 300,
-      });
-
-      return response.choices[0].message.content.trim();
-    } catch (error) {
-      console.error("Error handling complaint intent:", error.message);
-      return "I understand your concern and apologize for any inconvenience. Let me help resolve this issue for you.";
-    }
-  }
-
-  async handleComplimentIntent(message, conversationHistory, businessTone) {
-    try {
-      const systemPrompt = `You are a gracious business assistant. Respond warmly to compliments.
-
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
-
-Acknowledge the compliment graciously and express appreciation.`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        temperature: 0.7,
-        max_tokens: 100,
-      });
-
-      return response.choices[0].message.content.trim();
-    } catch (error) {
-      console.error("Error handling compliment intent:", error.message);
-      return "Thank you so much for your kind words! We really appreciate your feedback.";
-    }
-  }
-
-  async handleAppointmentIntent(businessId, message, conversationHistory, businessTone) {
-    try {
-      const systemPrompt = `You are a helpful business assistant. Handle appointment requests professionally.
-
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
-
-Help with appointment scheduling and provide relevant information.`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
-      });
-
-      return response.choices[0].message.content.trim();
-    } catch (error) {
-      console.error("Error handling appointment intent:", error.message);
-      return "I would be happy to help you with your appointment. What date and time would work best for you?";
-    }
-  }
-
-  async handleInformationRequestIntent(businessId, message, conversationHistory, businessTone) {
-    try {
-      const systemPrompt = `You are a helpful business assistant. Provide information clearly and accurately.
-
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
-
-Answer information requests with helpful and accurate details.`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
-      });
-
-      return response.choices[0].message.content.trim();
-    } catch (error) {
-      console.error("Error handling information request intent:", error.message);
-      return "I would be happy to provide you with information. What specifically would you like to know?";
-    }
-  }
-
-  async handleConfirmationIntent(message, conversationHistory, businessTone) {
-    try {
-      const systemPrompt = `You are a business assistant. Respond positively to confirmations and agreements.
-
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
-
-Acknowledge the confirmation and provide next steps if appropriate.`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        temperature: 0.7,
-        max_tokens: 100,
-      });
-
-      return response.choices[0].message.content.trim();
-    } catch (error) {
-      console.error("Error handling confirmation intent:", error.message);
-      return "Perfect! I have noted your confirmation. Is there anything else I can help you with?";
-    }
-  }
-
-  async handleCancellationIntent(businessId, message, conversationHistory, businessTone) {
-    try {
-      const systemPrompt = `You are a business assistant. Handle cancellations professionally and helpfully.
-
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
-
-Acknowledge the cancellation request and provide information about the cancellation process.`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        temperature: 0.6,
-        max_tokens: 200,
-      });
-
-      return response.choices[0].message.content.trim();
-    } catch (error) {
-      console.error("Error handling cancellation intent:", error.message);
-      return "I understand you would like to cancel. Let me help you with that process. Could you provide more details?";
-    }
-  }
-
-  async handleHelpRequestIntent(businessId, message, conversationHistory, businessTone) {
-    try {
-      const systemPrompt = `You are a helpful business assistant. Provide assistance and guidance.
-
-${businessTone ? `Business Tone: ${businessTone.tone_instructions}` : ""}
-
-Offer help and ask clarifying questions to better understand what the customer needs.`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
-      });
-
-      return response.choices[0].message.content.trim();
-    } catch (error) {
-      console.error("Error handling help request intent:", error.message);
-      return "I am here to help! What specific assistance do you need? Please let me know how I can support you.";
-    }
-  }
-
+  // Intent-specific handlers
   async handleFAQIntent(businessId, message, conversationHistory, businessTone) {
     try {
       // Use embeddings service for FAQ detection
@@ -797,63 +604,6 @@ Offer help and ask clarifying questions to better understand what the customer n
         conversationHistory,
         businessTone
       );
-    }
-  }
-
-  // Legacy integration handlers (simplified)
-  async handleGoogleEmailWithAI(businessId, intent, conversationHistory, businessTone) {
-    try {
-      if (intent.action === "send" && intent.user_email && intent.subject && intent.body) {
-        const result = await GoogleService.sendEmail(businessId, {
-          to: intent.user_email,
-          subject: intent.subject,
-          body: intent.body,
-          isHtml: false,
-        });
-        return `✅ Email sent successfully to ${intent.user_email}`;
-      }
-      return "I would be happy to help you send an email. Please provide the recipient, subject, and message content.";
-    } catch (error) {
-      console.error("Error handling Google email:", error.message);
-      return "I apologize, but I could not send the email. Please check your email configuration.";
-    }
-  }
-
-  async handleGoogleCalendarWithAI(businessId, intent, conversationHistory, businessTone) {
-    try {
-      if (intent.action === "schedule") {
-        const eventData = {
-          title: intent.title || "Meeting",
-          startTime: intent.startTime || new Date().toISOString(),
-          endTime: intent.endTime || new Date(Date.now() + 3600000).toISOString(),
-          description: intent.description || "",
-        };
-
-        const result = await GoogleService.createCalendarEvent(businessId, eventData);
-        return `✅ Calendar event created successfully`;
-      }
-      return "I would be happy to help you with calendar scheduling. What would you like to schedule?";
-    } catch (error) {
-      console.error("Error handling Google calendar:", error.message);
-      return "I apologize, but I could not access your calendar. Please check your calendar configuration.";
-    }
-  }
-
-  async handleHubSpotWithAI(businessId, intent, conversationHistory, businessTone) {
-    try {
-      return "I would be happy to help you with HubSpot operations. What would you like to do?";
-    } catch (error) {
-      console.error("Error handling HubSpot request:", error.message);
-      return "I apologize, but I could not process your HubSpot request. Please check your HubSpot configuration.";
-    }
-  }
-
-  async handleOdooWithAI(businessId, intent, phoneNumber, conversationHistory, businessTone) {
-    try {
-      return "I would be happy to help you with Odoo operations. What would you like to do?";
-    } catch (error) {
-      console.error("Error handling Odoo request:", error.message);
-      return "I apologize, but I could not process your Odoo request. Please check your Odoo configuration.";
     }
   }
 
@@ -1037,6 +787,480 @@ Offer help and ask clarifying questions to better understand what the customer n
     } catch (error) {
       console.error("Error handling calendar delete intent:", error.message);
       return "I apologize, but I could not delete your calendar event. Please check your calendar configuration.";
+    }
+  }
+
+  // HubSpot intent handlers
+  async handleHubSpotContactCreateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[HUBSPOT_CONTACT_CREATE] Processing HubSpot contact create request for business ${businessId}: ${message}`
+      );
+
+      // Extract contact details from the message using AI
+      const contactPrompt = `Extract contact details from this message: "${message}"
+      
+      Return JSON with:
+      - firstName: contact first name
+      - lastName: contact last name
+      - email: contact email address
+      - phone: contact phone number
+      - company: company name
+      
+      If any field is missing, use reasonable defaults.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: contactPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      const contactData = JSON.parse(response.choices[0].message.content);
+
+      // Create contact using HubSpot Service
+      const result = await HubSpotService.createContact(businessId, contactData);
+
+      if (result.success) {
+        return `✅ Contact "${contactData.firstName} ${contactData.lastName}" created successfully in HubSpot`;
+      } else {
+        return `❌ Failed to create contact: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling HubSpot contact create intent:", error.message);
+      return "I apologize, but I could not create your contact. Please check your HubSpot configuration.";
+    }
+  }
+
+  async handleHubSpotContactSearchIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[HUBSPOT_CONTACT_SEARCH] Processing HubSpot contact search request for business ${businessId}: ${message}`
+      );
+
+      // Extract search criteria from the message using AI
+      const searchPrompt = `Extract search criteria from this message: "${message}"
+      
+      Return JSON with:
+      - searchTerm: name, email, or phone to search for
+      
+      If searchTerm is not provided, use "all" to get recent contacts.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: searchPrompt }],
+        temperature: 0.1,
+        max_tokens: 100,
+      });
+
+      const searchData = JSON.parse(response.choices[0].message.content);
+
+      // Search contacts using HubSpot Service
+      const result = await HubSpotService.searchContacts(businessId, searchData.searchTerm);
+
+      if (result.success && result.contacts.length > 0) {
+        const contactsList = result.contacts
+          .map((contact) => `• ${contact.firstName} ${contact.lastName} - ${contact.email}`)
+          .join("\n");
+
+        return `📇 Found ${result.contacts.length} contact(s):\n${contactsList}`;
+      } else if (result.success) {
+        return "📇 No contacts found matching your search criteria.";
+      } else {
+        return `❌ Failed to search contacts: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling HubSpot contact search intent:", error.message);
+      return "I apologize, but I could not search your contacts. Please check your HubSpot configuration.";
+    }
+  }
+
+  async handleHubSpotContactUpdateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[HUBSPOT_CONTACT_UPDATE] Processing HubSpot contact update request for business ${businessId}: ${message}`
+      );
+
+      return "I apologize, but contact update functionality is not yet implemented. Please use the HubSpot web interface to update contacts.";
+    } catch (error) {
+      console.error("Error handling HubSpot contact update intent:", error.message);
+      return "I apologize, but I could not update your contact. Please check your HubSpot configuration.";
+    }
+  }
+
+  async handleHubSpotDealCreateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[HUBSPOT_DEAL_CREATE] Processing HubSpot deal create request for business ${businessId}: ${message}`
+      );
+
+      // Extract deal details from the message using AI
+      const dealPrompt = `Extract deal details from this message: "${message}"
+      
+      Return JSON with:
+      - name: name of the deal
+      - amount: deal amount (number)
+      - stage: deal stage
+      - closeDate: close date (ISO format)
+      
+      If any field is missing, use reasonable defaults.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: dealPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      const dealData = JSON.parse(response.choices[0].message.content);
+
+      // Create deal using HubSpot Service
+      const result = await HubSpotService.createDeal(businessId, dealData);
+
+      if (result.success) {
+        return `✅ Deal "${dealData.name}" created successfully in HubSpot`;
+      } else {
+        return `❌ Failed to create deal: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling HubSpot deal create intent:", error.message);
+      return "I apologize, but I could not create your deal. Please check your HubSpot configuration.";
+    }
+  }
+
+  async handleHubSpotDealUpdateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[HUBSPOT_DEAL_UPDATE] Processing HubSpot deal update request for business ${businessId}: ${message}`
+      );
+
+      return "I apologize, but deal update functionality is not yet implemented. Please use the HubSpot web interface to update deals.";
+    } catch (error) {
+      console.error("Error handling HubSpot deal update intent:", error.message);
+      return "I apologize, but I could not update your deal. Please check your HubSpot configuration.";
+    }
+  }
+
+  async handleHubSpotCompanyCreateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[HUBSPOT_COMPANY_CREATE] Processing HubSpot company create request for business ${businessId}: ${message}`
+      );
+
+      // Extract company details from the message using AI
+      const companyPrompt = `Extract company details from this message: "${message}"
+      
+      Return JSON with:
+      - name: company name
+      - domain: company domain/website
+      - industry: company industry
+      - city: company city
+      - state: company state
+      - country: company country
+      
+      If any field is missing, use reasonable defaults.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: companyPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      const companyData = JSON.parse(response.choices[0].message.content);
+
+      // Create company using HubSpot Service
+      const result = await HubSpotService.createCompany(businessId, companyData);
+
+      if (result.success) {
+        return `✅ Company "${companyData.name}" created successfully in HubSpot`;
+      } else {
+        return `❌ Failed to create company: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling HubSpot company create intent:", error.message);
+      return "I apologize, but I could not create your company. Please check your HubSpot configuration.";
+    }
+  }
+
+  async handleHubSpotPipelineViewIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[HUBSPOT_PIPELINE_VIEW] Processing HubSpot pipeline view request for business ${businessId}: ${message}`
+      );
+
+      return "I apologize, but pipeline view functionality is not yet implemented. Please use the HubSpot web interface to view your sales pipeline.";
+    } catch (error) {
+      console.error("Error handling HubSpot pipeline view intent:", error.message);
+      return "I apologize, but I could not retrieve your pipeline. Please check your HubSpot configuration.";
+    }
+  }
+
+  // Odoo intent handlers
+  async handleOdooCustomerCreateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[ODOO_CUSTOMER_CREATE] Processing Odoo customer create request for business ${businessId}: ${message}`
+      );
+
+      // Extract customer details from the message using AI
+      const customerPrompt = `Extract customer details from this message: "${message}"
+      
+      Return JSON with:
+      - name: customer name
+      - email: customer email address
+      - phone: customer phone number
+      - street: customer street address
+      - city: customer city
+      - country: customer country
+      
+      If any field is missing, use reasonable defaults.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: customerPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      const customerData = JSON.parse(response.choices[0].message.content);
+
+      // Create customer using Odoo Service
+      const result = await OdooService.createCustomer(businessId, customerData);
+
+      if (result.success) {
+        return `✅ Customer "${customerData.name}" created successfully in Odoo`;
+      } else {
+        return `❌ Failed to create customer: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling Odoo customer create intent:", error.message);
+      return "I apologize, but I could not create your customer. Please check your Odoo configuration.";
+    }
+  }
+
+  async handleOdooCustomerSearchIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[ODOO_CUSTOMER_SEARCH] Processing Odoo customer search request for business ${businessId}: ${message}`
+      );
+
+      // Extract search criteria from the message using AI
+      const searchPrompt = `Extract search criteria from this message: "${message}"
+      
+      Return JSON with:
+      - searchTerm: name, email, or phone to search for
+      
+      If searchTerm is not provided, use "all" to get recent customers.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: searchPrompt }],
+        temperature: 0.1,
+        max_tokens: 100,
+      });
+
+      const searchData = JSON.parse(response.choices[0].message.content);
+
+      // Search customers using Odoo Service
+      const result = await OdooService.searchCustomers(businessId, searchData.searchTerm);
+
+      if (result.success && result.customers.length > 0) {
+        const customersList = result.customers.map((customer) => `• ${customer.name} - ${customer.email}`).join("\n");
+
+        return `👥 Found ${result.customers.length} customer(s):\n${customersList}`;
+      } else if (result.success) {
+        return "👥 No customers found matching your search criteria.";
+      } else {
+        return `❌ Failed to search customers: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling Odoo customer search intent:", error.message);
+      return "I apologize, but I could not search your customers. Please check your Odoo configuration.";
+    }
+  }
+
+  async handleOdooProductCreateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[ODOO_PRODUCT_CREATE] Processing Odoo product create request for business ${businessId}: ${message}`
+      );
+
+      // Extract product details from the message using AI
+      const productPrompt = `Extract product details from this message: "${message}"
+      
+      Return JSON with:
+      - name: product name
+      - type: product type (consu, service, product)
+      - list_price: product price
+      - standard_price: cost price
+      - description: product description
+      
+      If any field is missing, use reasonable defaults.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: productPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      const productData = JSON.parse(response.choices[0].message.content);
+
+      // Create product using Odoo Service
+      const result = await OdooService.createProduct(businessId, productData);
+
+      if (result.success) {
+        return `✅ Product "${productData.name}" created successfully in Odoo`;
+      } else {
+        return `❌ Failed to create product: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling Odoo product create intent:", error.message);
+      return "I apologize, but I could not create your product. Please check your Odoo configuration.";
+    }
+  }
+
+  async handleOdooSaleOrderCreateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[ODOO_SALE_ORDER_CREATE] Processing Odoo sale order create request for business ${businessId}: ${message}`
+      );
+
+      // Extract sale order details from the message using AI
+      const orderPrompt = `Extract sale order details from this message: "${message}"
+      
+      Return JSON with:
+      - partner_id: customer ID or name
+      - order_line: array of products with product_id, product_uom_qty, price_unit
+      - note: order notes
+      
+      If any field is missing, use reasonable defaults.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: orderPrompt }],
+        temperature: 0.1,
+        max_tokens: 300,
+      });
+
+      const orderData = JSON.parse(response.choices[0].message.content);
+
+      // Create sale order using Odoo Service
+      const result = await OdooService.createSaleOrder(businessId, orderData);
+
+      if (result.success) {
+        return `✅ Sale order created successfully in Odoo`;
+      } else {
+        return `❌ Failed to create sale order: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling Odoo sale order create intent:", error.message);
+      return "I apologize, but I could not create your sale order. Please check your Odoo configuration.";
+    }
+  }
+
+  async handleOdooInvoiceCreateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[ODOO_INVOICE_CREATE] Processing Odoo invoice create request for business ${businessId}: ${message}`
+      );
+
+      // Extract invoice details from the message using AI
+      const invoicePrompt = `Extract invoice details from this message: "${message}"
+      
+      Return JSON with:
+      - partner_id: customer ID or name
+      - invoice_line_ids: array of products with product_id, quantity, price_unit
+      - note: invoice notes
+      
+      If any field is missing, use reasonable defaults.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: invoicePrompt }],
+        temperature: 0.1,
+        max_tokens: 300,
+      });
+
+      const invoiceData = JSON.parse(response.choices[0].message.content);
+
+      // Create invoice using Odoo Service
+      const result = await OdooService.createInvoice(businessId, invoiceData);
+
+      if (result.success) {
+        return `✅ Invoice created successfully in Odoo`;
+      } else {
+        return `❌ Failed to create invoice: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling Odoo invoice create intent:", error.message);
+      return "I apologize, but I could not create your invoice. Please check your Odoo configuration.";
+    }
+  }
+
+  async handleOdooInventoryCheckIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[ODOO_INVENTORY_CHECK] Processing Odoo inventory check request for business ${businessId}: ${message}`
+      );
+
+      // Get inventory data using Odoo Service
+      const result = await OdooService.getInventory(businessId);
+
+      if (result.success && result.products.length > 0) {
+        const inventoryList = result.products
+          .map((product) => `• ${product.name} - Qty: ${product.qty_available}`)
+          .join("\n");
+
+        return `📦 Current inventory:\n${inventoryList}`;
+      } else if (result.success) {
+        return "📦 Your inventory is currently empty.";
+      } else {
+        return `❌ Failed to retrieve inventory: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling Odoo inventory check intent:", error.message);
+      return "I apologize, but I could not retrieve your inventory. Please check your Odoo configuration.";
+    }
+  }
+
+  async handleOdooLeadCreateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`[ODOO_LEAD_CREATE] Processing Odoo lead create request for business ${businessId}: ${message}`);
+
+      // Extract lead details from the message using AI
+      const leadPrompt = `Extract lead details from this message: "${message}"
+      
+      Return JSON with:
+      - name: lead name or title
+      - partner_name: contact name
+      - email_from: contact email
+      - phone: contact phone
+      - description: lead description
+      
+      If any field is missing, use reasonable defaults.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: leadPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      const leadData = JSON.parse(response.choices[0].message.content);
+
+      // Create lead using Odoo Service
+      const result = await OdooService.createLead(businessId, leadData);
+
+      if (result.success) {
+        return `✅ Lead "${leadData.name}" created successfully in Odoo`;
+      } else {
+        return `❌ Failed to create lead: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling Odoo lead create intent:", error.message);
+      return "I apologize, but I could not create your lead. Please check your Odoo configuration.";
     }
   }
 }

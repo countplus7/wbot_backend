@@ -387,6 +387,112 @@ class OdooService {
 
     return moduleStatus;
   }
+
+  // Additional Odoo methods for intent handlers
+  async searchCustomers(businessId, searchTerm) {
+    try {
+      const domain = searchTerm === "all" 
+        ? [] 
+        : [
+            "|", "|",
+            ["name", "ilike", searchTerm],
+            ["email", "ilike", searchTerm],
+            ["phone", "ilike", searchTerm]
+          ];
+
+      const customers = await this.makeJsonRpcCall(
+        businessId,
+        "search_read",
+        "res.partner",
+        [domain, ["name", "email", "phone"]],
+        { limit: 10 }
+      );
+
+      return {
+        success: true,
+        customers: customers || [],
+      };
+    } catch (error) {
+      console.error("Error searching customers:", error.message);
+      return {
+        success: false,
+        error: error.message,
+        customers: [],
+      };
+    }
+  }
+
+  async createProduct(businessId, productData) {
+    try {
+      const values = {
+        name: productData.name,
+        type: productData.type || "consu",
+        list_price: productData.list_price || 0,
+        standard_price: productData.standard_price || 0,
+        description: productData.description || "",
+      };
+
+      const result = await this.makeJsonRpcCall(businessId, "create", "product.product", [values]);
+
+      return {
+        success: true,
+        productId: result,
+      };
+    } catch (error) {
+      console.error("Error creating product:", error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  async createInvoice(businessId, invoiceData) {
+    try {
+      const values = {
+        partner_id: invoiceData.partner_id,
+        invoice_line_ids: invoiceData.invoice_line_ids || [],
+        note: invoiceData.note || "",
+      };
+
+      const result = await this.makeJsonRpcCall(businessId, "create", "account.move", [values]);
+
+      return {
+        success: true,
+        invoiceId: result,
+      };
+    } catch (error) {
+      console.error("Error creating invoice:", error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  async getInventory(businessId) {
+    try {
+      const products = await this.makeJsonRpcCall(
+        businessId,
+        "search_read",
+        "product.product",
+        [[], ["name", "qty_available", "list_price"]],
+        { limit: 50 }
+      );
+
+      return {
+        success: true,
+        products: products || [],
+      };
+    } catch (error) {
+      console.error("Error getting inventory:", error.message);
+      return {
+        success: false,
+        error: error.message,
+        products: [],
+      };
+    }
+  }
 }
 
 module.exports = new OdooService();

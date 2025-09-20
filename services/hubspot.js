@@ -333,6 +333,93 @@ class HubSpotService {
       throw new Error("Failed to delete HubSpot integration");
     }
   }
+
+  // Additional HubSpot methods for intent handlers
+  async updateContact(businessId, contactId, updates) {
+    try {
+      const accessToken = await this.getValidAccessToken(businessId);
+
+      const response = await axios.patch(
+        `${this.baseURL}/crm/v3/objects/contacts/${contactId}`,
+        {
+          properties: updates,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      return {
+        success: true,
+        contact: response.data,
+      };
+    } catch (err) {
+      console.error("Error updating HubSpot contact:", err.response?.data || err.message);
+      throw new Error("Failed to update contact in HubSpot");
+    }
+  }
+
+  async updateDeal(businessId, dealId, updates) {
+    try {
+      const accessToken = await this.getValidAccessToken(businessId);
+
+      const response = await axios.patch(
+        `${this.baseURL}/crm/v3/objects/deals/${dealId}`,
+        {
+          properties: updates,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      return {
+        success: true,
+        deal: response.data,
+      };
+    } catch (err) {
+      console.error("Error updating HubSpot deal:", err.response?.data || err.message);
+      throw new Error("Failed to update deal in HubSpot");
+    }
+  }
+
+  async getPipeline(businessId) {
+    try {
+      const accessToken = await this.getValidAccessToken(businessId);
+
+      const response = await axios.get(
+        `${this.baseURL}/crm/v3/objects/deals`,
+        {
+          params: {
+            properties: ["dealname", "amount", "dealstage", "closedate"],
+            limit: 50,
+          },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const deals = response.data.results || [];
+      const totalValue = deals.reduce((sum, deal) => sum + (parseFloat(deal.properties.amount) || 0), 0);
+
+      return {
+        success: true,
+        pipeline: deals,
+        totalValue: totalValue,
+      };
+    } catch (err) {
+      console.error("Error getting HubSpot pipeline:", err.response?.data || err.message);
+      throw new Error("Failed to get pipeline from HubSpot");
+    }
+  }
 }
 
 module.exports = new HubSpotService();

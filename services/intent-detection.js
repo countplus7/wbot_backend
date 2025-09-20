@@ -300,16 +300,25 @@ ${availableIntents}
 Return only JSON: {"intent": "intent_name", "confidence": 0.9}
 
 Examples:
-"Hello" -> {"intent": "greeting", "confidence": 0.9}
-"What are your hours?" -> {"intent": "faq", "confidence": 0.9}
-"I need help" -> {"intent": "help_request", "confidence": 0.9}
-"Thank you" -> {"intent": "compliment", "confidence": 0.8}
-"Cancel my appointment" -> {"intent": "cancellation", "confidence": 0.9}
 "Send an email to john@example.com" -> {"intent": "gmail_send", "confidence": 0.9}
 "Schedule a meeting for tomorrow" -> {"intent": "calendar_create", "confidence": 0.9}
 "Check my availability" -> {"intent": "calendar_check", "confidence": 0.9}
 "Reschedule my meeting" -> {"intent": "calendar_update", "confidence": 0.9}
-"Cancel my meeting" -> {"intent": "calendar_delete", "confidence": 0.9}`;
+"Cancel my meeting" -> {"intent": "calendar_delete", "confidence": 0.9}
+"Create a new contact" -> {"intent": "hubspot_contact_create", "confidence": 0.9}
+"Search for contacts" -> {"intent": "hubspot_contact_search", "confidence": 0.9}
+"Update contact information" -> {"intent": "hubspot_contact_update", "confidence": 0.9}
+"Create a new deal" -> {"intent": "hubspot_deal_create", "confidence": 0.9}
+"Update deal information" -> {"intent": "hubspot_deal_update", "confidence": 0.9}
+"Create a new company" -> {"intent": "hubspot_company_create", "confidence": 0.9}
+"View my sales pipeline" -> {"intent": "hubspot_pipeline_view", "confidence": 0.9}
+"Create a new customer" -> {"intent": "odoo_customer_create", "confidence": 0.9}
+"Search for customers" -> {"intent": "odoo_customer_search", "confidence": 0.9}
+"Create a new product" -> {"intent": "odoo_product_create", "confidence": 0.9}
+"Create a new sale order" -> {"intent": "odoo_sale_order_create", "confidence": 0.9}
+"Create a new invoice" -> {"intent": "odoo_invoice_create", "confidence": 0.9}
+"Check inventory" -> {"intent": "odoo_inventory_check", "confidence": 0.9}
+"Create a new lead" -> {"intent": "odoo_lead_create", "confidence": 0.9}`;
 
       const response = await this.openai.chat.completions.create({
         model: this.chatModel,
