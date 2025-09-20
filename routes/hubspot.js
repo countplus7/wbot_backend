@@ -70,7 +70,7 @@ router.get(
     try {
       const stateData = JSON.parse(state);
       const result = await HubSpotService.exchangeCodeForTokens(code, stateData.businessId);
-      
+
       res.send(`
         <!DOCTYPE html>
         <html>
@@ -127,13 +127,15 @@ router.post(
     const { client_id, client_secret, redirect_uri } = req.body;
 
     if (!client_id || !client_secret) {
-      return res.status(400).json(createResponse(false, null, "Client ID and Client Secret are required", null, "VALIDATION_ERROR"));
+      return res
+        .status(400)
+        .json(createResponse(false, null, "Client ID and Client Secret are required", null, "VALIDATION_ERROR"));
     }
 
     const config = await HubSpotService.saveIntegration(parseInt(businessId), {
       client_id,
       client_secret,
-      redirect_uri
+      redirect_uri,
     });
 
     res.status(201).json(createResponse(true, config, "HubSpot configuration saved successfully"));
@@ -184,77 +186,13 @@ router.get(
     const { businessId } = req.params;
     const isIntegrated = await HubSpotService.isIntegrated(parseInt(businessId));
     const config = await HubSpotService.getConfig(parseInt(businessId));
-    
-    res.json(createResponse(true, { 
-      isIntegrated, 
-      config: config || null 
-    }));
-  })
-);
 
-/**
- * Create Contact
- * POST /api/hubspot/contacts/:businessId
- */
-router.post(
-  "/contacts/:businessId",
-  authMiddleware,
-  validate([commonValidations.businessId]),
-  asyncHandler(async (req, res) => {
-    const { businessId } = req.params;
-    const contact = await HubSpotService.createContact(parseInt(businessId), req.body);
-    res.status(201).json(createResponse(true, contact, "Contact created successfully"));
-  })
-);
-
-/**
- * Search Contacts
- * POST /api/hubspot/contacts/search/:businessId
- */
-router.post(
-  "/contacts/search/:businessId",
-  authMiddleware,
-  validate([commonValidations.businessId]),
-  asyncHandler(async (req, res) => {
-    const { businessId } = req.params;
-    const { searchTerm } = req.body;
-    
-    if (!searchTerm) {
-      return res.status(400).json(createResponse(false, null, "Search term is required", null, "VALIDATION_ERROR"));
-    }
-    
-    const contacts = await HubSpotService.searchContacts(parseInt(businessId), searchTerm);
-    res.json(createResponse(true, contacts));
-  })
-);
-
-/**
- * Create Company
- * POST /api/hubspot/companies/:businessId
- */
-router.post(
-  "/companies/:businessId",
-  authMiddleware,
-  validate([commonValidations.businessId]),
-  asyncHandler(async (req, res) => {
-    const { businessId } = req.params;
-    const company = await HubSpotService.createCompany(parseInt(businessId), req.body);
-    res.status(201).json(createResponse(true, company, "Company created successfully"));
-  })
-);
-
-/**
- * Create Deal
- * POST /api/hubspot/deals/:businessId
- */
-router.post(
-  "/deals/:businessId",
-  authMiddleware,
-  validate([commonValidations.businessId]),
-  asyncHandler(async (req, res) => {
-    const { businessId } = req.params;
-    const deal = await HubSpotService.createDeal(parseInt(businessId), req.body);
-    res.status(201).json(createResponse(true, deal, "Deal created successfully"));
+    res.json(
+      createResponse(true, {
+        isIntegrated,
+        config: config || null,
+      })
+    );
   })
 );
 
