@@ -96,11 +96,17 @@ class WhatsAppService {
    * @param {number} retries - Number of retry attempts
    * @returns {Promise<Object>} Media data with buffer and metadata
    */
+
   async downloadMedia(mediaId, retries = 3) {
     try {
+      console.log(`[DEBUG] Starting media download for ID: ${mediaId}`);
+
       if (!this.accessToken) {
+        console.error("[DEBUG] No access token available");
         throw new Error("WhatsApp configuration not set. Please set business config first.");
       }
+
+      console.log(`[DEBUG] Getting media URL from: ${this.baseURL}/${mediaId}`);
 
       // Get media URL from WhatsApp
       const mediaResponse = await axios.get(`${this.baseURL}/${mediaId}`, {
@@ -109,10 +115,15 @@ class WhatsAppService {
         },
       });
 
+      console.log(`[DEBUG] Media URL response:`, JSON.stringify(mediaResponse.data, null, 2));
+
       const mediaUrl = mediaResponse.data.url;
       if (!mediaUrl) {
+        console.error("[DEBUG] No media URL found in response");
         throw new Error("No media URL found in response");
       }
+
+      console.log(`[DEBUG] Downloading media from URL: ${mediaUrl}`);
 
       // Download the actual media file as a stream
       const downloadResponse = await axios.get(mediaUrl, {
@@ -126,7 +137,9 @@ class WhatsAppService {
       const contentType = downloadResponse.headers["content-type"];
       const contentLength = downloadResponse.headers["content-length"];
 
-      return {
+      console.log(`[DEBUG] Downloaded media - Content Type: ${contentType}, Size: ${contentLength}`);
+
+      const result = {
         stream: downloadResponse.data,
         mimeType: contentType,
         fileSize: contentLength ? parseInt(contentLength) : undefined,
@@ -136,11 +149,15 @@ class WhatsAppService {
         contentType: contentType, // Keep for backward compatibility
         size: contentLength ? parseInt(contentLength) : undefined, // Keep for backward compatibility
       };
+
+      console.log(`[DEBUG] Returning media data:`, JSON.stringify(result, null, 2));
+      return result;
     } catch (error) {
-      console.error("Error downloading media:", error.response?.data || error.message);
+      console.error("[DEBUG] Error downloading media:", error.response?.data || error.message);
+      console.error("[DEBUG] Full error:", error);
 
       if (retries > 0) {
-        console.log(`Retrying media download... ${retries} attempts left`);
+        console.log(`[DEBUG] Retrying media download... ${retries} attempts left`);
         await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second before retry
         return this.downloadMedia(mediaId, retries - 1);
       }
