@@ -71,6 +71,7 @@ class OpenAIService {
         case "gmail_send":
           return await this.handleGmailSendIntent(businessId, latestMessage.content, conversationHistory, businessTone);
         case "calendar_create":
+        case "APPOINTMENT": // Handle both calendar_create and APPOINTMENT intents
           return await this.handleCalendarCreateIntent(
             businessId,
             latestMessage.content,
