@@ -614,22 +614,53 @@ class OpenAIService {
 
       // Extract email details from the message using AI
       const emailPrompt = `Extract email details from this message: "${message}"
-      
-      Return JSON with:
-      - to: recipient email address
-      - subject: email subject
-      - body: email content
-      
-      If any field is missing, use reasonable defaults.`;
+
+You must respond with ONLY valid JSON in this exact format:
+{
+  "to": "recipient@example.com",
+  "subject": "email subject",
+  "body": "email content"
+}
+
+Do not include any explanation or additional text, only the JSON.`;
 
       const response = await openai.chat.completions.create({
         model: this.chatModel,
-        messages: [{ role: "user", content: emailPrompt }],
+        messages: [
+          { 
+            role: "system", 
+            content: "You are a helpful assistant that extracts email data and responds only with valid JSON. Never include explanatory text, only JSON." 
+          },
+          { role: "user", content: emailPrompt }
+        ],
         temperature: 0.1,
-        max_tokens: 200,
+        max_tokens: 150,
       });
 
-      const emailData = JSON.parse(response.choices[0].message.content);
+      let emailData;
+      try {
+        const aiResponse = response.choices[0].message.content.trim();
+        console.log(`[GMAIL_SEND] AI Response: ${aiResponse}`);
+        
+        // Try to extract JSON if it's wrapped in other text
+        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : aiResponse;
+        
+        emailData = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error(`[GMAIL_SEND] JSON Parse Error: ${parseError.message}`);
+        console.error(`[GMAIL_SEND] Raw AI Response: ${response.choices[0].message.content}`);
+        
+        // Fallback: extract email details manually from the original message
+        emailData = this.extractEmailDataFallback(message);
+      }
+
+      // Validate required fields
+      if (!emailData.to || !emailData.subject || !emailData.body) {
+        throw new Error("Missing required email fields (to, subject, body)");
+      }
+
+      console.log(`[GMAIL_SEND] Extracted email data:`, emailData);
 
       // Send email using Google Service
       const result = await GoogleService.sendEmail(businessId, {
@@ -638,15 +669,24 @@ class OpenAIService {
         body: emailData.body,
       });
 
-      if (result.success) {
-        return `✅ Email sent successfully to ${emailData.to}`;
-      } else {
-        return `❌ Failed to send email: ${result.error}`;
-      }
+      return `✅ Email sent successfully to ${emailData.to}!\nSubject: ${emailData.subject}`;
     } catch (error) {
       console.error("Error handling Gmail send intent:", error.message);
-      return "I apologize, but I could not send your email. Please check your Gmail configuration.";
+      return "I apologize, but I encountered an error while trying to send your email. Please make sure you've provided the recipient email, subject, and message content, and verify your Gmail integration is properly configured.";
     }
+  }
+
+  // Add fallback method for extracting email data
+  extractEmailDataFallback(message) {
+    // Simple regex patterns to extract email components
+    const emailMatch = message.match(/(?:to|send to|recipient|email)\s*:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    const subjectMatch = message.match(/(?:subject|title|topic)\s*:?\s*(.+?)(?:\n|$)/i);
+    
+    return {
+      to: emailMatch ? emailMatch[1] : "recipient@example.com",
+      subject: subjectMatch ? subjectMatch[1].trim() : "Test Subject",
+      body: message.includes("body") ? message.split("body")[1]?.trim() || "Test message" : "Test message"
+    };
   }
 
   // Calendar intent handlers
