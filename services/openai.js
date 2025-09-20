@@ -266,18 +266,31 @@ class OpenAIService {
   // Add this helper method for audio conversion using fluent-ffmpeg
   async convertAudioToWav(inputPath, outputPath) {
     return new Promise((resolve, reject) => {
+      // Set ffmpeg path if needed (uncomment and modify if ffmpeg is not in PATH)
+      // ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
+      
       ffmpeg(inputPath)
         .audioFrequency(16000) // Set sample rate to 16kHz (optimal for Whisper)
         .audioChannels(1) // Convert to mono
         .audioCodec('pcm_s16le') // Use PCM 16-bit little-endian (WAV format)
         .format('wav')
+        .on('start', (commandLine) => {
+          console.log(`[DEBUG] FFmpeg command: ${commandLine}`);
+        })
+        .on('progress', (progress) => {
+          console.log(`[DEBUG] Conversion progress: ${progress.percent}% done`);
+        })
         .on('end', () => {
           console.log(`[DEBUG] Audio converted successfully: ${outputPath}`);
           resolve();
         })
         .on('error', (error) => {
           console.error(`[DEBUG] Audio conversion failed:`, error.message);
-          reject(new Error(`Failed to convert audio: ${error.message}`));
+          if (error.message.includes('Cannot find ffmpeg')) {
+            reject(new Error(`FFmpeg is not installed. Please install ffmpeg on your server: sudo apt install ffmpeg`));
+          } else {
+            reject(new Error(`Failed to convert audio: ${error.message}`));
+          }
         })
         .save(outputPath);
     });
