@@ -72,19 +72,33 @@ router.post("/webhook", async (req, res) => {
           if (mediaError) {
             console.log("Sending media download failure notification to user");
 
-            // Send a helpful message to the user about the failed media
-            const recipientId = status.recipient_id;
-
-            try {
-              await WhatsAppService.sendMessage(
-                recipientId,
-                "I'm sorry, but I couldn't process your voice message due to a technical issue. " +
-                  "This sometimes happens with voice notes. Please try sending your message again, " +
-                  "or you can type your message instead. I'm here to help! 😊"
-              );
-              console.log("Media download failure notification sent successfully");
-            } catch (error) {
-              console.error("Failed to send media download failure notification:", error);
+            // Get the phone number ID from the webhook metadata to identify the business
+            const phoneNumberId = changes?.value?.metadata?.phone_number_id;
+            if (phoneNumberId) {
+              try {
+                // Get WhatsApp configuration for this business
+                const whatsappConfig = await BusinessService.getWhatsAppConfigByPhoneNumber(phoneNumberId);
+                if (whatsappConfig) {
+                  // Configure WhatsApp service before sending message
+                  WhatsAppService.setBusinessConfig(whatsappConfig);
+                  
+                  // Send a helpful message to the user about the failed media
+                  const recipientId = status.recipient_id;
+                  await WhatsAppService.sendMessage(
+                    recipientId,
+                    "I'm sorry, but I couldn't process your voice message due to a technical issue. " +
+                      "This sometimes happens with voice notes. Please try sending your message again, " +
+                      "or you can type your message instead. I'm here to help! ��"
+                  );
+                  console.log("Media download failure notification sent successfully");
+                } else {
+                  console.error("No WhatsApp configuration found for phone number:", phoneNumberId);
+                }
+              } catch (error) {
+                console.error("Failed to send media download failure notification:", error);
+              }
+            } else {
+              console.error("No phone number ID found in webhook metadata");
             }
           }
         }
