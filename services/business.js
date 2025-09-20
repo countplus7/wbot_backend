@@ -254,19 +254,6 @@ class BusinessService {
       throw new Error("Failed to get Google Workspace configuration");
     }
   }
-
-  async getBusinessToneById(businessId, toneId) {
-    try {
-      const result = await pool.query("SELECT * FROM business_tones WHERE id = $1 AND business_id = $2", [
-        toneId,
-        businessId,
-      ]);
-      return result.rows[0] || null;
-    } catch (error) {
-      console.error("Error getting business tone by ID:", error);
-      throw error;
-    }
-  }
 }
 
 module.exports = new BusinessService();
