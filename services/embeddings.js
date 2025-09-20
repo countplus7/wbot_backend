@@ -154,55 +154,21 @@ class EmbeddingsService {
    */
   async detectIntentWithEmbeddings(message, intentExamples = {}) {
     try {
-      // Default intent examples if none provided
-      const defaultExamples = {
-        FAQ: [
-          "What are your business hours?",
-          "How do I return a product?",
-          "What payment methods do you accept?",
-          "Do you offer delivery?",
-          "What is your refund policy?",
-          "How can I contact support?",
-          "What are your shipping options?",
-        ],
-        EMAIL: [
-          "Send an email to john@example.com",
-          "I need to email the client about the project",
-          "Can you send a message to the team?",
-          "Email the invoice to the customer",
-        ],
-        CALENDAR: [
-          "Schedule a meeting for tomorrow",
-          "Book an appointment next week",
-          "Check my availability",
-          "Create a calendar event",
-          "What meetings do I have today?",
-        ],
-        HUBSPOT: [
-          "Create a new contact",
-          "Add a company to HubSpot",
-          "Create a new deal",
-          "Search for contacts",
-          "Update contact information",
-          "Check deal status",
-          "Create a new lead",
-          "View my sales pipeline",
-        ],
-        ODOO: [
-          "Create a new order",
-          "Generate an invoice",
-          "Check inventory levels",
-          "Update product information",
-          "Process a return",
-        ],
-        GENERAL: ["Hello, how are you?", "Thank you for your help", "I have a question", "Can you help me?"],
-      };
-
-      const examples = { ...defaultExamples, ...intentExamples };
+      // Use the provided intentExamples (from database)
+      const examples = intentExamples;
       const intentCategories = Object.keys(examples);
 
+      if (intentCategories.length === 0) {
+        // Fallback to general intent if no examples provided
+        return {
+          intent: "general",
+          confidence: 0.5,
+          method: "fallback",
+        };
+      }
+
       // Find the most similar intent category
-      let bestIntent = "GENERAL";
+      let bestIntent = "general";
       let highestSimilarity = 0;
 
       for (const intent of intentCategories) {
@@ -223,7 +189,7 @@ class EmbeddingsService {
       console.error("Error in enhanced intent detection:", error);
       // Fallback to general intent
       return {
-        intent: "GENERAL",
+        intent: "general",
         confidence: 0.5,
         method: "fallback",
       };

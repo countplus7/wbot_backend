@@ -105,8 +105,38 @@ class OpenAIService {
             conversationHistory,
             businessTone
           );
-        case "FAQ":
+        case "faq":
           return await this.handleFAQIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+        case "gmail_send":
+          return await this.handleGmailSendIntent(businessId, latestMessage.content, conversationHistory, businessTone);
+        case "calendar_create":
+          return await this.handleCalendarCreateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "calendar_check":
+          return await this.handleCalendarCheckIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "calendar_update":
+          return await this.handleCalendarUpdateIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "calendar_delete":
+          return await this.handleCalendarDeleteIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
         // Legacy intent support
         case "GOOGLE_EMAIL":
           return await this.handleGoogleEmailWithAI(businessId, aiIntent, conversationHistory, businessTone);
@@ -131,13 +161,15 @@ class OpenAIService {
   async generateGeneralResponse(messages, conversationHistory = [], businessTone = null) {
     try {
       const systemPrompt = this.buildSystemPrompt(businessTone);
-      
+
       // Format conversation history properly for AI service
-      const formattedHistory = conversationHistory.map(msg => ({
-        role: msg.direction === 'inbound' ? 'user' : 'assistant',
-        content: msg.content || ''
-      })).filter(msg => msg.content && msg.content.trim().length > 0);
-      
+      const formattedHistory = conversationHistory
+        .map((msg) => ({
+          role: msg.direction === "inbound" ? "user" : "assistant",
+          content: msg.content || "",
+        }))
+        .filter((msg) => msg.content && msg.content.trim().length > 0);
+
       const allMessages = [{ role: "system", content: systemPrompt }, ...formattedHistory, ...messages];
 
       const response = await openai.chat.completions.create({
@@ -216,33 +248,33 @@ class OpenAIService {
   async transcribeAudio(audioPath) {
     try {
       console.log(`[DEBUG] Starting audio transcription for: ${audioPath}`);
-      
+
       if (!fs.existsSync(audioPath)) {
         console.error(`[DEBUG] Audio file not found: ${audioPath}`);
         throw new Error(`Audio file not found: ${audioPath}`);
       }
 
       // Check if the file is in a supported format
-      const supportedFormats = ['.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm'];
+      const supportedFormats = [".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm"];
       const fileExtension = path.extname(audioPath).toLowerCase();
-      
+
       if (!supportedFormats.includes(fileExtension)) {
         console.log(`[DEBUG] Unsupported format ${fileExtension}, attempting to convert...`);
-        
+
         // Convert OGG to WAV using ffmpeg
-        const wavPath = audioPath.replace(fileExtension, '.wav');
+        const wavPath = audioPath.replace(fileExtension, ".wav");
         await this.convertAudioToWav(audioPath, wavPath);
-        
+
         // Use the converted WAV file for transcription
         const audioFile = fs.createReadStream(wavPath);
         const response = await openai.audio.transcriptions.create({
           file: audioFile,
           model: "whisper-1",
         });
-        
+
         // Clean up the temporary WAV file
         fs.unlinkSync(wavPath);
-        
+
         console.log(`[DEBUG] Transcription successful: ${response.text}`);
         return response.text;
       } else {
@@ -268,25 +300,25 @@ class OpenAIService {
     return new Promise((resolve, reject) => {
       // Set ffmpeg path if needed (uncomment and modify if ffmpeg is not in PATH)
       // ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
-      
+
       ffmpeg(inputPath)
         .audioFrequency(16000) // Set sample rate to 16kHz (optimal for Whisper)
         .audioChannels(1) // Convert to mono
-        .audioCodec('pcm_s16le') // Use PCM 16-bit little-endian (WAV format)
-        .format('wav')
-        .on('start', (commandLine) => {
+        .audioCodec("pcm_s16le") // Use PCM 16-bit little-endian (WAV format)
+        .format("wav")
+        .on("start", (commandLine) => {
           console.log(`[DEBUG] FFmpeg command: ${commandLine}`);
         })
-        .on('progress', (progress) => {
+        .on("progress", (progress) => {
           console.log(`[DEBUG] Conversion progress: ${progress.percent}% done`);
         })
-        .on('end', () => {
+        .on("end", () => {
           console.log(`[DEBUG] Audio converted successfully: ${outputPath}`);
           resolve();
         })
-        .on('error', (error) => {
+        .on("error", (error) => {
           console.error(`[DEBUG] Audio conversion failed:`, error.message);
-          if (error.message.includes('Cannot find ffmpeg')) {
+          if (error.message.includes("Cannot find ffmpeg")) {
             reject(new Error(`FFmpeg is not installed. Please install ffmpeg on your server: sudo apt install ffmpeg`));
           } else {
             reject(new Error(`Failed to convert audio: ${error.message}`));
@@ -822,6 +854,189 @@ Offer help and ask clarifying questions to better understand what the customer n
     } catch (error) {
       console.error("Error handling Odoo request:", error.message);
       return "I apologize, but I could not process your Odoo request. Please check your Odoo configuration.";
+    }
+  }
+
+  // Gmail intent handlers
+  async handleGmailSendIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`[GMAIL_SEND] Processing Gmail send request for business ${businessId}: ${message}`);
+
+      // Extract email details from the message using AI
+      const emailPrompt = `Extract email details from this message: "${message}"
+      
+      Return JSON with:
+      - to: recipient email address
+      - subject: email subject
+      - body: email content
+      
+      If any field is missing, use reasonable defaults.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: emailPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      const emailData = JSON.parse(response.choices[0].message.content);
+
+      // Send email using Google Service
+      const result = await GoogleService.sendEmail(businessId, {
+        to: emailData.to,
+        subject: emailData.subject,
+        body: emailData.body,
+      });
+
+      if (result.success) {
+        return `✅ Email sent successfully to ${emailData.to}`;
+      } else {
+        return `❌ Failed to send email: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling Gmail send intent:", error.message);
+      return "I apologize, but I could not send your email. Please check your Gmail configuration.";
+    }
+  }
+
+  // Calendar intent handlers
+  async handleCalendarCreateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`[CALENDAR_CREATE] Processing calendar create request for business ${businessId}: ${message}`);
+
+      // Extract event details from the message using AI
+      const eventPrompt = `Extract calendar event details from this message: "${message}"
+      
+      Return JSON with:
+      - title: event title
+      - start: start date/time (ISO format)
+      - end: end date/time (ISO format)
+      - description: event description
+      
+      If any field is missing, use reasonable defaults.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: eventPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      const eventData = JSON.parse(response.choices[0].message.content);
+
+      // Create calendar event using Google Service
+      const result = await GoogleService.createCalendarEvent(businessId, eventData);
+
+      if (result.success) {
+        return `✅ Calendar event "${eventData.title}" created successfully`;
+      } else {
+        return `❌ Failed to create calendar event: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling calendar create intent:", error.message);
+      return "I apologize, but I could not create your calendar event. Please check your calendar configuration.";
+    }
+  }
+
+  async handleCalendarCheckIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`[CALENDAR_CHECK] Processing calendar check request for business ${businessId}: ${message}`);
+
+      // Get calendar events using Google Service
+      const result = await GoogleService.getCalendarEvents(businessId, {
+        timeMin: new Date().toISOString(),
+        maxResults: 10,
+      });
+
+      if (result.success && result.events.length > 0) {
+        const eventsList = result.events
+          .map((event) => `• ${event.summary} - ${new Date(event.start.dateTime || event.start.date).toLocaleString()}`)
+          .join("\n");
+
+        return `📅 Your upcoming events:\n${eventsList}`;
+      } else if (result.success) {
+        return "📅 You have no upcoming events scheduled.";
+      } else {
+        return `❌ Failed to check calendar: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling calendar check intent:", error.message);
+      return "I apologize, but I could not check your calendar. Please check your calendar configuration.";
+    }
+  }
+
+  async handleCalendarUpdateIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`[CALENDAR_UPDATE] Processing calendar update request for business ${businessId}: ${message}`);
+
+      // Extract update details from the message using AI
+      const updatePrompt = `Extract calendar update details from this message: "${message}"
+      
+      Return JSON with:
+      - eventId: event ID to update (if mentioned)
+      - title: new event title
+      - start: new start date/time (ISO format)
+      - end: new end date/time (ISO format)
+      - description: new event description
+      
+      If any field is missing, use reasonable defaults.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: updatePrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      const updateData = JSON.parse(response.choices[0].message.content);
+
+      // Update calendar event using Google Service
+      const result = await GoogleService.updateCalendarEvent(businessId, updateData.eventId, updateData);
+
+      if (result.success) {
+        return `✅ Calendar event updated successfully`;
+      } else {
+        return `❌ Failed to update calendar event: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling calendar update intent:", error.message);
+      return "I apologize, but I could not update your calendar event. Please check your calendar configuration.";
+    }
+  }
+
+  async handleCalendarDeleteIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`[CALENDAR_DELETE] Processing calendar delete request for business ${businessId}: ${message}`);
+
+      // Extract event ID from the message using AI
+      const deletePrompt = `Extract event ID or details from this message: "${message}"
+      
+      Return JSON with:
+      - eventId: event ID to delete (if mentioned)
+      - title: event title to search for
+      
+      If eventId is not provided, we'll search by title.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: deletePrompt }],
+        temperature: 0.1,
+        max_tokens: 100,
+      });
+
+      const deleteData = JSON.parse(response.choices[0].message.content);
+
+      // Delete calendar event using Google Service
+      const result = await GoogleService.deleteCalendarEvent(businessId, deleteData.eventId || deleteData.title);
+
+      if (result.success) {
+        return `✅ Calendar event deleted successfully`;
+      } else {
+        return `❌ Failed to delete calendar event: ${result.error}`;
+      }
+    } catch (error) {
+      console.error("Error handling calendar delete intent:", error.message);
+      return "I apologize, but I could not delete your calendar event. Please check your calendar configuration.";
     }
   }
 }

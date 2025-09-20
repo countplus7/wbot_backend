@@ -301,10 +301,15 @@ Return only JSON: {"intent": "intent_name", "confidence": 0.9}
 
 Examples:
 "Hello" -> {"intent": "greeting", "confidence": 0.9}
-"What are your hours?" -> {"intent": "question", "confidence": 0.8}
+"What are your hours?" -> {"intent": "faq", "confidence": 0.9}
 "I need help" -> {"intent": "help_request", "confidence": 0.9}
 "Thank you" -> {"intent": "compliment", "confidence": 0.8}
-"Cancel my appointment" -> {"intent": "cancellation", "confidence": 0.9}`;
+"Cancel my appointment" -> {"intent": "cancellation", "confidence": 0.9}
+"Send an email to john@example.com" -> {"intent": "gmail_send", "confidence": 0.9}
+"Schedule a meeting for tomorrow" -> {"intent": "calendar_create", "confidence": 0.9}
+"Check my availability" -> {"intent": "calendar_check", "confidence": 0.9}
+"Reschedule my meeting" -> {"intent": "calendar_update", "confidence": 0.9}
+"Cancel my meeting" -> {"intent": "calendar_delete", "confidence": 0.9}`;
 
       const response = await this.openai.chat.completions.create({
         model: this.chatModel,
