@@ -628,11 +628,12 @@ Do not include any explanation or additional text, only the JSON.`;
       const response = await openai.chat.completions.create({
         model: this.chatModel,
         messages: [
-          { 
-            role: "system", 
-            content: "You are a helpful assistant that extracts email data and responds only with valid JSON. Never include explanatory text, only JSON." 
+          {
+            role: "system",
+            content:
+              "You are a helpful assistant that extracts email data and responds only with valid JSON. Never include explanatory text, only JSON.",
           },
-          { role: "user", content: emailPrompt }
+          { role: "user", content: emailPrompt },
         ],
         temperature: 0.1,
         max_tokens: 150,
@@ -642,16 +643,16 @@ Do not include any explanation or additional text, only the JSON.`;
       try {
         const aiResponse = response.choices[0].message.content.trim();
         console.log(`[GMAIL_SEND] AI Response: ${aiResponse}`);
-        
+
         // Try to extract JSON if it's wrapped in other text
         const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
         const jsonString = jsonMatch ? jsonMatch[0] : aiResponse;
-        
+
         emailData = JSON.parse(jsonString);
       } catch (parseError) {
         console.error(`[GMAIL_SEND] JSON Parse Error: ${parseError.message}`);
         console.error(`[GMAIL_SEND] Raw AI Response: ${response.choices[0].message.content}`);
-        
+
         // Fallback: extract email details manually from the original message
         emailData = this.extractEmailDataFallback(message);
       }
@@ -680,52 +681,109 @@ Do not include any explanation or additional text, only the JSON.`;
   // Add fallback method for extracting email data
   extractEmailDataFallback(message) {
     // Simple regex patterns to extract email components
-    const emailMatch = message.match(/(?:to|send to|recipient|email)\s*:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    const emailMatch = message.match(
+      /(?:to|send to|recipient|email)\s*:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i
+    );
     const subjectMatch = message.match(/(?:subject|title|topic)\s*:?\s*(.+?)(?:\n|$)/i);
-    
+
     return {
       to: emailMatch ? emailMatch[1] : "recipient@example.com",
       subject: subjectMatch ? subjectMatch[1].trim() : "Test Subject",
-      body: message.includes("body") ? message.split("body")[1]?.trim() || "Test message" : "Test message"
+      body: message.includes("body") ? message.split("body")[1]?.trim() || "Test message" : "Test message",
     };
   }
 
+  // Calendar intent handlers
   // Calendar intent handlers
   async handleCalendarCreateIntent(businessId, message, conversationHistory, businessTone) {
     try {
       console.log(`[CALENDAR_CREATE] Processing calendar create request for business ${businessId}: ${message}`);
 
-      // Extract event details from the message using AI
+      // Extract event details from the message using AI with improved prompt
       const eventPrompt = `Extract calendar event details from this message: "${message}"
-      
-      Return JSON with:
-      - title: event title
-      - start: start date/time (ISO format)
-      - end: end date/time (ISO format)
-      - description: event description
-      
-      If any field is missing, use reasonable defaults.`;
+  
+  You must respond with ONLY valid JSON in this exact format:
+  {
+    "title": "Meeting with John",
+    "start": "2024-01-20T15:00:00.000Z",
+    "end": "2024-01-20T16:00:00.000Z",
+    "description": "Meeting description"
+  }
+  
+  IMPORTANT:
+  - Use proper ISO 8601 format for dates (YYYY-MM-DDTHH:mm:ss.sssZ)
+  - If "tomorrow" is mentioned, calculate the actual date
+  - If time is mentioned (like "3 PM"), use 24-hour format (15:00)
+  - Default duration is 1 hour if not specified
+  - Extract attendee names from the message if mentioned
+  
+  Do not include any explanation or additional text, only the JSON.`;
 
       const response = await openai.chat.completions.create({
         model: this.chatModel,
-        messages: [{ role: "user", content: eventPrompt }],
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a helpful assistant that extracts calendar event data and responds only with valid JSON. Never include explanatory text, only JSON.",
+          },
+          { role: "user", content: eventPrompt },
+        ],
         temperature: 0.1,
-        max_tokens: 200,
+        max_tokens: 300,
       });
 
-      const eventData = JSON.parse(response.choices[0].message.content);
+      let eventData;
+      try {
+        const aiResponse = response.choices[0].message.content.trim();
+        console.log(`[CALENDAR_CREATE] AI Response: ${aiResponse}`);
+
+        // Try to extract JSON if it's wrapped in other text
+        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : aiResponse;
+
+        eventData = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error(`[CALENDAR_CREATE] JSON Parse Error: ${parseError.message}`);
+        console.error(`[CALENDAR_CREATE] Raw AI Response: ${response.choices[0].message.content}`);
+        throw new Error("Failed to parse event data from message");
+      }
+
+      // Validate required fields
+      if (!eventData.title || !eventData.start || !eventData.end) {
+        throw new Error("Missing required event fields (title, start, end)");
+      }
+
+      console.log(`[CALENDAR_CREATE] Extracted event data:`, eventData);
 
       // Create calendar event using Google Service
       const result = await GoogleService.createCalendarEvent(businessId, eventData);
 
-      if (result.success) {
-        return `✅ Calendar event "${eventData.title}" created successfully`;
+      console.log(`[CALENDAR_CREATE] Google Service result:`, result);
+
+      // Google Service returns the event data directly, not a success object
+      if (result && result.id) {
+        return `✅ Calendar event "${eventData.title}" created successfully!\n\n📅 Event Details:\n• Title: ${
+          eventData.title
+        }\n• Start: ${new Date(eventData.start).toLocaleString()}\n• End: ${new Date(
+          eventData.end
+        ).toLocaleString()}\n• Description: ${eventData.description || "No description"}`;
       } else {
-        return `❌ Failed to create calendar event: ${result.error}`;
+        throw new Error("Calendar event creation returned invalid result");
       }
     } catch (error) {
       console.error("Error handling calendar create intent:", error.message);
-      return "I apologize, but I could not create your calendar event. Please check your calendar configuration.";
+
+      // Provide more specific error messages
+      if (error.message.includes("Failed to parse event data")) {
+        return "❌ I couldn't understand the meeting details from your message. Please try rephrasing with clear date, time, and title information.";
+      } else if (error.message.includes("Missing required event fields")) {
+        return "❌ I need more information to create the calendar event. Please include the title, date, and time.";
+      } else if (error.message.includes("Failed to create calendar event")) {
+        return "❌ I couldn't create the calendar event. Please check your Google Calendar integration is properly configured.";
+      } else {
+        return "❌ I apologize, but I encountered an error while trying to create your calendar event. Please try again or check your calendar configuration.";
+      }
     }
   }
 
