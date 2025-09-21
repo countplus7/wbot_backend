@@ -488,7 +488,9 @@ class OdooService {
           hasStockInfo: true,
         };
       } catch (stockError) {
-        if (stockError.message.includes("Invalid field 'qty_available'")) {
+        // Check if the error is about the qty_available field not existing
+        if (stockError.message.includes("Invalid field 'qty_available'") || 
+            stockError.message.includes("qty_available")) {
           console.log("Inventory module not available, falling back to basic product info");
           
           // Fallback: get products without stock information
