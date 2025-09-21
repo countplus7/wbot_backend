@@ -1802,7 +1802,12 @@ Your order has been created in Odoo and is ready for processing! 🎉`;
       // Extract lead details from the message using AI
       const leadPrompt = `Analyze this lead creation request: "${message}"
 
-Determine what information is provided and what is missing.
+IMPORTANT: Parse the message carefully. Look for these specific patterns:
+- "Lead: [name]" = lead name
+- "Contact: [name]" = contact name  
+- "Email: [email]" = email address
+- "Phone: [phone]" = phone number
+- "Description: [text]" = description
 
 Return JSON with this structure:
 {
@@ -1820,7 +1825,24 @@ Return JSON with this structure:
   "missing_fields": ["list of missing required fields"]
 }
 
-Required fields: name, contact_name, email, phone, description`;
+Required fields: name, contact_name, email, phone, description
+
+Example parsing:
+Input: "Lead: New Customer Inquiry, Contact: John Smith, Email: john@example.com, Phone: 123-456-7890, Description: Interested in our services"
+Output: {
+  "has_name": true,
+  "has_contact_name": true,
+  "has_email": true,
+  "has_phone": true,
+  "has_description": true,
+  "name": "New Customer Inquiry",
+  "contact_name": "John Smith",
+  "email": "john@example.com",
+  "phone": "123-456-7890",
+  "description": "Interested in our services",
+  "is_complete": true,
+  "missing_fields": []
+}`;
 
       const response = await openai.chat.completions.create({
         model: this.chatModel,
