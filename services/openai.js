@@ -553,12 +553,12 @@ class OpenAIService {
    */
   async detectFAQIntentWithEmbeddings(message) {
     try {
-      const result = await this.embeddingsService.detectIntentWithEmbeddings(message, {
-        intentType: "FAQ",
-      });
+      // Use the proper intent detection service instead of the broken embeddings method
+      const IntentDetectionService = require('./intent-detection');
+      const result = await IntentDetectionService.detectIntent(message);
 
       return {
-        isFAQ: result && result.confidence >= 0.7,
+        isFAQ: result && result.intent === 'faq' && result.confidence >= 0.7,
         confidence: result ? result.confidence : 0,
         response: result ? result.response : null,
       };
