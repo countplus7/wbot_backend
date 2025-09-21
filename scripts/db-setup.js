@@ -35,23 +35,29 @@ const isDatabaseEmpty = async () => {
 
 // Check if table exists
 const tableExists = async (tableName) => {
-  const result = await executeWithRetry(`
+  const result = await executeWithRetry(
+    `
     SELECT EXISTS (
       SELECT FROM information_schema.tables 
       WHERE table_name = $1
     );
-  `, [tableName]);
+  `,
+    [tableName]
+  );
   return result.rows[0].exists;
 };
 
 // Check if column exists
 const columnExists = async (tableName, columnName) => {
-  const result = await executeWithRetry(`
+  const result = await executeWithRetry(
+    `
     SELECT EXISTS (
       SELECT FROM information_schema.columns 
       WHERE table_name = $1 AND column_name = $2
     );
-  `, [tableName, columnName]);
+  `,
+    [tableName, columnName]
+  );
   return result.rows[0].exists;
 };
 
@@ -75,13 +81,22 @@ const dropAllTables = async () => {
   const dropStartTime = Date.now();
 
   const tables = [
-    "intent_cache", "intent_examples", "intents",
-    "conversation_embeddings", "faq_embeddings",
-    "media_files", "messages", "conversations",
-    "business_tones", "whatsapp_configs",
-    "google_workspace_integrations", "hubspot_integrations",
-    "odoo_integrations", "airtable_integrations",
-    "businesses", "users"
+    "intent_cache",
+    "intent_examples",
+    "intents",
+    "conversation_embeddings",
+    "faq_embeddings",
+    "media_files",
+    "messages",
+    "conversations",
+    "business_tones",
+    "whatsapp_configs",
+    "google_workspace_integrations",
+    "hubspot_integrations",
+    "odoo_integrations",
+    "airtable_integrations",
+    "businesses",
+    "users",
   ];
 
   const dropPromises = tables.map(async (table) => {
@@ -111,7 +126,7 @@ const getTableDefinitions = () => [
       status VARCHAR(20) DEFAULT 'active',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`
+    )`,
   },
   {
     name: "businesses",
@@ -122,7 +137,7 @@ const getTableDefinitions = () => [
       status VARCHAR(20) DEFAULT 'active',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`
+    )`,
   },
   {
     name: "whatsapp_configs",
@@ -137,7 +152,7 @@ const getTableDefinitions = () => [
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
       UNIQUE(business_id, phone_number_id)
-    )`
+    )`,
   },
   {
     name: "business_tones",
@@ -150,7 +165,7 @@ const getTableDefinitions = () => [
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
-    )`
+    )`,
   },
   {
     name: "conversations",
@@ -162,7 +177,7 @@ const getTableDefinitions = () => [
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
-    )`
+    )`,
   },
   {
     name: "messages",
@@ -184,7 +199,7 @@ const getTableDefinitions = () => [
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-    )`
+    )`,
   },
   {
     name: "media_files",
@@ -198,7 +213,7 @@ const getTableDefinitions = () => [
       file_size INTEGER,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
-    )`
+    )`,
   },
   {
     name: "google_workspace_integrations",
@@ -212,7 +227,7 @@ const getTableDefinitions = () => [
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
       UNIQUE(business_id)
-    )`
+    )`,
   },
   {
     name: "hubspot_integrations",
@@ -228,7 +243,7 @@ const getTableDefinitions = () => [
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
       UNIQUE(business_id)
-    )`
+    )`,
   },
   {
     name: "odoo_integrations",
@@ -243,7 +258,7 @@ const getTableDefinitions = () => [
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
       UNIQUE(business_id)
-    )`
+    )`,
   },
   {
     name: "airtable_integrations",
@@ -257,7 +272,7 @@ const getTableDefinitions = () => [
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
       UNIQUE(business_id)
-    )`
+    )`,
   },
   {
     name: "faq_embeddings",
@@ -273,7 +288,7 @@ const getTableDefinitions = () => [
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
       UNIQUE(business_id, faq_id)
-    )`
+    )`,
   },
   {
     name: "conversation_embeddings",
@@ -287,7 +302,7 @@ const getTableDefinitions = () => [
       message_type VARCHAR(50) DEFAULT 'text',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
-    )`
+    )`,
   },
   {
     name: "intents",
@@ -299,7 +314,7 @@ const getTableDefinitions = () => [
       active BOOLEAN DEFAULT true,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`
+    )`,
   },
   {
     name: "intent_examples",
@@ -313,7 +328,7 @@ const getTableDefinitions = () => [
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (intent_id) REFERENCES intents(id) ON DELETE CASCADE
-    )`
+    )`,
   },
   {
     name: "intent_cache",
@@ -327,8 +342,8 @@ const getTableDefinitions = () => [
       embedding JSONB,
       expires_at TIMESTAMP DEFAULT (NOW() + INTERVAL '24 hours'),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`
-  }
+    )`,
+  },
 ];
 
 // Create table if it doesn't exist (for migrate mode)
@@ -349,9 +364,9 @@ const createTableIfNotExists = async (tableName, query) => {
 const createTables = async (isInitMode) => {
   console.log("📋 Creating database tables...");
   const createStartTime = Date.now();
-  
+
   const tableDefinitions = getTableDefinitions();
-  
+
   for (const table of tableDefinitions) {
     try {
       if (isInitMode) {
@@ -368,7 +383,7 @@ const createTables = async (isInitMode) => {
       throw error;
     }
   }
-  
+
   const createTime = Date.now() - createStartTime;
   console.log(`✅ All ${tablesCreated} tables processed successfully in ${createTime}ms`);
 };
@@ -376,7 +391,7 @@ const createTables = async (isInitMode) => {
 // Handle migrations for existing tables
 const handleMigrations = async () => {
   console.log("🔄 Running database migrations...");
-  
+
   // Migrate conversations table
   if (await tableExists("conversations")) {
     const hasBusinessId = await columnExists("conversations", "business_id");
@@ -397,10 +412,9 @@ const handleMigrations = async () => {
       `);
 
       // Update existing conversations with default business
-      await executeWithRetry(
-        `UPDATE conversations SET business_id = $1 WHERE business_id IS NULL`,
-        [defaultBusiness.rows[0].id]
-      );
+      await executeWithRetry(`UPDATE conversations SET business_id = $1 WHERE business_id IS NULL`, [
+        defaultBusiness.rows[0].id,
+      ]);
 
       // Make business_id NOT NULL and add foreign key
       await executeWithRetry(`
@@ -435,10 +449,9 @@ const handleMigrations = async () => {
 
       if (defaultBusiness.rows.length > 0) {
         // Update existing messages with default business
-        await executeWithRetry(
-          `UPDATE messages SET business_id = $1 WHERE business_id IS NULL`,
-          [defaultBusiness.rows[0].id]
-        );
+        await executeWithRetry(`UPDATE messages SET business_id = $1 WHERE business_id IS NULL`, [
+          defaultBusiness.rows[0].id,
+        ]);
 
         // Make business_id NOT NULL and add foreign key
         await executeWithRetry(`
@@ -477,10 +490,9 @@ const handleMigrations = async () => {
 
       if (defaultBusiness.rows.length > 0) {
         // Update existing media files with default business
-        await executeWithRetry(
-          `UPDATE media_files SET business_id = $1 WHERE business_id IS NULL`,
-          [defaultBusiness.rows[0].id]
-        );
+        await executeWithRetry(`UPDATE media_files SET business_id = $1 WHERE business_id IS NULL`, [
+          defaultBusiness.rows[0].id,
+        ]);
 
         // Make business_id NOT NULL and add foreign key
         await executeWithRetry(`
@@ -498,7 +510,7 @@ const handleMigrations = async () => {
       columnsAdded++;
     }
   }
-  
+
   console.log("✅ Migrations completed");
 };
 
@@ -587,16 +599,16 @@ const createIndexes = async () => {
 const setupDatabase = async (mode = "auto") => {
   try {
     const totalStartTime = Date.now();
-    
+
     // Determine mode
     let isInitMode;
     if (mode === "auto") {
       isInitMode = await isDatabaseEmpty();
-      console.log(`🔍 Detected ${isInitMode ? 'empty' : 'existing'} database`);
+      console.log(`🔍 Detected ${isInitMode ? "empty" : "existing"} database`);
     } else {
       isInitMode = mode === "init";
     }
-    
+
     if (isInitMode) {
       console.log("🚀 Running in INIT mode - will delete all existing data!");
       console.log("⚠️  WARNING: This will completely delete all existing data!");
@@ -604,24 +616,24 @@ const setupDatabase = async (mode = "auto") => {
     } else {
       console.log("🔄 Running in MIGRATE mode - preserving existing data");
     }
-    
+
     await createTables(isInitMode);
-    
+
     if (!isInitMode) {
       await handleMigrations();
     }
-    
+
     await createIndexes();
-    
+
     const totalTime = Date.now() - totalStartTime;
     console.log(`\n🎉 Database setup completed successfully!`);
     console.log(`📊 Performance Summary:`);
-    console.log(`   • Mode: ${isInitMode ? 'INIT' : 'MIGRATE'}`);
+    console.log(`   • Mode: ${isInitMode ? "INIT" : "MIGRATE"}`);
     console.log(`   • Tables created: ${tablesCreated}`);
     console.log(`   • Columns added: ${columnsAdded}`);
     console.log(`   • Indexes created: ${indexesCreated}`);
     console.log(`   • Total time: ${totalTime}ms`);
-    
+
     process.exit(0);
   } catch (error) {
     console.error("❌ Database setup failed:", error);
@@ -631,7 +643,7 @@ const setupDatabase = async (mode = "auto") => {
 
 // Command line interface
 if (require.main === module) {
-  const mode = process.argv[2] || "auto";
+  const mode = process.argv[2] || "init";
   setupDatabase(mode);
 }
 
