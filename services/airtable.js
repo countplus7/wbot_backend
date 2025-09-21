@@ -180,6 +180,11 @@ class AirtableService {
       console.log("No cached match found, searching live Airtable data for business", businessId);
       const faqs = await this.getFAQs(businessId);
 
+      console.log(`Retrieved ${faqs.length} FAQs from Airtable for business ${businessId}:`);
+      faqs.forEach((faq, index) => {
+        console.log(`  FAQ ${index + 1}: Q="${faq.question}" A="${faq.answer ? faq.answer.substring(0, 100) : "No answer"}..."`);
+      });
+
       if (faqs.length === 0) {
         console.log(`No FAQs found in Airtable for business ${businessId}`);
         return null;
@@ -187,6 +192,21 @@ class AirtableService {
 
       // Use semantic search with embeddings
       const semanticMatch = await this.embeddingsService.findBestFAQMatch(userQuestion, faqs, 0.75);
+
+      console.log(`Semantic search completed. Match found: ${semanticMatch ? "YES" : "NO"}`);
+      console.log(`Semantic search completed. Match found: ${semanticMatch ? "YES" : "NO"}`);
+      if (semanticMatch && semanticMatch.semanticSimilarity) {
+        console.log(`  Match details: similarity=${semanticMatch.semanticSimilarity}, question="${semanticMatch.question}"`);
+      }
+
+      if (semanticMatch) {
+        console.log(`  Match details: similarity=${semanticMatch.semanticSimilarity}, question="${semanticMatch.question}"`);
+      }
+
+      console.log(`Semantic search completed. Match found: ${semanticMatch ? "YES" : "NO"}`);
+      if (semanticMatch && semanticMatch.semanticSimilarity) {
+        console.log(`  Match details: similarity=${semanticMatch.semanticSimilarity}, question="${semanticMatch.question}"`);
+      }
 
       if (semanticMatch) {
         console.log("Found semantic FAQ match from live data for business", businessId);
@@ -384,3 +404,5 @@ class AirtableService {
 }
 
 module.exports = new AirtableService();
+
+
