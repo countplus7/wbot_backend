@@ -536,12 +536,8 @@ class OpenAIService {
    */
   async handleOdooOrder(businessId, orderRequest, phoneNumber) {
     try {
-      const result = await OdooService.createSaleOrder(businessId, {
-        customer_phone: phoneNumber,
-        message: orderRequest.message,
-      });
-
-      return `✅ Order created successfully. Order ID: ${result.id}`;
+      // For now, return a message that order creation requires more details
+      return "✅ I understand you want to create an order. To create a proper order, please provide more details like:\n• What product do you want to order?\n• How many units?\n• Any special requirements?\n\nFor example: 'Create an order for 5 laptops'";
     } catch (error) {
       console.error("Error handling Odoo order:", error.message);
       return "❌ Sorry, I could not process your order. Please try again or contact support.";
