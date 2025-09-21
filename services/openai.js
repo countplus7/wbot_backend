@@ -1332,22 +1332,22 @@ Do not include any explanation or additional text, only the JSON.`;
       }
 
       // Extract order details from the message using AI
-      const orderPrompt = `Analyze this order request: "${message}"
+      const orderPrompt = `You are a JSON parser. Analyze this order request: "${message}"
 
-Determine what information is provided and what is missing.
+IMPORTANT: Return ONLY valid JSON, no explanations or additional text.
 
-Return JSON with this structure:
+Return JSON with this exact structure:
 {
-  "has_customer": true/false,
-  "has_products": true/false,
-  "has_quantities": true/false,
-  "customer_info": "customer name or details if provided",
-  "products": [{"name": "product name", "quantity": number}],
-  "is_complete": true/false,
-  "missing_fields": ["list of missing required fields"]
+  "has_customer": true,
+  "has_products": true,
+  "has_quantities": true,
+  "customer_info": "John Smith",
+  "products": [{"name": "laptop", "quantity": 2}],
+  "is_complete": true,
+  "missing_fields": []
 }
 
-Required fields: customer, products, quantities`;
+Analyze the message and return the appropriate JSON. Required fields: customer, products, quantities.`;
 
       const response = await openai.chat.completions.create({
         model: this.chatModel,
@@ -1359,18 +1359,19 @@ Required fields: customer, products, quantities`;
       let analysis;
       try {
         const responseContent = response.choices[0].message.content.trim();
+        console.log("AI response for order analysis:", responseContent);
+        
+        // Try to extract JSON from the response if it's wrapped in text
         const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
         const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        
         analysis = JSON.parse(jsonString);
       } catch (parseError) {
         console.error("Error parsing order analysis:", parseError);
-        analysis = {
-          has_customer: false,
-          has_products: false,
-          has_quantities: false,
-          is_complete: false,
-          missing_fields: ["customer", "products", "quantities"]
-        };
+        console.log("Raw AI response:", response.choices[0].message.content);
+        
+        // Fallback: manually analyze the message for common patterns
+        analysis = this.manualOrderAnalysis(message);
       }
 
       console.log("Order analysis:", analysis);
@@ -1650,6 +1651,74 @@ Your order has been created in Odoo and is ready for processing! 🎉`;
       console.error("Error handling Odoo lead create intent:", error.message);
       return "I apologize, but I could not create your lead. Please check your Odoo configuration.";
     }
+  }
+
+  manualOrderAnalysis(message) {
+    const lowerMessage = message.toLowerCase();
+    
+    // Check for customer patterns
+    const customerPatterns = [
+      /(?:for|to)\s+([a-zA-Z\s]+?)(?:\s|,|$)/,
+      /(?:customer|client):\s*([a-zA-Z\s]+?)(?:\s|,|$)/,
+      /(?:order for)\s+([a-zA-Z\s]+?)(?:\s|,|$)/i
+    ];
+    
+    let customer = null;
+    for (const pattern of customerPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        customer = match[1].trim();
+        break;
+      }
+    }
+    
+    // Check for quantity patterns
+    const quantityPatterns = [
+      /(\d+)\s+([a-zA-Z\s]+?)(?:\s|,|$)/,
+      /([a-zA-Z\s]+?)\s+(\d+)(?:\s|,|$)/,
+      /(?:quantity|qty):\s*(\d+)/i
+    ];
+    
+    let products = [];
+    for (const pattern of quantityPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        if (pattern.source.includes('\\d+\\s+')) {
+          // "2 laptops" format
+          products.push({
+            name: match[2].trim(),
+            quantity: parseInt(match[1])
+          });
+        } else {
+          // "laptops 2" format
+          products.push({
+            name: match[1].trim(),
+            quantity: parseInt(match[2])
+          });
+        }
+        break;
+      }
+    }
+    
+    const hasCustomer = !!customer;
+    const hasProducts = products.length > 0;
+    const hasQuantities = products.some(p => p.quantity > 0);
+    const isComplete = hasCustomer && hasProducts && hasQuantities;
+    
+    const missingFields = [];
+    if (!hasCustomer) missingFields.push("customer");
+    if (!hasProducts) missingFields.push("products");
+    if (!hasQuantities) missingFields.push("quantities");
+    
+    return {
+      has_customer: hasCustomer,
+      has_products: hasProducts,
+      has_quantities: hasQuantities,
+      customer_info: customer,
+      products: products,
+      is_complete: isComplete,
+      missing_fields: missingFields
+    };
   }
 }
 
