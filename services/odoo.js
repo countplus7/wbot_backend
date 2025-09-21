@@ -252,6 +252,125 @@ class OdooService {
     }
   }
 
+  async getOrderStatus(businessId, orderId) {
+    try {
+      const orders = await this.makeJsonRpcCall(businessId, "search_read", "sale.order", [
+        [["id", "=", orderId]],
+        ["id", "name", "partner_id", "state", "amount_total", "date_order", "order_line"]
+      ]);
+
+      if (!orders || orders.length === 0) {
+        return { success: false, error: "Order not found" };
+      }
+
+      const order = orders[0];
+      
+      // Get customer name
+      let customerName = "Unknown Customer";
+      if (order.partner_id && order.partner_id.length > 1) {
+        customerName = order.partner_id[1];
+      }
+
+      // Get order lines details
+      let orderLines = [];
+      if (order.order_line && order.order_line.length > 0) {
+        const lineIds = order.order_line;
+        const lines = await this.makeJsonRpcCall(businessId, "read", "sale.order.line", [
+          lineIds,
+          ["product_id", "name", "product_uom_qty", "price_unit", "price_subtotal"]
+        ]);
+        
+        orderLines = lines.map(line => ({
+          product: line.product_id ? line.product_id[1] : line.name,
+          quantity: line.product_uom_qty,
+          price: line.price_unit,
+          total: line.price_subtotal
+        }));
+      }
+
+      return {
+        success: true,
+        order: {
+          id: order.id,
+          name: order.name,
+          customer: customerName,
+          state: order.state,
+          amount_total: order.amount_total,
+          date_order: order.date_order,
+          order_lines: orderLines
+        }
+      };
+    } catch (error) {
+      console.error("Error getting order status:", error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async cancelOrder(businessId, orderId) {
+    try {
+      // First check if the order exists and can be cancelled
+      const orderStatus = await this.getOrderStatus(businessId, orderId);
+      if (!orderStatus.success) {
+        return orderStatus;
+      }
+
+      const order = orderStatus.order;
+      
+      // Check if order can be cancelled (typically only 'draft' or 'sent' orders can be cancelled)
+      if (order.state === 'cancel') {
+        return { success: false, error: "Order is already cancelled" };
+      }
+      
+      if (order.state === 'done') {
+        return { success: false, error: "Cannot cancel a completed order" };
+      }
+
+      // Cancel the order
+      const result = await this.makeJsonRpcCall(businessId, "write", "sale.order", [
+        [orderId],
+        { state: 'cancel' }
+      ]);
+
+      return { success: true, orderId: orderId, message: "Order cancelled successfully" };
+    } catch (error) {
+      console.error("Error cancelling order:", error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async searchOrders(businessId, searchTerm, limit = 10) {
+    try {
+      let domain = [];
+      
+      if (searchTerm && searchTerm !== "all") {
+        // Search by order name, customer name, or order ID
+        domain = [
+          "|", "|",
+          ["name", "ilike", searchTerm],
+          ["partner_id", "ilike", searchTerm],
+          ["id", "=", parseInt(searchTerm) || 0]
+        ];
+      }
+
+      const orders = await this.makeJsonRpcCall(businessId, "search_read", "sale.order", [
+        domain,
+        ["id", "name", "partner_id", "state", "amount_total", "date_order"]
+      ], { limit });
+
+      return {
+        success: true,
+        orders: orders || []
+      };
+    } catch (error) {
+      console.error("Error searching orders:", error.message);
+      return {
+        success: false,
+        error: error.message,
+        orders: []
+      };
+    }
+  }
+
   // ---------- INVOICES ----------
   async getInvoice(businessId, invoiceRef) {
     const invoices = await this.makeJsonRpcCall(businessId, "search_read", "account.move", [

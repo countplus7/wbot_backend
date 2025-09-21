@@ -199,6 +199,27 @@ class OpenAIService {
             conversationHistory,
             businessTone
           );
+        case "odoo_order_status":
+          return await this.handleOdooOrderStatusIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "odoo_order_cancel":
+          return await this.handleOdooOrderCancelIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "odoo_order_search":
+          return await this.handleOdooOrderSearchIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
         // Legacy intent support
         case "HUBSPOT":
           return await this.handleHubSpotWithAI(businessId, aiIntent, conversationHistory, businessTone);
