@@ -711,83 +711,257 @@ class OpenAIService {
     try {
       console.log(`[GMAIL_SEND] Processing Gmail send request for business ${businessId}: ${message}`);
 
-      // Extract email details from the message using AI
-      const emailPrompt = `Extract email details from this message: "${message}"
+      // Check if this is a follow-up to a previous incomplete email request
+      const isFollowUp = this.isEmailFollowUp(message, conversationHistory);
+      
+      if (isFollowUp) {
+        return await this.handleEmailFollowUp(businessId, message, conversationHistory, businessTone);
+      }
 
-You must respond with ONLY valid JSON in this exact format:
+      // Extract email details from the message using AI
+      const emailPrompt = `Analyze this email request: "${message}"
+
+Determine what information is provided and what is missing.
+
+Return JSON with this structure:
 {
-  "to": "recipient@example.com",
-  "subject": "email subject",
-  "body": "email content"
+  "has_subject": true/false,
+  "has_body": true/false,
+  "subject": "email subject if provided",
+  "body": "email content if provided",
+  "is_complete": true/false,
+  "missing_fields": ["list of missing required fields"]
 }
 
-Do not include any explanation or additional text, only the JSON.`;
+Required fields: subject, body
+Note: Email will be sent TO the business owner FROM the integrated Google Workspace account.`;
 
       const response = await openai.chat.completions.create({
         model: this.chatModel,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a helpful assistant that extracts email data and responds only with valid JSON. Never include explanatory text, only JSON.",
-          },
-          { role: "user", content: emailPrompt },
-        ],
+        messages: [{ role: "user", content: emailPrompt }],
         temperature: 0.1,
-        max_tokens: 150,
+        max_tokens: 300,
       });
 
-      let emailData;
+      let analysis;
       try {
-        const aiResponse = response.choices[0].message.content.trim();
-        console.log(`[GMAIL_SEND] AI Response: ${aiResponse}`);
-
-        // Try to extract JSON if it's wrapped in other text
-        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-        const jsonString = jsonMatch ? jsonMatch[0] : aiResponse;
-
-        emailData = JSON.parse(jsonString);
+        const responseContent = response.choices[0].message.content.trim();
+        console.log("AI response for email analysis:", responseContent);
+        
+        // Try to extract JSON from the response if it's wrapped in text
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        
+        analysis = JSON.parse(jsonString);
       } catch (parseError) {
-        console.error(`[GMAIL_SEND] JSON Parse Error: ${parseError.message}`);
-        console.error(`[GMAIL_SEND] Raw AI Response: ${response.choices[0].message.content}`);
-
-        // Fallback: extract email details manually from the original message
-        emailData = this.extractEmailDataFallback(message);
+        console.error("Error parsing email analysis:", parseError);
+        console.log("Raw AI response:", response.choices[0].message.content);
+        
+        // Fallback: manually analyze the message for common patterns
+        analysis = this.manualEmailAnalysis(message);
       }
 
-      // Validate required fields
-      if (!emailData.to || !emailData.subject || !emailData.body) {
-        throw new Error("Missing required email fields (to, subject, body)");
+      console.log("Email analysis:", analysis);
+
+      if (analysis.is_complete) {
+        // All information provided, send the email
+        return await this.sendCompleteEmail(businessId, analysis, message);
+      } else {
+        // Missing information, ask for it
+        return await this.askForMissingEmailInfo(analysis, message);
       }
 
-      console.log(`[GMAIL_SEND] Extracted email data:`, emailData);
-
-      // Send email using Google Service
-      const result = await GoogleService.sendEmail(businessId, {
-        to: emailData.to,
-        subject: emailData.subject,
-        body: emailData.body,
-      });
-
-      return `✅ Email sent successfully to ${emailData.to}!\nSubject: ${emailData.subject}`;
     } catch (error) {
       console.error("Error handling Gmail send intent:", error.message);
-      return "I apologize, but I encountered an error while trying to send your email. Please make sure you've provided the recipient email, subject, and message content, and verify your Gmail integration is properly configured.";
+      return "I apologize, but I could not process your email request. Please try again.";
     }
   }
 
-  // Add fallback method for extracting email data
-  extractEmailDataFallback(message) {
-    // Simple regex patterns to extract email components
-    const emailMatch = message.match(
-      /(?:to|send to|recipient|email)\s*:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i
+  isEmailFollowUp(message, conversationHistory) {
+    // Check if the last few messages indicate we're in an email sending flow
+    const recentMessages = conversationHistory.slice(-3);
+    return recentMessages.some(msg => 
+      msg.content && (
+        msg.content.includes("What is the subject") ||
+        msg.content.includes("What is the message") ||
+        msg.content.includes("email subject") ||
+        msg.content.includes("email content") ||
+        msg.content.includes("email details")
+      )
     );
-    const subjectMatch = message.match(/(?:subject|title|topic)\s*:?\s*(.+?)(?:\n|$)/i);
+  }
 
+  async handleEmailFollowUp(businessId, message, conversationHistory, businessTone) {
+    try {
+      // Get the context from recent conversation
+      const recentMessages = conversationHistory.slice(-5);
+      const contextPrompt = `Based on this conversation context, determine if we now have enough information to send an email:
+
+Recent conversation:
+${recentMessages.map(msg => `${msg.direction}: ${msg.content}`).join('\n')}
+
+Latest message: "${message}"
+
+Return JSON:
+{
+  "has_all_info": true/false,
+  "subject": "email subject if provided",
+  "body": "email content if provided",
+  "missing": ["any still missing fields"]
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: contextPrompt }],
+        temperature: 0.1,
+        max_tokens: 300,
+      });
+
+      let followUpAnalysis;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        followUpAnalysis = JSON.parse(jsonString);
+      } catch (parseError) {
+        return "I'm having trouble understanding your email details. Could you please provide:\n• Email subject\n• Email message content";
+      }
+
+      if (followUpAnalysis.has_all_info) {
+        // We have all the information, send the email
+        return await this.sendCompleteEmail(businessId, followUpAnalysis, message);
+      } else {
+        // Still missing information
+        return this.askForMissingEmailInfo(followUpAnalysis, message);
+      }
+
+    } catch (error) {
+      console.error("Error handling email follow-up:", error.message);
+      return "I'm having trouble processing your email. Please provide:\n• Email subject\n• Email message content";
+    }
+  }
+
+  async askForMissingEmailInfo(analysis, originalMessage) {
+    const missing = analysis.missing_fields || [];
+    
+    if (missing.includes("subject") && missing.includes("body")) {
+      return `I'd be happy to help you send an email! 📧
+
+To send your email, I need a few more details:
+
+**Subject:** What should the email subject be?
+**Message:** What should the email content be?
+
+For example: "Subject: Meeting Request, Message: Hi, I'd like to schedule a meeting for tomorrow."`;
+    } else if (missing.includes("subject")) {
+      return `Great! I can see your message: "${analysis.body}"
+
+Just need to know: **What should the email subject be?**`;
+    } else if (missing.includes("body")) {
+      return `Perfect! I have the subject: "${analysis.subject}"
+
+Now I need to know: **What should the email message content be?**`;
+    } else {
+      return `I need a bit more information to send your email. Could you please specify:\n• Email subject\n• Email message content`;
+    }
+  }
+
+  async sendCompleteEmail(businessId, analysis, message) {
+    try {
+      // Get business owner email (for now, we'll need to implement this)
+      // This could come from business configuration, Google Workspace integration, etc.
+      const businessOwnerEmail = await this.getBusinessOwnerEmail(businessId);
+      
+      if (!businessOwnerEmail) {
+        return "❌ I couldn't find the business owner's email address. Please configure the business owner email in your settings.";
+      }
+
+      const emailData = {
+        to: businessOwnerEmail,
+        subject: analysis.subject,
+        body: analysis.body,
+      };
+
+      console.log("Sending email with data:", emailData);
+
+      // Send email using Google Service
+      const result = await GoogleService.sendEmail(businessId, emailData);
+
+      return `✅ **Email Sent Successfully!**
+
+ **Email Details:**
+• To: ${businessOwnerEmail}
+• Subject: ${analysis.subject}
+• Message: ${analysis.body.substring(0, 100)}${analysis.body.length > 100 ? "..." : ""}
+
+Your email has been sent via Gmail! 🎉`;
+    } catch (error) {
+      console.error("Error sending complete email:", error.message);
+      return "❌ I encountered an error while sending your email. Please try again or contact support.";
+    }
+  }
+
+  async getBusinessOwnerEmail(businessId) {
+    // TODO: Implement logic to get business owner email
+    // This could come from:
+    // 1. Business configuration table
+    // 2. Google Workspace integration (get the authenticated user's email)
+    // 3. Admin user email from the system
+    
+    // For now, return a placeholder - this needs to be implemented
+    return "owner@business.com"; // This should be replaced with actual logic
+  }
+
+  manualEmailAnalysis(message) {
+    const lowerMessage = message.toLowerCase();
+    
+    // Check for subject patterns
+    const subjectPatterns = [
+      /(?:subject|title):\s*([^,]+?)(?:\s|,|$)/i,
+      /(?:about|regarding):\s*([^,]+?)(?:\s|,|$)/i,
+      /(?:re:|subject:)\s*([^,]+?)(?:\s|,|$)/i
+    ];
+    
+    let subject = null;
+    for (const pattern of subjectPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        subject = match[1].trim();
+        break;
+      }
+    }
+    
+    // Check for body/message patterns
+    const bodyPatterns = [
+      /(?:message|body|content):\s*([^,]+?)(?:\s|,|$)/i,
+      /(?:saying|tell them):\s*([^,]+?)(?:\s|,|$)/i,
+      /(?:write|send):\s*([^,]+?)(?:\s|,|$)/i
+    ];
+    
+    let body = null;
+    for (const pattern of bodyPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        body = match[1].trim();
+        break;
+      }
+    }
+    
+    const hasSubject = !!subject;
+    const hasBody = !!body;
+    const isComplete = hasSubject && hasBody;
+    
+    const missingFields = [];
+    if (!hasSubject) missingFields.push("subject");
+    if (!hasBody) missingFields.push("body");
+    
     return {
-      to: emailMatch ? emailMatch[1] : "recipient@example.com",
-      subject: subjectMatch ? subjectMatch[1].trim() : "Test Subject",
-      body: message.includes("body") ? message.split("body")[1]?.trim() || "Test message" : "Test message",
+      has_subject: hasSubject,
+      has_body: hasBody,
+      subject: subject,
+      body: body,
+      is_complete: isComplete,
+      missing_fields: missingFields
     };
   }
 
