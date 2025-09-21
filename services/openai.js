@@ -558,7 +558,7 @@ class OpenAIService {
       const result = await IntentDetectionService.detectIntent(message);
 
       return {
-        isFAQ: result && result.intent === 'faq' && result.confidence >= 0.7,
+        isFAQ: result && result.intent && result.intent.toLowerCase() === 'faq' && result.confidence >= 0.7,
         confidence: result ? result.confidence : 0,
         response: result ? result.response : null,
       };
