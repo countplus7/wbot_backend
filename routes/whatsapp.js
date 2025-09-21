@@ -508,18 +508,20 @@ router.post("/webhook", async (req, res) => {
         if (faqIntent && faqIntent.isFAQ) {
           console.log("Enhanced FAQ intent detected:", faqIntent);
 
-          // Search FAQs in Airtable with semantic search
-          const faqMatch = await AirtableService.searchFAQs(businessId, messageData.content);
+          try {
+            // Search FAQs in Airtable with semantic search
+            const faqMatch = await AirtableService.searchFAQs(businessId, messageData.content);
 
-          console.log("FAQ match received from Airtable:", { 
-        similarity: faqMatch?.semanticSimilarity, 
-        matchScore: faqMatch?.matchScore, 
-        matchType: faqMatch?.matchType,
-        question: faqMatch?.question?.substring(0, 50) + "..."
-      });
+            console.log("FAQ match received from Airtable:", { 
+              similarity: faqMatch?.semanticSimilarity, 
+              matchScore: faqMatch?.matchScore, 
+              matchType: faqMatch?.matchType,
+              question: faqMatch?.question?.substring(0, 50) + "..."
+            });
 
-      if (faqMatch && (faqMatch.semanticSimilarity > 0.75 || faqMatch.matchScore > 0.3)) {
-            console.log("Enhanced FAQ answer found:", faqMatch);
+            // Updated threshold to be more lenient (0.45 instead of 0.75)
+            if (faqMatch && (faqMatch.semanticSimilarity > 0.45 || faqMatch.matchScore > 0.2)) {
+              console.log("Enhanced FAQ answer found:", faqMatch);
 
             // Store conversation embedding for context
             try {
