@@ -523,90 +523,94 @@ router.post("/webhook", async (req, res) => {
             if (faqMatch && (faqMatch.semanticSimilarity > 0.45 || faqMatch.matchScore > 0.2)) {
               console.log("Enhanced FAQ answer found:", faqMatch);
 
-            // Store conversation embedding for context
-            try {
-              await EmbeddingsService.storeConversationEmbedding(
-                businessId,
-                conversation.id,
-                `msg_${Date.now()}`,
-                messageData.content,
-                "user"
-              );
-            } catch (embeddingError) {
-              console.error("Error storing conversation embedding:", embeddingError);
-            }
+              // Store conversation embedding for context
+              try {
+                await EmbeddingsService.storeConversationEmbedding(
+                  businessId,
+                  conversation.id,
+                  `msg_${Date.now()}`,
+                  messageData.content,
+                  "user"
+                );
+              } catch (embeddingError) {
+                console.error("Error storing conversation embedding:", embeddingError);
+              }
 
-            // Save the FAQ response to database
-            await DatabaseService.saveMessage({
-              businessId: businessId,
-              conversationId: conversation.id,
-              messageId: `faq_${Date.now()}`,
-              fromNumber: messageData.to, // From business
-              toNumber: messageData.from, // To user
-              messageType: "text",
-              content: faqMatch.answer,
-              mediaUrl: null,
-              localFilePath: null,
-              isFromUser: false,
-            });
+              // Save the FAQ response to database
+              await DatabaseService.saveMessage({
+                businessId: businessId,
+                conversationId: conversation.id,
+                messageId: `faq_${Date.now()}`,
+                fromNumber: messageData.to, // From business
+                toNumber: messageData.from, // To user
+                messageType: "text",
+                content: faqMatch.answer,
+                mediaUrl: null,
+                localFilePath: null,
+                isFromUser: false,
+              });
 
-            // Store FAQ response embedding
-            try {
-              await EmbeddingsService.storeConversationEmbedding(
-                businessId,
-                conversation.id,
-                `faq_resp_${Date.now()}`,
-                faqMatch.answer,
-                "assistant"
-              );
-            } catch (embeddingError) {
-              console.error("Error storing FAQ response embedding:", embeddingError);
-            }
+              // Store FAQ response embedding
+              try {
+                await EmbeddingsService.storeConversationEmbedding(
+                  businessId,
+                  conversation.id,
+                  `faq_resp_${Date.now()}`,
+                  faqMatch.answer,
+                  "assistant"
+                );
+              } catch (embeddingError) {
+                console.error("Error storing FAQ response embedding:", embeddingError);
+              }
 
-            // Send the FAQ response via WhatsApp
-            try {
-              const response = await WhatsAppService.sendTextMessage(messageData.from, faqMatch.answer);
-              console.log("Enhanced FAQ response sent successfully:", response);
-            } catch (whatsappError) {
-              console.error("Error sending FAQ response:", whatsappError);
-            }
+              // Send the FAQ response via WhatsApp
+              try {
+                const response = await WhatsAppService.sendTextMessage(messageData.from, faqMatch.answer);
+                console.log("Enhanced FAQ response sent successfully:", response);
+              } catch (whatsappError) {
+                console.error("Error sending FAQ response:", whatsappError);
+              }
 
-            return res.status(200).send("OK");
-          } else {
-            console.log("No suitable FAQ match found with enhanced search, providing FAQ fallback response");
+              return res.status(200).send("OK");
+            } else {
+              console.log("No suitable FAQ match found with enhanced search, providing FAQ fallback response");
 
-            // Provide a proper FAQ fallback response
-            const fallbackResponse = faqMatch ? 
-              `I found a related question about "${faqMatch.question}", but I'm not confident this is exactly what you're looking for. Could you please rephrase your question or provide more details? I'm here to help! ??` :
-              `I'm here to help! ??
+              // Provide a proper FAQ fallback response
+              const fallbackResponse = faqMatch ? 
+                `I found a related question about "${faqMatch.question}", but I'm not confident this is exactly what you're looking for. Could you please rephrase your question or provide more details? I'm here to help! ??` :
+                `I'm here to help! ??
 
 However, I wasn't able to find specific information on "${messageData.content.substring(0, 50)}${messageData.content.length > 50 ? "..." : ""}" in our database. ?????? They might be specific tools, software, or services related to a certain company or industry.
 
 For me to provide a more accurate answer, could you please provide more context or details about these terms? Are they related to a certain industry, software, or business process? ?? Any additional information would be very helpful!`;
 
-            // Save the fallback response to database
-            await DatabaseService.saveMessage({
-              businessId: businessId,
-              conversationId: conversation.id,
-              messageId: `faq_fallback_${Date.now()}`,
-              fromNumber: messageData.to, // From business
-              toNumber: messageData.from, // To user
-              messageType: "text",
-              content: fallbackResponse,
-              mediaUrl: null,
-              localFilePath: null,
-              isFromUser: false,
-            });
+              // Save the fallback response to database
+              await DatabaseService.saveMessage({
+                businessId: businessId,
+                conversationId: conversation.id,
+                messageId: `faq_fallback_${Date.now()}`,
+                fromNumber: messageData.to, // From business
+                toNumber: messageData.from, // To user
+                messageType: "text",
+                content: fallbackResponse,
+                mediaUrl: null,
+                localFilePath: null,
+                isFromUser: false,
+              });
 
-            // Send the fallback response via WhatsApp
-            try {
-              const response = await WhatsAppService.sendTextMessage(messageData.from, fallbackResponse);
-              console.log("FAQ fallback response sent successfully:", response);
-            } catch (whatsappError) {
-              console.error("Error sending FAQ fallback response:", whatsappError);
+              // Send the fallback response via WhatsApp
+              try {
+                const response = await WhatsAppService.sendTextMessage(messageData.from, fallbackResponse);
+                console.log("FAQ fallback response sent successfully:", response);
+              } catch (whatsappError) {
+                console.error("Error sending FAQ fallback response:", whatsappError);
+              }
+
+              return res.status(200).send("OK");
             }
-
-            return res.status(200).send("OK");
+          } catch (faqError) {
+            console.error("Error in enhanced FAQ processing:", faqError);
+            // Continue with regular AI processing if FAQ processing fails
           }
         }
       } catch (faqError) {
