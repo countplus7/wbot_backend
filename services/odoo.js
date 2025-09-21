@@ -111,7 +111,13 @@ class OdooService {
 
     if (response.data.error) {
       console.error("Odoo API error details:", response.data.error);
-      throw new Error(`Odoo API Error: ${response.data.error.message || JSON.stringify(response.data.error)}`);
+      
+      // Include detailed error information in the thrown error
+      const errorMessage = response.data.error.message || "Unknown error";
+      const errorDetails = response.data.error.data ? response.data.error.data.message : "";
+      const fullErrorMessage = `Odoo API Error: ${errorMessage}${errorDetails ? ` - ${errorDetails}` : ""}`;
+      
+      throw new Error(fullErrorMessage);
     }
 
     return response.data.result;
@@ -497,7 +503,8 @@ class OdooService {
         if (
           errorString.includes("qty_available") ||
           stockError.message.includes("qty_available") ||
-          stockError.message.includes("Invalid field")
+          stockError.message.includes("Invalid field") ||
+          stockError.message.includes("Odoo Server Error") // Add this condition
         ) {
           console.log("Inventory module not available, falling back to basic product info");
           
