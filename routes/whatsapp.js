@@ -273,6 +273,77 @@ router.post("/webhook", async (req, res) => {
         await DatabaseService.updateMessageLocalFilePath(messageData.messageId, relativePath);
 
         console.log(`Media file info saved to database with path: ${relativePath}`);
+
+        // Process media directly without intent detection
+        try {
+          if (messageData.messageType === "image") {
+            console.log("Processing image with OCR/vision analysis...");
+            // Use the highest OCR model features as per user preference
+            const imageAnalysis = await OpenAIService.analyzeImage(
+              localFilePath, 
+              "Please analyze this image thoroughly. Extract all text using OCR, describe the visual content, identify any objects, text, or important details. Provide a comprehensive analysis.",
+              businessTone
+            );
+            
+            aiResponse = `📸 **Image Analysis:**\n\n${imageAnalysis}`;
+            
+          } else if (messageData.messageType === "audio") {
+            console.log("Processing audio/voice note with transcription...");
+            // Transcribe the audio using OpenAI Whisper
+            const transcription = await OpenAIService.transcribeAudio(localFilePath);
+            
+            aiResponse = `🎤 **Voice Note Transcription:**\n\n"${transcription}"\n\nIs there anything specific you'd like me to help you with regarding this message?`;
+          }
+
+          console.log("Media processing completed successfully");
+
+          // Save AI response to database
+          await DatabaseService.saveMessage({
+            businessId: businessId,
+            conversationId: conversation.id,
+            messageId: `media_${Date.now()}`,
+            fromNumber: messageData.to, // From business
+            toNumber: messageData.from, // To user
+            messageType: "text",
+            content: aiResponse,
+            mediaUrl: null,
+            localFilePath: null,
+            isFromUser: false,
+          });
+
+          // Send WhatsApp response
+          try {
+            const response = await WhatsAppService.sendTextMessage(messageData.from, aiResponse);
+            console.log("Media processing response sent successfully:", response);
+          } catch (whatsappError) {
+            console.error("Error sending media processing response:", whatsappError);
+          }
+
+          return res.status(200).send("OK");
+
+        } catch (mediaProcessingError) {
+          console.error("Error processing media:", mediaProcessingError);
+          aiResponse = `I received your ${messageData.messageType} message, but I encountered an error while processing it. Please try again or send a different file.`;
+          
+          // Save error response to database
+          await DatabaseService.saveMessage({
+            businessId: businessId,
+            conversationId: conversation.id,
+            messageId: `media_error_${Date.now()}`,
+            fromNumber: messageData.to,
+            toNumber: messageData.from,
+            messageType: "text",
+            content: aiResponse,
+            mediaUrl: null,
+            localFilePath: null,
+            isFromUser: false,
+          });
+
+          // Send error response via WhatsApp
+          await WhatsAppService.sendTextMessage(messageData.from, aiResponse);
+          return res.status(200).send("OK");
+        }
+
       } catch (mediaError) {
         console.error(`Error processing ${messageData.messageType} media:`, mediaError);
 
@@ -293,7 +364,7 @@ router.post("/webhook", async (req, res) => {
       }
     }
 
-    // Enhanced fast intent detection
+    // Enhanced fast intent detection (only for text messages)
     if (messageData.messageType === "text" && messageData.content) {
       try {
         console.log("Fast intent detection starting...");
@@ -505,6 +576,12 @@ router.post("/webhook", async (req, res) => {
     // Enhanced AI response generation with embeddings
     try {
       console.log("Enhanced AI response generation with embeddings...");
+
+      // Skip AI processing for media messages as they are handled directly above
+      if (messageData.messageType === "image" || messageData.messageType === "audio") {
+        console.log("Skipping AI processing for media message - already handled directly");
+        return res.status(200).send("OK");
+      }
 
       // Get conversation history for context
       const conversationHistory = await DatabaseService.getConversationHistory(conversation.id);
