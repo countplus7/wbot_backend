@@ -1324,36 +1324,30 @@ Do not include any explanation or additional text, only the JSON.`;
         `[ODOO_SALE_ORDER_CREATE] Processing Odoo sale order create request for business ${businessId}: ${message}`
       );
 
-      // Extract sale order details from the message using AI
-      const orderPrompt = `You are a JSON parser. Extract sale order details from this message: "${message}"
+      // Check if this is a follow-up to a previous incomplete order request
+      const isFollowUp = this.isOrderFollowUp(message, conversationHistory);
+      
+      if (isFollowUp) {
+        return await this.handleOrderFollowUp(businessId, message, conversationHistory, businessTone);
+      }
 
-IMPORTANT: Return ONLY valid JSON, no explanations or additional text.
+      // Extract order details from the message using AI
+      const orderPrompt = `Analyze this order request: "${message}"
 
-Return JSON with this exact structure:
+Determine what information is provided and what is missing.
+
+Return JSON with this structure:
 {
-  "partner_id": "customer name or ID",
-  "order_lines": [
-    {
-      "product_id": "product name or ID", 
-      "product_uom_qty": 1,
-      "price_unit": 0
-    }
-  ],
-  "note": "order notes"
+  "has_customer": true/false,
+  "has_products": true/false,
+  "has_quantities": true/false,
+  "customer_info": "customer name or details if provided",
+  "products": [{"name": "product name", "quantity": number}],
+  "is_complete": true/false,
+  "missing_fields": ["list of missing required fields"]
 }
 
-If any field is missing, use reasonable defaults. For "Create a new order", use:
-{
-  "partner_id": "Default Customer",
-  "order_lines": [
-    {
-      "product_id": "Default Product",
-      "product_uom_qty": 1,
-      "price_unit": 0
-    }
-  ],
-  "note": "Order created via WhatsApp"
-}`;
+Required fields: customer, products, quantities`;
 
       const response = await openai.chat.completions.create({
         model: this.chatModel,
@@ -1362,45 +1356,195 @@ If any field is missing, use reasonable defaults. For "Create a new order", use:
         max_tokens: 300,
       });
 
-      let orderData;
+      let analysis;
       try {
         const responseContent = response.choices[0].message.content.trim();
-        console.log("AI response for order parsing:", responseContent);
-        
-        // Try to extract JSON from the response if it's wrapped in text
         const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
         const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
-        
-        orderData = JSON.parse(jsonString);
+        analysis = JSON.parse(jsonString);
       } catch (parseError) {
-        console.error("Error parsing AI response as JSON:", parseError);
-        console.log("Raw AI response:", response.choices[0].message.content);
-        
-        // Fallback to default order data
-        orderData = {
-          partner_id: "Default Customer",
-          order_lines: [
-            {
-              product_id: "Default Product",
-              product_uom_qty: 1,
-              price_unit: 0
-            }
-          ],
-          note: "Order created via WhatsApp"
+        console.error("Error parsing order analysis:", parseError);
+        analysis = {
+          has_customer: false,
+          has_products: false,
+          has_quantities: false,
+          is_complete: false,
+          missing_fields: ["customer", "products", "quantities"]
         };
       }
 
-      // Create sale order using Odoo Service
+      console.log("Order analysis:", analysis);
+
+      if (analysis.is_complete) {
+        // All information provided, create the order
+        return await this.createCompleteOrder(businessId, analysis, message);
+      } else {
+        // Missing information, ask for it
+        return await this.askForMissingOrderInfo(analysis, message);
+      }
+
+    } catch (error) {
+      console.error("Error handling Odoo sale order create intent:", error.message);
+      return "I apologize, but I could not process your order request. Please try again.";
+    }
+  }
+
+  isOrderFollowUp(message, conversationHistory) {
+    // Check if the last few messages indicate we're in an order creation flow
+    const recentMessages = conversationHistory.slice(-3);
+    return recentMessages.some(msg => 
+      msg.content && (
+        msg.content.includes("What customer") ||
+        msg.content.includes("What product") ||
+        msg.content.includes("How many") ||
+        msg.content.includes("order details")
+      )
+    );
+  }
+
+  async handleOrderFollowUp(businessId, message, conversationHistory, businessTone) {
+    try {
+      // Get the context from recent conversation
+      const recentMessages = conversationHistory.slice(-5);
+      const contextPrompt = `Based on this conversation context, determine if we now have enough information to create an order:
+
+Recent conversation:
+${recentMessages.map(msg => `${msg.direction}: ${msg.content}`).join('\n')}
+
+Latest message: "${message}"
+
+Return JSON:
+{
+  "has_all_info": true/false,
+  "customer": "customer name if provided",
+  "products": [{"name": "product", "quantity": number}],
+  "missing": ["any still missing fields"]
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: contextPrompt }],
+        temperature: 0.1,
+        max_tokens: 300,
+      });
+
+      let followUpAnalysis;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        followUpAnalysis = JSON.parse(jsonString);
+      } catch (parseError) {
+        return "I'm having trouble understanding your order details. Could you please provide:\n• Customer name\n• Product name\n• Quantity";
+      }
+
+      if (followUpAnalysis.has_all_info) {
+        // We have all the information, create the order
+        return await this.createCompleteOrder(businessId, followUpAnalysis, message);
+      } else {
+        // Still missing information
+        return this.askForMissingOrderInfo(followUpAnalysis, message);
+      }
+
+    } catch (error) {
+      console.error("Error handling order follow-up:", error.message);
+      return "I'm having trouble processing your order. Please provide:\n• Customer name\n• Product name\n• Quantity";
+    }
+  }
+
+  async askForMissingOrderInfo(analysis, originalMessage) {
+    const missing = analysis.missing_fields || [];
+    
+    if (missing.includes("customer") && missing.includes("products")) {
+      return `I'd be happy to help you create an order! 📝
+
+To create your order, I need a few more details:
+
+**Customer:** Who is this order for?
+**Product:** What product would you like to order?
+**Quantity:** How many units?
+
+For example: "Order for John Smith, 5 laptops"`;
+    } else if (missing.includes("customer")) {
+      return `Great! I can see you want to order ${analysis.products?.map(p => `${p.quantity} ${p.name}`).join(', ')}.
+
+Just need to know: **Who is this order for?** (customer name)`;
+    } else if (missing.includes("products")) {
+      return `Perfect! I have the customer: ${analysis.customer_info}
+
+Now I need to know: **What product would you like to order and how many?**`;
+    } else if (missing.includes("quantities")) {
+      return `Got it! Customer: ${analysis.customer_info}, Product: ${analysis.products?.map(p => p.name).join(', ')}
+
+Just need: **How many units of each product?**`;
+    } else {
+      return `I need a bit more information to create your order. Could you please specify:\n• Customer name\n• Product details\n• Quantities`;
+    }
+  }
+
+  async createCompleteOrder(businessId, analysis, message) {
+    try {
+      // Get customer ID
+      let customerId = 1; // fallback
+      if (analysis.customer || analysis.customer_info) {
+        const customerName = analysis.customer || analysis.customer_info;
+        const customerSearch = await OdooService.searchCustomers(businessId, customerName);
+        if (customerSearch.success && customerSearch.customers.length > 0) {
+          customerId = customerSearch.customers[0].id;
+        }
+      }
+
+      // Get product IDs
+      const orderLines = [];
+      for (const product of analysis.products || []) {
+        const products = await OdooService.getProducts(businessId, 100);
+        const matchingProduct = products.find(p => 
+          p.name.toLowerCase().includes(product.name.toLowerCase()) ||
+          product.name.toLowerCase().includes(p.name.toLowerCase())
+        );
+        
+        if (matchingProduct) {
+          orderLines.push({
+            product_id: matchingProduct.id,
+            quantity: product.quantity || 1,
+            price_unit: matchingProduct.list_price || 0
+          });
+        }
+      }
+
+      if (orderLines.length === 0) {
+        return "I couldn't find the products you mentioned. Please check the product names and try again.";
+      }
+
+      const orderData = {
+        partner_id: customerId,
+        order_lines: orderLines,
+        note: `Order created via WhatsApp: ${message}`
+      };
+
+      console.log("Creating order with data:", orderData);
+
       const result = await OdooService.createSaleOrder(businessId, orderData);
 
       if (result.success) {
-        return `✅ Sale order created successfully in Odoo`;
+        const customerName = analysis.customer || analysis.customer_info || "Customer";
+        const productSummary = orderLines.map(line => `${line.quantity} units`).join(', ');
+        
+        return `✅ **Order Created Successfully!**
+
+📋 **Order Details:**
+• Customer: ${customerName}
+• Products: ${productSummary}
+• Order ID: ${result.id}
+
+Your order has been created in Odoo and is ready for processing! 🎉`;
       } else {
-        return `❌ Failed to create sale order: ${result.error}`;
+        return `❌ Sorry, I couldn't create your order: ${result.error}`;
       }
+
     } catch (error) {
-      console.error("Error handling Odoo sale order create intent:", error.message);
-      return "I apologize, but I could not create your sale order. Please check your Odoo configuration.";
+      console.error("Error creating complete order:", error.message);
+      return "❌ I encountered an error while creating your order. Please try again or contact support.";
     }
   }
 
