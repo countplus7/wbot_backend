@@ -484,16 +484,23 @@ class OdooService {
           hasStockInfo: true,
         };
       } catch (stockError) {
+        // Debug: Log the full error object to understand its structure
+        console.log("Full stockError object:", stockError);
+        console.log("stockError.message:", stockError.message);
+        console.log("stockError.stack:", stockError.stack);
+        
         // Check if the error is about the qty_available field not existing
         // The error might be in the error message or in the error object structure
         const errorString = JSON.stringify(stockError);
+        console.log("Error as JSON string:", errorString);
+        
         if (
           errorString.includes("qty_available") ||
           stockError.message.includes("qty_available") ||
           stockError.message.includes("Invalid field")
         ) {
           console.log("Inventory module not available, falling back to basic product info");
-
+          
           // Fallback: get products without stock information
           const products = await this.makeJsonRpcCall(
             businessId,
@@ -516,6 +523,7 @@ class OdooService {
             message: "Stock information is not available. Inventory module may not be installed.",
           };
         } else {
+          console.log("Error doesn't match qty_available pattern, re-throwing");
           throw stockError;
         }
       }
