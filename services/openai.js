@@ -1325,14 +1325,35 @@ Do not include any explanation or additional text, only the JSON.`;
       );
 
       // Extract sale order details from the message using AI
-      const orderPrompt = `Extract sale order details from this message: "${message}"
-      
-      Return JSON with:
-      - partner_id: customer ID or name
-      - order_line: array of products with product_id, product_uom_qty, price_unit
-      - note: order notes
-      
-      If any field is missing, use reasonable defaults.`;
+      const orderPrompt = `You are a JSON parser. Extract sale order details from this message: "${message}"
+
+IMPORTANT: Return ONLY valid JSON, no explanations or additional text.
+
+Return JSON with this exact structure:
+{
+  "partner_id": "customer name or ID",
+  "order_lines": [
+    {
+      "product_id": "product name or ID", 
+      "product_uom_qty": 1,
+      "price_unit": 0
+    }
+  ],
+  "note": "order notes"
+}
+
+If any field is missing, use reasonable defaults. For "Create a new order", use:
+{
+  "partner_id": "Default Customer",
+  "order_lines": [
+    {
+      "product_id": "Default Product",
+      "product_uom_qty": 1,
+      "price_unit": 0
+    }
+  ],
+  "note": "Order created via WhatsApp"
+}`;
 
       const response = await openai.chat.completions.create({
         model: this.chatModel,
@@ -1341,7 +1362,33 @@ Do not include any explanation or additional text, only the JSON.`;
         max_tokens: 300,
       });
 
-      const orderData = JSON.parse(response.choices[0].message.content);
+      let orderData;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        console.log("AI response for order parsing:", responseContent);
+        
+        // Try to extract JSON from the response if it's wrapped in text
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        
+        orderData = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error("Error parsing AI response as JSON:", parseError);
+        console.log("Raw AI response:", response.choices[0].message.content);
+        
+        // Fallback to default order data
+        orderData = {
+          partner_id: "Default Customer",
+          order_lines: [
+            {
+              product_id: "Default Product",
+              product_uom_qty: 1,
+              price_unit: 0
+            }
+          ],
+          note: "Order created via WhatsApp"
+        };
+      }
 
       // Create sale order using Odoo Service
       const result = await OdooService.createSaleOrder(businessId, orderData);
