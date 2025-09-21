@@ -220,11 +220,6 @@ class OpenAIService {
             conversationHistory,
             businessTone
           );
-        // Legacy intent support
-        case "HUBSPOT":
-          return await this.handleHubSpotWithAI(businessId, aiIntent, conversationHistory, businessTone);
-        case "ODOO":
-          return await this.handleOdooWithAI(businessId, aiIntent, phoneNumber, conversationHistory, businessTone);
         default:
           return await this.generateGeneralResponse([latestMessage], conversationHistory, businessTone);
       }
@@ -359,10 +354,12 @@ class OpenAIService {
 
         // Check if ffmpeg is available before attempting conversion
         const ffmpegAvailable = await this.isFfmpegAvailable();
-        
+
         if (!ffmpegAvailable) {
           console.warn(`[DEBUG] FFmpeg not available, cannot convert ${fileExtension} format`);
-          throw new Error(`Audio format ${fileExtension} is not supported and ffmpeg is not available for conversion. Please install ffmpeg or send audio in a supported format (mp3, wav, m4a, etc.)`);
+          throw new Error(
+            `Audio format ${fileExtension} is not supported and ffmpeg is not available for conversion. Please install ffmpeg or send audio in a supported format (mp3, wav, m4a, etc.)`
+          );
         }
 
         // Convert to WAV using ffmpeg
@@ -406,7 +403,11 @@ class OpenAIService {
       ffmpeg.getAvailableFormats((err, formats) => {
         if (err) {
           console.warn(`[DEBUG] FFmpeg not available: ${err.message}`);
-          reject(new Error(`FFmpeg is not installed or not accessible. Please install ffmpeg on your server: sudo apt install ffmpeg`));
+          reject(
+            new Error(
+              `FFmpeg is not installed or not accessible. Please install ffmpeg on your server: sudo apt install ffmpeg`
+            )
+          );
           return;
         }
 
@@ -431,7 +432,9 @@ class OpenAIService {
           .on("error", (error) => {
             console.error(`[DEBUG] Audio conversion failed:`, error.message);
             if (error.message.includes("Cannot find ffmpeg")) {
-              reject(new Error(`FFmpeg is not installed. Please install ffmpeg on your server: sudo apt install ffmpeg`));
+              reject(
+                new Error(`FFmpeg is not installed. Please install ffmpeg on your server: sudo apt install ffmpeg`)
+              );
             } else {
               reject(new Error(`Failed to convert audio: ${error.message}`));
             }
@@ -571,11 +574,11 @@ class OpenAIService {
   async detectFAQIntentWithEmbeddings(message) {
     try {
       // Use the proper intent detection service instead of the broken embeddings method
-      const IntentDetectionService = require('./intent-detection');
+      const IntentDetectionService = require("./intent-detection");
       const result = await IntentDetectionService.detectIntent(message);
 
       return {
-        isFAQ: result && result.intent && result.intent.toLowerCase() === 'faq' && result.confidence >= 0.7,
+        isFAQ: result && result.intent && result.intent.toLowerCase() === "faq" && result.confidence >= 0.7,
         confidence: result ? result.confidence : 0,
         response: result ? result.response : null,
       };
@@ -611,11 +614,22 @@ class OpenAIService {
     }
   }
 
-    /**
+  /**
    * Detect calendar intent with better parsing
    */
   detectCalendarIntent(message) {
-    const calendarKeywords = ["schedule", "meeting", "appointment", "calendar", "book", "reserve", "time", "tomorrow", "today", "next week"];
+    const calendarKeywords = [
+      "schedule",
+      "meeting",
+      "appointment",
+      "calendar",
+      "book",
+      "reserve",
+      "time",
+      "tomorrow",
+      "today",
+      "next week",
+    ];
     const hasCalendarKeyword = calendarKeywords.some((keyword) =>
       message.toLowerCase().includes(keyword.toLowerCase())
     );
@@ -623,7 +637,7 @@ class OpenAIService {
     if (hasCalendarKeyword) {
       // Try to extract more specific information
       const lowerMessage = message.toLowerCase();
-      
+
       // Determine the type of calendar request
       let intent = "schedule_meeting"; // default
       if (lowerMessage.includes("appointment") || lowerMessage.includes("book")) {
@@ -661,9 +675,9 @@ class OpenAIService {
     if (lowerMessage.includes("tomorrow")) {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      data.date = tomorrow.toISOString().split('T')[0];
+      data.date = tomorrow.toISOString().split("T")[0];
     } else if (lowerMessage.includes("today")) {
-      data.date = new Date().toISOString().split('T')[0];
+      data.date = new Date().toISOString().split("T")[0];
     }
 
     // Extract time
@@ -671,27 +685,29 @@ class OpenAIService {
     if (timeMatch) {
       let hours = parseInt(timeMatch[1]);
       const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : '';
+      const period = timeMatch[3] ? timeMatch[3].toLowerCase() : "";
 
       // Convert to 24-hour format
-      if (period === 'pm' && hours !== 12) {
+      if (period === "pm" && hours !== 12) {
         hours += 12;
-      } else if (period === 'am' && hours === 12) {
+      } else if (period === "am" && hours === 12) {
         hours = 0;
       }
 
-      data.time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      data.time = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
     }
 
     // Extract title/description
-    const titleMatch = message.match(/(?:with|meeting with|appointment with)\s+([A-Za-z\s]+?)(?:\s+at|\s+on|\s+tomorrow|\s+today|$)/i);
+    const titleMatch = message.match(
+      /(?:with|meeting with|appointment with)\s+([A-Za-z\s]+?)(?:\s+at|\s+on|\s+tomorrow|\s+today|$)/i
+    );
     if (titleMatch) {
       data.title = titleMatch[1].trim();
     } else {
       // Try to extract from the beginning
-      const words = message.split(' ');
+      const words = message.split(" ");
       if (words.length > 2) {
-        data.title = words.slice(0, 3).join(' ');
+        data.title = words.slice(0, 3).join(" ");
       }
     }
 
@@ -734,7 +750,7 @@ class OpenAIService {
 
       // Check if this is a follow-up to a previous incomplete email request
       const isFollowUp = this.isEmailFollowUp(message, conversationHistory);
-      
+
       if (isFollowUp) {
         return await this.handleEmailFollowUp(businessId, message, conversationHistory, businessTone);
       }
@@ -768,16 +784,16 @@ Note: Email will be sent TO the business owner FROM the integrated Google Worksp
       try {
         const responseContent = response.choices[0].message.content.trim();
         console.log("AI response for email analysis:", responseContent);
-        
+
         // Try to extract JSON from the response if it's wrapped in text
         const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
         const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
-        
+
         analysis = JSON.parse(jsonString);
       } catch (parseError) {
         console.error("Error parsing email analysis:", parseError);
         console.log("Raw AI response:", response.choices[0].message.content);
-        
+
         // Fallback: manually analyze the message for common patterns
         analysis = this.manualEmailAnalysis(message);
       }
@@ -791,7 +807,6 @@ Note: Email will be sent TO the business owner FROM the integrated Google Worksp
         // Missing information, ask for it
         return await this.askForMissingEmailInfo(analysis, message);
       }
-
     } catch (error) {
       console.error("Error handling Gmail send intent:", error.message);
       return "I apologize, but I could not process your email request. Please try again.";
@@ -801,14 +816,14 @@ Note: Email will be sent TO the business owner FROM the integrated Google Worksp
   isEmailFollowUp(message, conversationHistory) {
     // Check if the last few messages indicate we're in an email sending flow
     const recentMessages = conversationHistory.slice(-3);
-    return recentMessages.some(msg => 
-      msg.content && (
-        msg.content.includes("What is the subject") ||
-        msg.content.includes("What is the message") ||
-        msg.content.includes("email subject") ||
-        msg.content.includes("email content") ||
-        msg.content.includes("email details")
-      )
+    return recentMessages.some(
+      (msg) =>
+        msg.content &&
+        (msg.content.includes("What is the subject") ||
+          msg.content.includes("What is the message") ||
+          msg.content.includes("email subject") ||
+          msg.content.includes("email content") ||
+          msg.content.includes("email details"))
     );
   }
 
@@ -819,7 +834,7 @@ Note: Email will be sent TO the business owner FROM the integrated Google Worksp
       const contextPrompt = `Based on this conversation context, determine if we now have enough information to send an email:
 
 Recent conversation:
-${recentMessages.map(msg => `${msg.direction}: ${msg.content}`).join('\n')}
+${recentMessages.map((msg) => `${msg.direction}: ${msg.content}`).join("\n")}
 
 Latest message: "${message}"
 
@@ -855,7 +870,6 @@ Return JSON:
         // Still missing information
         return this.askForMissingEmailInfo(followUpAnalysis, message);
       }
-
     } catch (error) {
       console.error("Error handling email follow-up:", error.message);
       return "I'm having trouble processing your email. Please provide:\n• Email subject\n• Email message content";
@@ -864,7 +878,7 @@ Return JSON:
 
   async askForMissingEmailInfo(analysis, originalMessage) {
     const missing = analysis.missing_fields || [];
-    
+
     if (missing.includes("subject") && missing.includes("body")) {
       return `I'd be happy to help you send an email! 📧
 
@@ -892,7 +906,7 @@ Now I need to know: **What should the email message content be?**`;
       // Get business owner email (for now, we'll need to implement this)
       // This could come from business configuration, Google Workspace integration, etc.
       const businessOwnerEmail = await this.getBusinessOwnerEmail(businessId);
-      
+
       if (!businessOwnerEmail) {
         return "❌ I couldn't find the business owner's email address. Please configure the business owner email in your settings.";
       }
@@ -928,21 +942,21 @@ Your email has been sent via Gmail! 🎉`;
     // 1. Business configuration table
     // 2. Google Workspace integration (get the authenticated user's email)
     // 3. Admin user email from the system
-    
+
     // For now, return a placeholder - this needs to be implemented
     return "owner@business.com"; // This should be replaced with actual logic
   }
 
   manualEmailAnalysis(message) {
     const lowerMessage = message.toLowerCase();
-    
+
     // Check for subject patterns
     const subjectPatterns = [
       /(?:subject|title):\s*([^,]+?)(?:\s|,|$)/i,
       /(?:about|regarding):\s*([^,]+?)(?:\s|,|$)/i,
-      /(?:re:|subject:)\s*([^,]+?)(?:\s|,|$)/i
+      /(?:re:|subject:)\s*([^,]+?)(?:\s|,|$)/i,
     ];
-    
+
     let subject = null;
     for (const pattern of subjectPatterns) {
       const match = message.match(pattern);
@@ -951,14 +965,14 @@ Your email has been sent via Gmail! 🎉`;
         break;
       }
     }
-    
+
     // Check for body/message patterns
     const bodyPatterns = [
       /(?:message|body|content):\s*([^,]+?)(?:\s|,|$)/i,
       /(?:saying|tell them):\s*([^,]+?)(?:\s|,|$)/i,
-      /(?:write|send):\s*([^,]+?)(?:\s|,|$)/i
+      /(?:write|send):\s*([^,]+?)(?:\s|,|$)/i,
     ];
-    
+
     let body = null;
     for (const pattern of bodyPatterns) {
       const match = message.match(pattern);
@@ -967,22 +981,22 @@ Your email has been sent via Gmail! 🎉`;
         break;
       }
     }
-    
+
     const hasSubject = !!subject;
     const hasBody = !!body;
     const isComplete = hasSubject && hasBody;
-    
+
     const missingFields = [];
     if (!hasSubject) missingFields.push("subject");
     if (!hasBody) missingFields.push("body");
-    
+
     return {
       has_subject: hasSubject,
       has_body: hasBody,
       subject: subject,
       body: body,
       is_complete: isComplete,
-      missing_fields: missingFields
+      missing_fields: missingFields,
     };
   }
 
@@ -1521,7 +1535,7 @@ Your email has been sent via Gmail! 🎉`;
 
       // Check if this is a follow-up to a previous incomplete order request
       const isFollowUp = this.isOrderFollowUp(message, conversationHistory);
-      
+
       if (isFollowUp) {
         return await this.handleOrderFollowUp(businessId, message, conversationHistory, businessTone);
       }
@@ -1555,16 +1569,16 @@ Analyze the message and return the appropriate JSON. Required fields: customer, 
       try {
         const responseContent = response.choices[0].message.content.trim();
         console.log("AI response for order analysis:", responseContent);
-        
+
         // Try to extract JSON from the response if it's wrapped in text
         const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
         const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
-        
+
         analysis = JSON.parse(jsonString);
       } catch (parseError) {
         console.error("Error parsing order analysis:", parseError);
         console.log("Raw AI response:", response.choices[0].message.content);
-        
+
         // Fallback: manually analyze the message for common patterns
         analysis = this.manualOrderAnalysis(message);
       }
@@ -1578,7 +1592,6 @@ Analyze the message and return the appropriate JSON. Required fields: customer, 
         // Missing information, ask for it
         return await this.askForMissingOrderInfo(analysis, message);
       }
-
     } catch (error) {
       console.error("Error handling Odoo sale order create intent:", error.message);
       return "I apologize, but I could not process your order request. Please try again.";
@@ -1588,13 +1601,13 @@ Analyze the message and return the appropriate JSON. Required fields: customer, 
   isOrderFollowUp(message, conversationHistory) {
     // Check if the last few messages indicate we're in an order creation flow
     const recentMessages = conversationHistory.slice(-3);
-    return recentMessages.some(msg => 
-      msg.content && (
-        msg.content.includes("What customer") ||
-        msg.content.includes("What product") ||
-        msg.content.includes("How many") ||
-        msg.content.includes("order details")
-      )
+    return recentMessages.some(
+      (msg) =>
+        msg.content &&
+        (msg.content.includes("What customer") ||
+          msg.content.includes("What product") ||
+          msg.content.includes("How many") ||
+          msg.content.includes("order details"))
     );
   }
 
@@ -1605,7 +1618,7 @@ Analyze the message and return the appropriate JSON. Required fields: customer, 
       const contextPrompt = `Based on this conversation context, determine if we now have enough information to create an order:
 
 Recent conversation:
-${recentMessages.map(msg => `${msg.direction}: ${msg.content}`).join('\n')}
+${recentMessages.map((msg) => `${msg.direction}: ${msg.content}`).join("\n")}
 
 Latest message: "${message}"
 
@@ -1641,7 +1654,6 @@ Return JSON:
         // Still missing information
         return this.askForMissingOrderInfo(followUpAnalysis, message);
       }
-
     } catch (error) {
       console.error("Error handling order follow-up:", error.message);
       return "I'm having trouble processing your order. Please provide:\n• Customer name\n• Product name\n• Quantity";
@@ -1650,7 +1662,7 @@ Return JSON:
 
   async askForMissingOrderInfo(analysis, originalMessage) {
     const missing = analysis.missing_fields || [];
-    
+
     if (missing.includes("customer") && missing.includes("products")) {
       return `I'd be happy to help you create an order! 📝
 
@@ -1662,7 +1674,7 @@ To create your order, I need a few more details:
 
 For example: "Order for John Smith, 5 laptops"`;
     } else if (missing.includes("customer")) {
-      return `Great! I can see you want to order ${analysis.products?.map(p => `${p.quantity} ${p.name}`).join(', ')}.
+      return `Great! I can see you want to order ${analysis.products?.map((p) => `${p.quantity} ${p.name}`).join(", ")}.
 
 Just need to know: **Who is this order for?** (customer name)`;
     } else if (missing.includes("products")) {
@@ -1670,7 +1682,7 @@ Just need to know: **Who is this order for?** (customer name)`;
 
 Now I need to know: **What product would you like to order and how many?**`;
     } else if (missing.includes("quantities")) {
-      return `Got it! Customer: ${analysis.customer_info}, Product: ${analysis.products?.map(p => p.name).join(', ')}
+      return `Got it! Customer: ${analysis.customer_info}, Product: ${analysis.products?.map((p) => p.name).join(", ")}
 
 Just need: **How many units of each product?**`;
     } else {
@@ -1694,16 +1706,17 @@ Just need: **How many units of each product?**`;
       const orderLines = [];
       for (const product of analysis.products || []) {
         const products = await OdooService.getProducts(businessId, 100);
-        const matchingProduct = products.find(p => 
-          p.name.toLowerCase().includes(product.name.toLowerCase()) ||
-          product.name.toLowerCase().includes(p.name.toLowerCase())
+        const matchingProduct = products.find(
+          (p) =>
+            p.name.toLowerCase().includes(product.name.toLowerCase()) ||
+            product.name.toLowerCase().includes(p.name.toLowerCase())
         );
-        
+
         if (matchingProduct) {
           orderLines.push({
             product_id: matchingProduct.id,
             quantity: product.quantity || 1,
-            price_unit: matchingProduct.list_price || 0
+            price_unit: matchingProduct.list_price || 0,
           });
         }
       }
@@ -1715,7 +1728,7 @@ Just need: **How many units of each product?**`;
       const orderData = {
         partner_id: customerId,
         order_lines: orderLines,
-        note: `Order created via WhatsApp: ${message}`
+        note: `Order created via WhatsApp: ${message}`,
       };
 
       console.log("Creating order with data:", orderData);
@@ -1724,8 +1737,8 @@ Just need: **How many units of each product?**`;
 
       if (result.success) {
         const customerName = analysis.customer || analysis.customer_info || "Customer";
-        const productSummary = orderLines.map(line => `${line.quantity} units`).join(', ');
-        
+        const productSummary = orderLines.map((line) => `${line.quantity} units`).join(", ");
+
         return `✅ **Order Created Successfully!**
 
 📋 **Order Details:**
@@ -1737,7 +1750,6 @@ Your order has been created in Odoo and is ready for processing! 🎉`;
       } else {
         return `❌ Sorry, I couldn't create your order: ${result.error}`;
       }
-
     } catch (error) {
       console.error("Error creating complete order:", error.message);
       return "❌ I encountered an error while creating your order. Please try again or contact support.";
@@ -1815,7 +1827,7 @@ Your order has been created in Odoo and is ready for processing! 🎉`;
 
       // Check if this is a follow-up to a previous incomplete lead request
       const isFollowUp = this.isLeadFollowUp(message, conversationHistory);
-      
+
       if (isFollowUp) {
         return await this.handleLeadFollowUp(businessId, message, conversationHistory, businessTone);
       }
@@ -1876,16 +1888,16 @@ Output: {
       try {
         const responseContent = response.choices[0].message.content.trim();
         console.log("AI response for lead analysis:", responseContent);
-        
+
         // Try to extract JSON from the response if it's wrapped in text
         const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
         const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
-        
+
         analysis = JSON.parse(jsonString);
       } catch (parseError) {
         console.error("Error parsing lead analysis:", parseError);
         console.log("Raw AI response:", response.choices[0].message.content);
-        
+
         // Fallback: manually analyze the message for common patterns
         analysis = this.manualLeadAnalysis(message);
       }
@@ -1899,7 +1911,6 @@ Output: {
         // Missing information, ask for it
         return await this.askForMissingLeadInfo(analysis, message);
       }
-
     } catch (error) {
       console.error("Error handling Odoo lead create intent:", error.message);
       return "I apologize, but I could not process your lead request. Please try again.";
@@ -1909,15 +1920,15 @@ Output: {
   isLeadFollowUp(message, conversationHistory) {
     // Check if the last few messages indicate we're in a lead creation flow
     const recentMessages = conversationHistory.slice(-3);
-    return recentMessages.some(msg => 
-      msg.content && (
-        msg.content.includes("What is the lead name") ||
-        msg.content.includes("What is the contact name") ||
-        msg.content.includes("What is the email") ||
-        msg.content.includes("What is the phone") ||
-        msg.content.includes("lead details") ||
-        msg.content.includes("contact information")
-      )
+    return recentMessages.some(
+      (msg) =>
+        msg.content &&
+        (msg.content.includes("What is the lead name") ||
+          msg.content.includes("What is the contact name") ||
+          msg.content.includes("What is the email") ||
+          msg.content.includes("What is the phone") ||
+          msg.content.includes("lead details") ||
+          msg.content.includes("contact information"))
     );
   }
 
@@ -1928,7 +1939,7 @@ Output: {
       const contextPrompt = `Based on this conversation context, determine if we now have enough information to create a lead:
 
 Recent conversation:
-${recentMessages.map(msg => `${msg.direction}: ${msg.content}`).join('\n')}
+${recentMessages.map((msg) => `${msg.direction}: ${msg.content}`).join("\n")}
 
 Latest message: "${message}"
 
@@ -1967,7 +1978,6 @@ Return JSON:
         // Still missing information
         return this.askForMissingLeadInfo(followUpAnalysis, message);
       }
-
     } catch (error) {
       console.error("Error handling lead follow-up:", error.message);
       return "I'm having trouble processing your lead. Please provide:\n• Lead name\n• Contact name\n• Email\n• Phone\n• Description";
@@ -1976,7 +1986,7 @@ Return JSON:
 
   async askForMissingLeadInfo(analysis, originalMessage) {
     const missing = analysis.missing_fields || [];
-    
+
     if (missing.length >= 3) {
       return `I'd be happy to help you create a lead! 📋
 
@@ -1994,18 +2004,18 @@ For example: "Lead: New Customer Inquiry, Contact: John Smith, Email: john@examp
       const fieldDisplay = this.getFieldDisplayName(field);
       return `Almost there! I just need the **${fieldDisplay}** to complete your lead.`;
     } else {
-      const missingFields = missing.map(field => this.getFieldDisplayName(field)).join(', ');
+      const missingFields = missing.map((field) => this.getFieldDisplayName(field)).join(", ");
       return `I need a few more details to create your lead: **${missingFields}**`;
     }
   }
 
   getFieldDisplayName(field) {
     const fieldNames = {
-      'name': 'Lead Name',
-      'contact_name': 'Contact Name', 
-      'email': 'Email',
-      'phone': 'Phone',
-      'description': 'Description'
+      name: "Lead Name",
+      contact_name: "Contact Name",
+      email: "Email",
+      phone: "Phone",
+      description: "Description",
     };
     return fieldNames[field] || field;
   }
@@ -2040,7 +2050,6 @@ Your lead has been created in Odoo and is ready for follow-up! 🎉`;
       } else {
         return `❌ Sorry, I couldn't create your lead: ${result.error}`;
       }
-
     } catch (error) {
       console.error("Error creating complete lead:", error.message);
       return "❌ I encountered an error while creating your lead. Please try again or contact support.";
@@ -2049,14 +2058,14 @@ Your lead has been created in Odoo and is ready for follow-up! 🎉`;
 
   manualLeadAnalysis(message) {
     const lowerMessage = message.toLowerCase();
-    
+
     // Check for lead name patterns
     const namePatterns = [
       /(?:lead|title):\s*([^,]+?)(?:\s|,|$)/i,
       /(?:name):\s*([^,]+?)(?:\s|,|$)/i,
-      /(?:about):\s*([^,]+?)(?:\s|,|$)/i
+      /(?:about):\s*([^,]+?)(?:\s|,|$)/i,
     ];
-    
+
     let name = null;
     for (const pattern of namePatterns) {
       const match = message.match(pattern);
@@ -2065,13 +2074,10 @@ Your lead has been created in Odoo and is ready for follow-up! 🎉`;
         break;
       }
     }
-    
+
     // Check for contact name patterns
-    const contactPatterns = [
-      /(?:contact|person):\s*([^,]+?)(?:\s|,|$)/i,
-      /(?:for|with)\s+([a-zA-Z\s]+?)(?:\s|,|$)/i
-    ];
-    
+    const contactPatterns = [/(?:contact|person):\s*([^,]+?)(?:\s|,|$)/i, /(?:for|with)\s+([a-zA-Z\s]+?)(?:\s|,|$)/i];
+
     let contactName = null;
     for (const pattern of contactPatterns) {
       const match = message.match(pattern);
@@ -2080,12 +2086,10 @@ Your lead has been created in Odoo and is ready for follow-up! 🎉`;
         break;
       }
     }
-    
+
     // Check for email patterns
-    const emailPatterns = [
-      /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i
-    ];
-    
+    const emailPatterns = [/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i];
+
     let email = null;
     for (const pattern of emailPatterns) {
       const match = message.match(pattern);
@@ -2094,13 +2098,10 @@ Your lead has been created in Odoo and is ready for follow-up! 🎉`;
         break;
       }
     }
-    
+
     // Check for phone patterns
-    const phonePatterns = [
-      /(?:phone|tel):\s*([^,]+?)(?:\s|,|$)/i,
-      /(\+?[\d\s\-\(\)]{10,})/i
-    ];
-    
+    const phonePatterns = [/(?:phone|tel):\s*([^,]+?)(?:\s|,|$)/i, /(\+?[\d\s\-\(\)]{10,})/i];
+
     let phone = null;
     for (const pattern of phonePatterns) {
       const match = message.match(pattern);
@@ -2109,13 +2110,13 @@ Your lead has been created in Odoo and is ready for follow-up! 🎉`;
         break;
       }
     }
-    
+
     // Check for description patterns
     const descriptionPatterns = [
       /(?:description|about|details):\s*([^,]+?)(?:\s|,|$)/i,
-      /(?:interested in|looking for):\s*([^,]+?)(?:\s|,|$)/i
+      /(?:interested in|looking for):\s*([^,]+?)(?:\s|,|$)/i,
     ];
-    
+
     let description = null;
     for (const pattern of descriptionPatterns) {
       const match = message.match(pattern);
@@ -2124,21 +2125,21 @@ Your lead has been created in Odoo and is ready for follow-up! 🎉`;
         break;
       }
     }
-    
+
     const hasName = !!name;
     const hasContactName = !!contactName;
     const hasEmail = !!email;
     const hasPhone = !!phone;
     const hasDescription = !!description;
     const isComplete = hasName && hasContactName && hasEmail && hasPhone && hasDescription;
-    
+
     const missingFields = [];
     if (!hasName) missingFields.push("name");
     if (!hasContactName) missingFields.push("contact_name");
     if (!hasEmail) missingFields.push("email");
     if (!hasPhone) missingFields.push("phone");
     if (!hasDescription) missingFields.push("description");
-    
+
     return {
       has_name: hasName,
       has_contact_name: hasContactName,
@@ -2151,7 +2152,338 @@ Your lead has been created in Odoo and is ready for follow-up! 🎉`;
       phone: phone,
       description: description,
       is_complete: isComplete,
-      missing_fields: missingFields
+      missing_fields: missingFields,
+    };
+  }
+
+  // New Odoo Order Management Intent Handlers
+  async handleOdooOrderStatusIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`[ODOO_ORDER_STATUS] Processing order status request for business ${businessId}: ${message}`);
+
+      // Extract order identifier from the message
+      const orderPrompt = `Extract order identifier from this message: "${message}"
+
+Return JSON with this structure:
+{
+  "order_id": "order ID if provided",
+  "order_name": "order name if provided", 
+  "search_term": "any search term if provided",
+  "has_identifier": true/false
+}
+
+Look for patterns like:
+- "Order ID: 123"
+- "Order: SO001" 
+- "Check status of order 456"
+- "What's the status of order SO002"`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: orderPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      let analysis;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        analysis = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error("Error parsing order status analysis:", parseError);
+        analysis = this.manualOrderStatusAnalysis(message);
+      }
+
+      if (analysis.has_identifier) {
+        // Try to get order status
+        if (analysis.order_id) {
+          const result = await OdooService.getOrderStatus(businessId, parseInt(analysis.order_id));
+          return this.formatOrderStatusResponse(result);
+        } else {
+          // Search for orders by name or search term
+          const searchResult = await OdooService.searchOrders(
+            businessId,
+            analysis.order_name || analysis.search_term,
+            5
+          );
+          return this.formatOrderSearchResponse(searchResult, "status");
+        }
+      } else {
+        return `I'd be happy to help you check an order status! ��
+
+To check an order status, I need to know which order you're looking for. Please provide:
+
+**Order ID:** The numeric ID of the order (e.g., "Order ID: 123")
+**Order Name:** The order reference (e.g., "Order: SO001")
+
+For example: "Check status of order 123" or "What's the status of order SO001"`;
+      }
+    } catch (error) {
+      console.error("Error handling Odoo order status intent:", error.message);
+      return "I apologize, but I could not check the order status. Please try again.";
+    }
+  }
+
+  async handleOdooOrderCancelIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`[ODOO_ORDER_CANCEL] Processing order cancellation request for business ${businessId}: ${message}`);
+
+      // Extract order identifier from the message
+      const orderPrompt = `Extract order identifier from this message: "${message}"
+
+Return JSON with this structure:
+{
+  "order_id": "order ID if provided",
+  "order_name": "order name if provided",
+  "search_term": "any search term if provided", 
+  "has_identifier": true/false,
+  "confirmation": true/false
+}
+
+Look for patterns like:
+- "Cancel order 123"
+- "Cancel order SO001"
+- "Yes, cancel order 456" (confirmation)
+- "No, don't cancel" (confirmation)`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: orderPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      let analysis;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        analysis = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error("Error parsing order cancel analysis:", parseError);
+        analysis = this.manualOrderCancelAnalysis(message);
+      }
+
+      if (analysis.has_identifier) {
+        if (analysis.confirmation === false) {
+          return "Order cancellation cancelled. No changes were made.";
+        }
+
+        if (analysis.order_id) {
+          const result = await OdooService.cancelOrder(businessId, parseInt(analysis.order_id));
+          return this.formatOrderCancelResponse(result);
+        } else {
+          // Search for orders first
+          const searchResult = await OdooService.searchOrders(
+            businessId,
+            analysis.order_name || analysis.search_term,
+            5
+          );
+          if (searchResult.success && searchResult.orders.length === 1) {
+            const result = await OdooService.cancelOrder(businessId, searchResult.orders[0].id);
+            return this.formatOrderCancelResponse(result);
+          } else {
+            return this.formatOrderSearchResponse(searchResult, "cancel");
+          }
+        }
+      } else {
+        return `I'd be happy to help you cancel an order! ⚠️
+
+To cancel an order, I need to know which order you want to cancel. Please provide:
+
+**Order ID:** The numeric ID of the order (e.g., "Cancel order 123")
+**Order Name:** The order reference (e.g., "Cancel order SO001")
+
+For example: "Cancel order 123" or "Cancel order SO001"
+
+⚠️ **Warning:** Cancelling an order cannot be undone. Please make sure you want to cancel the order.`;
+      }
+    } catch (error) {
+      console.error("Error handling Odoo order cancel intent:", error.message);
+      return "I apologize, but I could not cancel the order. Please try again.";
+    }
+  }
+
+  async handleOdooOrderSearchIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`[ODOO_ORDER_SEARCH] Processing order search request for business ${businessId}: ${message}`);
+
+      // Extract search term from the message
+      const searchPrompt = `Extract search term from this message: "${message}"
+
+Return JSON with this structure:
+{
+  "search_term": "search term if provided",
+  "has_search_term": true/false
+}
+
+Look for patterns like:
+- "Find orders for John Smith"
+- "Search orders with SO001"
+- "Show all orders"
+- "List recent orders"`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: searchPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      let analysis;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        analysis = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error("Error parsing order search analysis:", parseError);
+        analysis = this.manualOrderSearchAnalysis(message);
+      }
+
+      const searchTerm = analysis.search_term || "all";
+      const result = await OdooService.searchOrders(businessId, searchTerm, 10);
+      return this.formatOrderSearchResponse(result, "search");
+    } catch (error) {
+      console.error("Error handling Odoo order search intent:", error.message);
+      return "I apologize, but I could not search for orders. Please try again.";
+    }
+  }
+
+  // Helper methods for formatting responses
+  formatOrderStatusResponse(result) {
+    if (!result.success) {
+      return `❌ **Error:** ${result.error}`;
+    }
+
+    const order = result.order;
+    const stateDisplay = this.getOrderStateDisplay(order.state);
+
+    return `📋 **Order Status**
+
+**Order:** ${order.name} (ID: ${order.id})
+**Customer:** ${order.customer}
+**Status:** ${stateDisplay}
+**Total Amount:** $${order.amount_total}
+**Order Date:** ${new Date(order.date_order).toLocaleDateString()}
+
+**Order Items:**
+${order.order_lines.map((line) => `• ${line.product} - Qty: ${line.quantity} - $${line.total}`).join("\n")}
+
+${this.getOrderStatusMessage(order.state)}`;
+  }
+
+  formatOrderCancelResponse(result) {
+    if (!result.success) {
+      return `❌ **Cancellation Failed:** ${result.error}`;
+    }
+
+    return `✅ **Order Cancelled Successfully**
+
+Order ID ${result.orderId} has been cancelled and is no longer active.
+
+⚠️ **Note:** This action cannot be undone.`;
+  }
+
+  formatOrderSearchResponse(result, action) {
+    if (!result.success) {
+      return `❌ **Search Failed:** ${result.error}`;
+    }
+
+    if (result.orders.length === 0) {
+      return `🔍 **No Orders Found**
+
+No orders match your search criteria. Please try a different search term.`;
+    }
+
+    if (result.orders.length === 1 && action === "cancel") {
+      const order = result.orders[0];
+      return ` **Found Order**
+
+**Order:** ${order.name} (ID: ${order.id})
+**Customer:** ${order.partner_id ? order.partner_id[1] : "Unknown"}
+**Status:** ${this.getOrderStateDisplay(order.state)}
+**Amount:** $${order.amount_total}
+
+⚠️ **Are you sure you want to cancel this order?** Please confirm by saying "Yes, cancel order ${
+        order.id
+      }" or "Cancel order ${order.id}".`;
+    }
+
+    const orderList = result.orders
+      .map(
+        (order) =>
+          `• **${order.name}** (ID: ${order.id}) - ${
+            order.partner_id ? order.partner_id[1] : "Unknown"
+          } - ${this.getOrderStateDisplay(order.state)} - $${order.amount_total}`
+      )
+      .join("\n");
+
+    return ` **Found ${result.orders.length} Order(s)**
+
+${orderList}
+
+${action === "status" ? "To check the status of a specific order, please provide the Order ID or Name." : ""}
+${action === "cancel" ? "To cancel a specific order, please provide the Order ID or Name." : ""}`;
+  }
+
+  getOrderStateDisplay(state) {
+    const stateMap = {
+      draft: " Draft",
+      sent: " Quotation Sent",
+      sale: "✅ Sales Order",
+      done: "✅ Done",
+      cancel: "❌ Cancelled",
+    };
+    return stateMap[state] || state;
+  }
+
+  getOrderStatusMessage(state) {
+    const messages = {
+      draft: "This order is in draft status and can still be modified.",
+      sent: "This quotation has been sent to the customer.",
+      sale: "This order has been confirmed and is being processed.",
+      done: "This order has been completed.",
+      cancel: "This order has been cancelled.",
+    };
+    return messages[state] || "";
+  }
+
+  // Manual analysis fallback methods
+  manualOrderStatusAnalysis(message) {
+    const orderIdMatch = message.match(/(?:order\s+)?(?:id\s*:?\s*)?(\d+)/i);
+    const orderNameMatch = message.match(/(?:order\s*:?\s*)([A-Z0-9]+)/i);
+
+    return {
+      order_id: orderIdMatch ? orderIdMatch[1] : null,
+      order_name: orderNameMatch ? orderNameMatch[1] : null,
+      search_term: orderIdMatch ? orderIdMatch[1] : orderNameMatch ? orderNameMatch[1] : null,
+      has_identifier: !!(orderIdMatch || orderNameMatch),
+    };
+  }
+
+  manualOrderCancelAnalysis(message) {
+    const orderIdMatch = message.match(/(?:order\s+)?(?:id\s*:?\s*)?(\d+)/i);
+    const orderNameMatch = message.match(/(?:order\s*:?\s*)([A-Z0-9]+)/i);
+    const confirmationMatch = message.match(/(yes|no|confirm|cancel)/i);
+
+    return {
+      order_id: orderIdMatch ? orderIdMatch[1] : null,
+      order_name: orderNameMatch ? orderNameMatch[1] : null,
+      search_term: orderIdMatch ? orderIdMatch[1] : orderNameMatch ? orderNameMatch[1] : null,
+      has_identifier: !!(orderIdMatch || orderNameMatch),
+      confirmation: confirmationMatch ? confirmationMatch[1].toLowerCase().includes("yes") : null,
+    };
+  }
+
+  manualOrderSearchAnalysis(message) {
+    const searchMatch = message.match(/(?:for|with|containing)\s+([^,]+?)(?:\s|$)/i);
+
+    return {
+      search_term: searchMatch ? searchMatch[1].trim() : null,
+      has_search_term: !!searchMatch,
     };
   }
 }
