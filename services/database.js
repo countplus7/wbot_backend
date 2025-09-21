@@ -35,17 +35,33 @@ class DatabaseService {
    */
   async createOrGetConversation(businessId, whatsappNumber) {
     try {
-      // Use UPSERT to handle both create and update in one query
-      const result = await pool.query(
-        `INSERT INTO conversations (business_id, phone_number, created_at, updated_at) 
-         VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-         ON CONFLICT (business_id, phone_number) 
-         DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-         RETURNING *`,
+      // First, try to find existing conversation
+      const existingResult = await pool.query(
+        `SELECT * FROM conversations 
+         WHERE business_id = $1 AND phone_number = $2`,
         [businessId, whatsappNumber]
       );
 
-      return result.rows[0];
+      if (existingResult.rows.length > 0) {
+        // Update the existing conversation's timestamp
+        const updateResult = await pool.query(
+          `UPDATE conversations 
+           SET updated_at = CURRENT_TIMESTAMP 
+           WHERE id = $1 
+           RETURNING *`,
+          [existingResult.rows[0].id]
+        );
+        return updateResult.rows[0];
+      } else {
+        // Create new conversation
+        const insertResult = await pool.query(
+          `INSERT INTO conversations (business_id, phone_number, created_at, updated_at) 
+           VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           RETURNING *`,
+          [businessId, whatsappNumber]
+        );
+        return insertResult.rows[0];
+      }
     } catch (error) {
       console.error("Error creating/getting conversation:", error);
       throw error;
