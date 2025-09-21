@@ -472,18 +472,50 @@ class OdooService {
 
   async getInventory(businessId) {
     try {
-      const products = await this.makeJsonRpcCall(
-        businessId,
-        "search_read",
-        "product.product",
-        [[], ["name", "qty_available", "list_price"]],
-        { limit: 50 }
-      );
+      // First, try to get inventory with stock fields (if inventory module is installed)
+      try {
+        const products = await this.makeJsonRpcCall(
+          businessId,
+          "search_read",
+          "product.product",
+          [[], ["name", "qty_available", "list_price"]],
+          { limit: 50 }
+        );
 
-      return {
-        success: true,
-        products: products || [],
-      };
+        return {
+          success: true,
+          products: products || [],
+          hasStockInfo: true,
+        };
+      } catch (stockError) {
+        if (stockError.message.includes("Invalid field 'qty_available'")) {
+          console.log("Inventory module not available, falling back to basic product info");
+          
+          // Fallback: get products without stock information
+          const products = await this.makeJsonRpcCall(
+            businessId,
+            "search_read",
+            "product.product",
+            [[], ["name", "list_price"]],
+            { limit: 50 }
+          );
+
+          // Add default stock info since it's not available
+          const productsWithStock = (products || []).map(product => ({
+            ...product,
+            qty_available: "N/A (Stock module not installed)",
+          }));
+
+          return {
+            success: true,
+            products: productsWithStock,
+            hasStockInfo: false,
+            message: "Stock information is not available. Inventory module may not be installed."
+          };
+        } else {
+          throw stockError;
+        }
+      }
     } catch (error) {
       console.error("Error getting inventory:", error.message);
       return {
