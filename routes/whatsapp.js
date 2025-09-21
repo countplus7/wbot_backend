@@ -577,12 +577,12 @@ router.post("/webhook", async (req, res) => {
 
               // Provide a proper FAQ fallback response
               const fallbackResponse = faqMatch ? 
-                `I found a related question about "${faqMatch.question}", but I'm not confident this is exactly what you're looking for. Could you please rephrase your question or provide more details? I'm here to help! ??` :
-                `I'm here to help! ??
+                `I found a related question about "${faqMatch.question}", but I'm not confident this is exactly what you're looking for. Could you please rephrase your question or provide more details? I'm here to help! 😊` :
+                `I'm here to help! 😊
 
-However, I wasn't able to find specific information on "${messageData.content.substring(0, 50)}${messageData.content.length > 50 ? "..." : ""}" in our database. ?????? They might be specific tools, software, or services related to a certain company or industry.
+However, I wasn't able to find specific information on "${messageData.content.substring(0, 50)}${messageData.content.length > 50 ? "..." : ""}" in our database.  These might be specific tools, software, or services related to a certain company or industry.
 
-For me to provide a more accurate answer, could you please provide more context or details about these terms? Are they related to a certain industry, software, or business process? ?? Any additional information would be very helpful!`;
+For me to provide a more accurate answer, could you please provide more context or details about these terms? Are they related to a certain industry, software, or business process? 🤔 Any additional information would be very helpful!`;
 
               // Save the fallback response to database
               await DatabaseService.saveMessage({
@@ -608,9 +608,9 @@ For me to provide a more accurate answer, could you please provide more context 
 
               return res.status(200).send("OK");
             }
-          } catch (faqError) {
-            console.error("Error in enhanced FAQ processing:", faqError);
-            // Continue with regular AI processing if FAQ processing fails
+          } catch (airtableError) {
+            console.error("Error in Airtable FAQ search:", airtableError);
+            // Continue with regular AI processing if Airtable search fails
           }
         }
       } catch (faqError) {
