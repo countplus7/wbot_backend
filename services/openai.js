@@ -536,7 +536,7 @@ class OpenAIService {
    */
   async handleOdooOrder(businessId, orderRequest, phoneNumber) {
     try {
-      const result = await OdooService.createOrder(businessId, {
+      const result = await OdooService.createSaleOrder(businessId, {
         customer_phone: phoneNumber,
         message: orderRequest.message,
       });
