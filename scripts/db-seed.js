@@ -496,28 +496,6 @@ const sampleIntents = [
       "Cancel order SO006",
     ],
   },
-  {
-    name: "odoo_order_search",
-    description: "User wants to search for orders in Odoo",
-    confidence_threshold: 0.8,
-    examples: [
-      "Find orders",
-      "Search for orders",
-      "Find order for John Smith",
-      "Search orders with SO001",
-      "Show all orders",
-      "List recent orders",
-      "Find orders by customer",
-      "Search order database",
-      "Show my orders",
-      "Find order by ID",
-      "Search for order 123",
-      "List all orders",
-      "Find orders by date",
-      "Search order history",
-      "Show order list",
-    ],
-  },
 ];
 
 // Seed intents and examples
