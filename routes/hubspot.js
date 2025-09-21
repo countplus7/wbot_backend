@@ -35,10 +35,18 @@ router.get(
           </style>
         </head>
         <body>
+          <script>
+            // Notify parent window of error
+            if (window.opener) {
+              window.opener.postMessage({ type: 'HUBSPOT_AUTH_ERROR' }, '*');
+            }
+            // Close the popup window
+            window.close();
+          </script>
           <h1>HubSpot Authentication Error</h1>
           <div class="error">
             <p>Authentication failed: ${error}</p>
-            <p>Please try again or contact support.</p>
+            <p>This window will close automatically.</p>
           </div>
         </body>
         </html>
@@ -57,10 +65,18 @@ router.get(
           </style>
         </head>
         <body>
+          <script>
+            // Notify parent window of error
+            if (window.opener) {
+              window.opener.postMessage({ type: 'HUBSPOT_AUTH_ERROR' }, '*');
+            }
+            // Close the popup window
+            window.close();
+          </script>
           <h1>HubSpot Authentication Error</h1>
           <div class="error">
             <p>Missing authorization code or state parameter.</p>
-            <p>Please try again.</p>
+            <p>This window will close automatically.</p>
           </div>
         </body>
         </html>
@@ -82,11 +98,19 @@ router.get(
           </style>
         </head>
         <body>
+          <script>
+            // Notify parent window of success
+            if (window.opener) {
+              window.opener.postMessage({ type: 'HUBSPOT_AUTH_SUCCESS', email: '${result.email}' }, '*');
+            }
+            // Close the popup window
+            window.close();
+          </script>
           <h1>HubSpot Authentication Successful</h1>
           <div class="success">
             <p>HubSpot integration has been configured successfully!</p>
-            <p>Connected portal: ${result.portalId}</p>
-            <p>You can now close this window and return to the application.</p>
+            <p>Connected email: ${result.email}</p>
+            <p>This window will close automatically.</p>
           </div>
         </body>
         </html>
