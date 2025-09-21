@@ -80,6 +80,12 @@ app.use(
   })
 );
 
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  next();
+});
+
 // 3. CORS configuration with caching
 const corsOptions = {
   origin: true,
@@ -92,12 +98,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-app.use((req, res, next) => {
-  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
-  next();
-});
 
 // 4. Optimized request logging middleware (only in development)
 if (isDev) {
