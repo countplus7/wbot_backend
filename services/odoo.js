@@ -391,14 +391,10 @@ class OdooService {
   // Additional Odoo methods for intent handlers
   async searchCustomers(businessId, searchTerm) {
     try {
-      const domain = searchTerm === "all" 
-        ? [] 
-        : [
-            "|", "|",
-            ["name", "ilike", searchTerm],
-            ["email", "ilike", searchTerm],
-            ["phone", "ilike", searchTerm]
-          ];
+      const domain =
+        searchTerm === "all"
+          ? []
+          : ["|", "|", ["name", "ilike", searchTerm], ["email", "ilike", searchTerm], ["phone", "ilike", searchTerm]];
 
       const customers = await this.makeJsonRpcCall(
         businessId,
@@ -489,10 +485,15 @@ class OdooService {
         };
       } catch (stockError) {
         // Check if the error is about the qty_available field not existing
-        if (stockError.message.includes("Invalid field 'qty_available'") || 
-            stockError.message.includes("qty_available")) {
+        // The error might be in the error message or in the error object structure
+        const errorString = JSON.stringify(stockError);
+        if (
+          errorString.includes("qty_available") ||
+          stockError.message.includes("qty_available") ||
+          stockError.message.includes("Invalid field")
+        ) {
           console.log("Inventory module not available, falling back to basic product info");
-          
+
           // Fallback: get products without stock information
           const products = await this.makeJsonRpcCall(
             businessId,
@@ -503,7 +504,7 @@ class OdooService {
           );
 
           // Add default stock info since it's not available
-          const productsWithStock = (products || []).map(product => ({
+          const productsWithStock = (products || []).map((product) => ({
             ...product,
             qty_available: "N/A (Stock module not installed)",
           }));
@@ -512,7 +513,7 @@ class OdooService {
             success: true,
             products: productsWithStock,
             hasStockInfo: false,
-            message: "Stock information is not available. Inventory module may not be installed."
+            message: "Stock information is not available. Inventory module may not be installed.",
           };
         } else {
           throw stockError;
