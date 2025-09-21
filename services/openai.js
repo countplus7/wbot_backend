@@ -1792,104 +1792,321 @@ Your order has been created in Odoo and is ready for processing! 🎉`;
     try {
       console.log(`[ODOO_LEAD_CREATE] Processing Odoo lead create request for business ${businessId}: ${message}`);
 
+      // Check if this is a follow-up to a previous incomplete lead request
+      const isFollowUp = this.isLeadFollowUp(message, conversationHistory);
+      
+      if (isFollowUp) {
+        return await this.handleLeadFollowUp(businessId, message, conversationHistory, businessTone);
+      }
+
       // Extract lead details from the message using AI
-      const leadPrompt = `Extract lead details from this message: "${message}"
-      
-      Return JSON with:
-      - name: lead name or title
-      - partner_name: contact name
-      - email_from: contact email
-      - phone: contact phone
-      - description: lead description
-      
-      If any field is missing, use reasonable defaults.`;
+      const leadPrompt = `Analyze this lead creation request: "${message}"
+
+Determine what information is provided and what is missing.
+
+Return JSON with this structure:
+{
+  "has_name": true/false,
+  "has_contact_name": true/false,
+  "has_email": true/false,
+  "has_phone": true/false,
+  "has_description": true/false,
+  "name": "lead name if provided",
+  "contact_name": "contact name if provided",
+  "email": "contact email if provided",
+  "phone": "contact phone if provided",
+  "description": "lead description if provided",
+  "is_complete": true/false,
+  "missing_fields": ["list of missing required fields"]
+}
+
+Required fields: name, contact_name, email, phone, description`;
 
       const response = await openai.chat.completions.create({
         model: this.chatModel,
         messages: [{ role: "user", content: leadPrompt }],
         temperature: 0.1,
-        max_tokens: 200,
+        max_tokens: 300,
       });
 
-      const leadData = JSON.parse(response.choices[0].message.content);
+      let analysis;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        console.log("AI response for lead analysis:", responseContent);
+        
+        // Try to extract JSON from the response if it's wrapped in text
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        
+        analysis = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error("Error parsing lead analysis:", parseError);
+        console.log("Raw AI response:", response.choices[0].message.content);
+        
+        // Fallback: manually analyze the message for common patterns
+        analysis = this.manualLeadAnalysis(message);
+      }
+
+      console.log("Lead analysis:", analysis);
+
+      if (analysis.is_complete) {
+        // All information provided, create the lead
+        return await this.createCompleteLead(businessId, analysis, message);
+      } else {
+        // Missing information, ask for it
+        return await this.askForMissingLeadInfo(analysis, message);
+      }
+
+    } catch (error) {
+      console.error("Error handling Odoo lead create intent:", error.message);
+      return "I apologize, but I could not process your lead request. Please try again.";
+    }
+  }
+
+  isLeadFollowUp(message, conversationHistory) {
+    // Check if the last few messages indicate we're in a lead creation flow
+    const recentMessages = conversationHistory.slice(-3);
+    return recentMessages.some(msg => 
+      msg.content && (
+        msg.content.includes("What is the lead name") ||
+        msg.content.includes("What is the contact name") ||
+        msg.content.includes("What is the email") ||
+        msg.content.includes("What is the phone") ||
+        msg.content.includes("lead details") ||
+        msg.content.includes("contact information")
+      )
+    );
+  }
+
+  async handleLeadFollowUp(businessId, message, conversationHistory, businessTone) {
+    try {
+      // Get the context from recent conversation
+      const recentMessages = conversationHistory.slice(-5);
+      const contextPrompt = `Based on this conversation context, determine if we now have enough information to create a lead:
+
+Recent conversation:
+${recentMessages.map(msg => `${msg.direction}: ${msg.content}`).join('\n')}
+
+Latest message: "${message}"
+
+Return JSON:
+{
+  "has_all_info": true/false,
+  "name": "lead name if provided",
+  "contact_name": "contact name if provided",
+  "email": "contact email if provided",
+  "phone": "contact phone if provided",
+  "description": "lead description if provided",
+  "missing": ["any still missing fields"]
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: contextPrompt }],
+        temperature: 0.1,
+        max_tokens: 300,
+      });
+
+      let followUpAnalysis;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        followUpAnalysis = JSON.parse(jsonString);
+      } catch (parseError) {
+        return "I'm having trouble understanding your lead details. Could you please provide:\n• Lead name\n• Contact name\n• Email\n• Phone\n• Description";
+      }
+
+      if (followUpAnalysis.has_all_info) {
+        // We have all the information, create the lead
+        return await this.createCompleteLead(businessId, followUpAnalysis, message);
+      } else {
+        // Still missing information
+        return this.askForMissingLeadInfo(followUpAnalysis, message);
+      }
+
+    } catch (error) {
+      console.error("Error handling lead follow-up:", error.message);
+      return "I'm having trouble processing your lead. Please provide:\n• Lead name\n• Contact name\n• Email\n• Phone\n• Description";
+    }
+  }
+
+  async askForMissingLeadInfo(analysis, originalMessage) {
+    const missing = analysis.missing_fields || [];
+    
+    if (missing.length >= 3) {
+      return `I'd be happy to help you create a lead! 📋
+
+To create your lead, I need the following information:
+
+**Lead Name:** What should we call this lead?
+**Contact Name:** Who is the contact person?
+**Email:** What's their email address?
+**Phone:** What's their phone number?
+**Description:** What is this lead about?
+
+For example: "Lead: New Customer Inquiry, Contact: John Smith, Email: john@example.com, Phone: 123-456-7890, Description: Interested in our services"`;
+    } else if (missing.length === 1) {
+      const field = missing[0];
+      const fieldDisplay = this.getFieldDisplayName(field);
+      return `Almost there! I just need the **${fieldDisplay}** to complete your lead.`;
+    } else {
+      const missingFields = missing.map(field => this.getFieldDisplayName(field)).join(', ');
+      return `I need a few more details to create your lead: **${missingFields}**`;
+    }
+  }
+
+  getFieldDisplayName(field) {
+    const fieldNames = {
+      'name': 'Lead Name',
+      'contact_name': 'Contact Name', 
+      'email': 'Email',
+      'phone': 'Phone',
+      'description': 'Description'
+    };
+    return fieldNames[field] || field;
+  }
+
+  async createCompleteLead(businessId, analysis, message) {
+    try {
+      const leadData = {
+        name: analysis.name,
+        partner_name: analysis.contact_name,
+        email: analysis.email,
+        phone: analysis.phone,
+        description: analysis.description,
+      };
+
+      console.log("Creating lead with data:", leadData);
 
       // Create lead using Odoo Service
       const result = await OdooService.createLead(businessId, leadData);
 
       if (result.success) {
-        return `✅ Lead "${leadData.name}" created successfully in Odoo`;
+        return `✅ **Lead Created Successfully!**
+
+📋 **Lead Details:**
+• Lead Name: ${analysis.name}
+• Contact: ${analysis.contact_name}
+• Email: ${analysis.email}
+• Phone: ${analysis.phone}
+• Description: ${analysis.description}
+• Lead ID: ${result.id}
+
+Your lead has been created in Odoo and is ready for follow-up! 🎉`;
       } else {
-        return `❌ Failed to create lead: ${result.error}`;
+        return `❌ Sorry, I couldn't create your lead: ${result.error}`;
       }
+
     } catch (error) {
-      console.error("Error handling Odoo lead create intent:", error.message);
-      return "I apologize, but I could not create your lead. Please check your Odoo configuration.";
+      console.error("Error creating complete lead:", error.message);
+      return "❌ I encountered an error while creating your lead. Please try again or contact support.";
     }
   }
 
-  manualOrderAnalysis(message) {
+  manualLeadAnalysis(message) {
     const lowerMessage = message.toLowerCase();
     
-    // Check for customer patterns
-    const customerPatterns = [
-      /(?:for|to)\s+([a-zA-Z\s]+?)(?:\s|,|$)/,
-      /(?:customer|client):\s*([a-zA-Z\s]+?)(?:\s|,|$)/,
-      /(?:order for)\s+([a-zA-Z\s]+?)(?:\s|,|$)/i
+    // Check for lead name patterns
+    const namePatterns = [
+      /(?:lead|title):\s*([^,]+?)(?:\s|,|$)/i,
+      /(?:name):\s*([^,]+?)(?:\s|,|$)/i,
+      /(?:about):\s*([^,]+?)(?:\s|,|$)/i
     ];
     
-    let customer = null;
-    for (const pattern of customerPatterns) {
+    let name = null;
+    for (const pattern of namePatterns) {
       const match = message.match(pattern);
       if (match) {
-        customer = match[1].trim();
+        name = match[1].trim();
         break;
       }
     }
     
-    // Check for quantity patterns
-    const quantityPatterns = [
-      /(\d+)\s+([a-zA-Z\s]+?)(?:\s|,|$)/,
-      /([a-zA-Z\s]+?)\s+(\d+)(?:\s|,|$)/,
-      /(?:quantity|qty):\s*(\d+)/i
+    // Check for contact name patterns
+    const contactPatterns = [
+      /(?:contact|person):\s*([^,]+?)(?:\s|,|$)/i,
+      /(?:for|with)\s+([a-zA-Z\s]+?)(?:\s|,|$)/i
     ];
     
-    let products = [];
-    for (const pattern of quantityPatterns) {
+    let contactName = null;
+    for (const pattern of contactPatterns) {
       const match = message.match(pattern);
       if (match) {
-        if (pattern.source.includes('\\d+\\s+')) {
-          // "2 laptops" format
-          products.push({
-            name: match[2].trim(),
-            quantity: parseInt(match[1])
-          });
-        } else {
-          // "laptops 2" format
-          products.push({
-            name: match[1].trim(),
-            quantity: parseInt(match[2])
-          });
-        }
+        contactName = match[1].trim();
         break;
       }
     }
     
-    const hasCustomer = !!customer;
-    const hasProducts = products.length > 0;
-    const hasQuantities = products.some(p => p.quantity > 0);
-    const isComplete = hasCustomer && hasProducts && hasQuantities;
+    // Check for email patterns
+    const emailPatterns = [
+      /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i
+    ];
+    
+    let email = null;
+    for (const pattern of emailPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        email = match[1].trim();
+        break;
+      }
+    }
+    
+    // Check for phone patterns
+    const phonePatterns = [
+      /(?:phone|tel):\s*([^,]+?)(?:\s|,|$)/i,
+      /(\+?[\d\s\-\(\)]{10,})/i
+    ];
+    
+    let phone = null;
+    for (const pattern of phonePatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        phone = match[1].trim();
+        break;
+      }
+    }
+    
+    // Check for description patterns
+    const descriptionPatterns = [
+      /(?:description|about|details):\s*([^,]+?)(?:\s|,|$)/i,
+      /(?:interested in|looking for):\s*([^,]+?)(?:\s|,|$)/i
+    ];
+    
+    let description = null;
+    for (const pattern of descriptionPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        description = match[1].trim();
+        break;
+      }
+    }
+    
+    const hasName = !!name;
+    const hasContactName = !!contactName;
+    const hasEmail = !!email;
+    const hasPhone = !!phone;
+    const hasDescription = !!description;
+    const isComplete = hasName && hasContactName && hasEmail && hasPhone && hasDescription;
     
     const missingFields = [];
-    if (!hasCustomer) missingFields.push("customer");
-    if (!hasProducts) missingFields.push("products");
-    if (!hasQuantities) missingFields.push("quantities");
+    if (!hasName) missingFields.push("name");
+    if (!hasContactName) missingFields.push("contact_name");
+    if (!hasEmail) missingFields.push("email");
+    if (!hasPhone) missingFields.push("phone");
+    if (!hasDescription) missingFields.push("description");
     
     return {
-      has_customer: hasCustomer,
-      has_products: hasProducts,
-      has_quantities: hasQuantities,
-      customer_info: customer,
-      products: products,
+      has_name: hasName,
+      has_contact_name: hasContactName,
+      has_email: hasEmail,
+      has_phone: hasPhone,
+      has_description: hasDescription,
+      name: name,
+      contact_name: contactName,
+      email: email,
+      phone: phone,
+      description: description,
       is_complete: isComplete,
       missing_fields: missingFields
     };
