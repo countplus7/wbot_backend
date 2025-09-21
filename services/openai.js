@@ -2293,14 +2293,15 @@ For example: "Cancel order 123" or "Cancel order 456"
     }
   }
 
-  // Follow-up detection methods
+  // Updated follow-up detection methods
   isOrderStatusFollowUp(message, conversationHistory) {
     const recentMessages = conversationHistory.slice(-3);
     return recentMessages.some(
       (msg) =>
         msg.content &&
         (msg.content.includes("check an order status") ||
-          msg.content.includes("Order ID") ||
+          msg.content.includes("I need the Order ID") ||
+          msg.content.includes("Please provide the Order ID") ||
           msg.content.includes("order status"))
     );
   }
@@ -2311,139 +2312,27 @@ For example: "Cancel order 123" or "Cancel order 456"
       (msg) =>
         msg.content &&
         (msg.content.includes("cancel an order") ||
-          msg.content.includes("Order ID") ||
+          msg.content.includes("I need the Order ID") ||
+          msg.content.includes("Please provide the Order ID") ||
           msg.content.includes("cancel order"))
     );
   }
 
-  // Follow-up handlers
-  async handleOrderStatusFollowUp(businessId, message, conversationHistory, businessTone) {
-    try {
-      // Get the context from recent conversation
-      const recentMessages = conversationHistory.slice(-5);
-      const contextPrompt = `Based on this conversation context, determine if we now have an order ID to check status:
-
-Recent conversation:
-${recentMessages.map((msg) => `${msg.direction}: ${msg.content}`).join("\n")}
-
-Latest message: "${message}"
-
-Return JSON:
-{
-  "has_order_id": true/false,
-  "order_id": "order ID if provided"
-}`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [{ role: "user", content: contextPrompt }],
-        temperature: 0.1,
-        max_tokens: 200,
-      });
-
-      let followUpAnalysis;
-      try {
-        const responseContent = response.choices[0].message.content.trim();
-        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
-        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
-        followUpAnalysis = JSON.parse(jsonString);
-      } catch (parseError) {
-        return "I'm having trouble understanding the order ID. Could you please provide the Order ID (numeric ID) of the order you want to check?";
-      }
-
-      if (followUpAnalysis.has_order_id && followUpAnalysis.order_id) {
-        // We have the order ID, get the status
-        const result = await OdooService.getOrderStatus(businessId, parseInt(followUpAnalysis.order_id));
-        return this.formatOrderStatusResponse(result);
-      } else {
-        // Still no order ID
-        return "I still need the Order ID to check the order status. Please provide the numeric ID of the order you want to check.";
-      }
-
-    } catch (error) {
-      console.error("Error handling order status follow-up:", error.message);
-      return "I'm having trouble processing your request. Please provide the Order ID (numeric ID) of the order you want to check.";
-    }
-  }
-
-  async handleOrderCancelFollowUp(businessId, message, conversationHistory, businessTone) {
-    try {
-      // Get the context from recent conversation
-      const recentMessages = conversationHistory.slice(-5);
-      const contextPrompt = `Based on this conversation context, determine if we now have an order ID to cancel:
-
-Recent conversation:
-${recentMessages.map((msg) => `${msg.direction}: ${msg.content}`).join("\n")}
-
-Latest message: "${message}"
-
-Return JSON:
-{
-  "has_order_id": true/false,
-  "order_id": "order ID if provided",
-  "confirmation": true/false
-}`;
-
-      const response = await openai.chat.completions.create({
-        model: this.chatModel,
-        messages: [{ role: "user", content: contextPrompt }],
-        temperature: 0.1,
-        max_tokens: 200,
-      });
-
-      let followUpAnalysis;
-      try {
-        const responseContent = response.choices[0].message.content.trim();
-        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
-        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
-        followUpAnalysis = JSON.parse(jsonString);
-      } catch (parseError) {
-        return "I'm having trouble understanding the order ID. Could you please provide the Order ID (numeric ID) of the order you want to cancel?";
-      }
-
-      if (followUpAnalysis.has_order_id && followUpAnalysis.order_id) {
-        if (followUpAnalysis.confirmation === false) {
-          return "Order cancellation cancelled. No changes were made.";
-        }
-
-        // We have the order ID, cancel the order
-        const result = await OdooService.cancelOrder(businessId, parseInt(followUpAnalysis.order_id));
-        return this.formatOrderCancelResponse(result);
-      } else {
-        // Still no order ID
-        return "I still need the Order ID to cancel the order. Please provide the numeric ID of the order you want to cancel.";
-      }
-
-    } catch (error) {
-      console.error("Error handling order cancel follow-up:", error.message);
-      return "I'm having trouble processing your request. Please provide the Order ID (numeric ID) of the order you want to cancel.";
-    }
-  }
-
-  // Updated manual analysis methods
-  manualOrderStatusAnalysis(message) {
-    const orderIdMatch = message.match(/(?:order\s+)?(?:id\s*:?\s*)?(\d+)/i);
-    
-    return {
-      order_id: orderIdMatch ? orderIdMatch[1] : null,
-      has_order_id: !!orderIdMatch
-    };
-  }
-
-  manualOrderCancelAnalysis(message) {
-    const orderIdMatch = message.match(/(?:order\s+)?(?:id\s*:?\s*)?(\d+)/i);
-    const confirmationMatch = message.match(/(yes|no|confirm|cancel)/i);
-    
-    return {
-      order_id: orderIdMatch ? orderIdMatch[1] : null,
-      has_order_id: !!orderIdMatch,
-      confirmation: confirmationMatch ? confirmationMatch[1].toLowerCase().includes("yes") : null
-    };
-  }
-
+  // Updated order search handler to check for follow-up contexts
   async handleOdooOrderSearchIntent(businessId, message, conversationHistory, businessTone) {
     try {
       console.log(`[ODOO_ORDER_SEARCH] Processing order search request for business ${businessId}: ${message}`);
+
+      // Check if this is actually a follow-up to order status or cancel requests
+      if (this.isOrderStatusFollowUp(message, conversationHistory)) {
+        console.log("Detected as order status follow-up, redirecting...");
+        return await this.handleOrderStatusFollowUp(businessId, message, conversationHistory, businessTone);
+      }
+      
+      if (this.isOrderCancelFollowUp(message, conversationHistory)) {
+        console.log("Detected as order cancel follow-up, redirecting...");
+        return await this.handleOrderCancelFollowUp(businessId, message, conversationHistory, businessTone);
+      }
 
       // Extract search term from the message
       const searchPrompt = `Extract search term from this message: "${message}"
@@ -2481,10 +2370,167 @@ Look for patterns like:
       const searchTerm = analysis.search_term || "all";
       const result = await OdooService.searchOrders(businessId, searchTerm, 10);
       return this.formatOrderSearchResponse(result, "search");
+
     } catch (error) {
       console.error("Error handling Odoo order search intent:", error.message);
       return "I apologize, but I could not search for orders. Please try again.";
     }
+  }
+
+  // Updated follow-up handlers with better parsing
+  async handleOrderStatusFollowUp(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`[ORDER_STATUS_FOLLOWUP] Processing follow-up for order status: ${message}`);
+
+      // First try manual parsing for order ID
+      const manualAnalysis = this.manualOrderStatusAnalysis(message);
+      if (manualAnalysis.has_order_id && manualAnalysis.order_id) {
+        console.log(`Found order ID via manual parsing: ${manualAnalysis.order_id}`);
+        const result = await OdooService.getOrderStatus(businessId, parseInt(manualAnalysis.order_id));
+        return this.formatOrderStatusResponse(result);
+      }
+
+      // If manual parsing didn't work, try AI parsing
+      const recentMessages = conversationHistory.slice(-5);
+      const contextPrompt = `Based on this conversation context, determine if we now have an order ID to check status:
+
+Recent conversation:
+${recentMessages.map((msg) => `${msg.direction}: ${msg.content}`).join("\n")}
+
+Latest message: "${message}"
+
+Return JSON:
+{
+  "has_order_id": true/false,
+  "order_id": "order ID if provided"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: contextPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      let followUpAnalysis;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        followUpAnalysis = JSON.parse(jsonString);
+      } catch (parseError) {
+        return "I'm having trouble understanding the order ID. Could you please provide the Order ID (numeric ID) of the order you want to check?";
+      }
+
+      if (followUpAnalysis.has_order_id && followUpAnalysis.order_id) {
+        console.log(`Found order ID via AI parsing: ${followUpAnalysis.order_id}`);
+        const result = await OdooService.getOrderStatus(businessId, parseInt(followUpAnalysis.order_id));
+        return this.formatOrderStatusResponse(result);
+      } else {
+        return "I still need the Order ID to check the order status. Please provide the numeric ID of the order you want to check.";
+      }
+
+    } catch (error) {
+      console.error("Error handling order status follow-up:", error.message);
+      return "I'm having trouble processing your request. Please provide the Order ID (numeric ID) of the order you want to check.";
+    }
+  }
+
+  async handleOrderCancelFollowUp(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`[ORDER_CANCEL_FOLLOWUP] Processing follow-up for order cancellation: ${message}`);
+
+      // First try manual parsing for order ID
+      const manualAnalysis = this.manualOrderCancelAnalysis(message);
+      if (manualAnalysis.has_order_id && manualAnalysis.order_id) {
+        console.log(`Found order ID via manual parsing: ${manualAnalysis.order_id}`);
+        if (manualAnalysis.confirmation === false) {
+          return "Order cancellation cancelled. No changes were made.";
+        }
+        const result = await OdooService.cancelOrder(businessId, parseInt(manualAnalysis.order_id));
+        return this.formatOrderCancelResponse(result);
+      }
+
+      // If manual parsing didn't work, try AI parsing
+      const recentMessages = conversationHistory.slice(-5);
+      const contextPrompt = `Based on this conversation context, determine if we now have an order ID to cancel:
+
+Recent conversation:
+${recentMessages.map((msg) => `${msg.direction}: ${msg.content}`).join("\n")}
+
+Latest message: "${message}"
+
+Return JSON:
+{
+  "has_order_id": true/false,
+  "order_id": "order ID if provided",
+  "confirmation": true/false
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: contextPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      let followUpAnalysis;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        followUpAnalysis = JSON.parse(jsonString);
+      } catch (parseError) {
+        return "I'm having trouble understanding the order ID. Could you please provide the Order ID (numeric ID) of the order you want to cancel?";
+      }
+
+      if (followUpAnalysis.has_order_id && followUpAnalysis.order_id) {
+        console.log(`Found order ID via AI parsing: ${followUpAnalysis.order_id}`);
+        if (followUpAnalysis.confirmation === false) {
+          return "Order cancellation cancelled. No changes were made.";
+        }
+        const result = await OdooService.cancelOrder(businessId, parseInt(followUpAnalysis.order_id));
+        return this.formatOrderCancelResponse(result);
+      } else {
+        return "I still need the Order ID to cancel the order. Please provide the numeric ID of the order you want to cancel.";
+      }
+
+    } catch (error) {
+      console.error("Error handling order cancel follow-up:", error.message);
+      return "I'm having trouble processing your request. Please provide the Order ID (numeric ID) of the order you want to cancel.";
+    }
+  }
+
+  // Updated manual analysis methods with better regex patterns
+  manualOrderStatusAnalysis(message) {
+    // Look for "Order ID: 5" or just "5" or "order 5" patterns
+    const orderIdMatch = message.match(/(?:order\s+id\s*:?\s*)?(\d+)/i);
+    
+    return {
+      order_id: orderIdMatch ? orderIdMatch[1] : null,
+      has_order_id: !!orderIdMatch
+    };
+  }
+
+  manualOrderCancelAnalysis(message) {
+    // Look for "Order ID: 5" or just "5" or "order 5" patterns
+    const orderIdMatch = message.match(/(?:order\s+id\s*:?\s*)?(\d+)/i);
+    const confirmationMatch = message.match(/(yes|no|confirm|cancel)/i);
+    
+    return {
+      order_id: orderIdMatch ? orderIdMatch[1] : null,
+      has_order_id: !!orderIdMatch,
+      confirmation: confirmationMatch ? confirmationMatch[1].toLowerCase().includes("yes") : null
+    };
+  }
+
+  manualOrderSearchAnalysis(message) {
+    const searchMatch = message.match(/(?:for|with|containing)\s+([^,]+?)(?:\s|$)/i);
+
+    return {
+      search_term: searchMatch ? searchMatch[1].trim() : null,
+      has_search_term: !!searchMatch,
+    };
   }
 
   // Helper methods for formatting responses
@@ -2584,15 +2630,6 @@ ${action === "cancel" ? "To cancel a specific order, please provide the Order ID
       cancel: "This order has been cancelled.",
     };
     return messages[state] || "";
-  }
-
-  manualOrderSearchAnalysis(message) {
-    const searchMatch = message.match(/(?:for|with|containing)\s+([^,]+?)(?:\s|$)/i);
-
-    return {
-      search_term: searchMatch ? searchMatch[1].trim() : null,
-      has_search_term: !!searchMatch,
-    };
   }
 }
 
