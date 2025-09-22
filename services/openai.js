@@ -1,4 +1,4 @@
-﻿require("dotenv").config();
+require("dotenv").config();
 const { OpenAI } = require("openai");
 const fs = require("fs-extra");
 const path = require("path");
@@ -238,15 +238,17 @@ class OpenAIService {
         .filter((msg) => msg.content && msg.content.trim().length > 0);
 
       // Ensure messages are properly formatted
-      const formattedMessages = messages.map((msg) => {
-        if (typeof msg === 'string') {
-          return { role: "user", content: msg };
-        }
-        if (msg.content && !msg.role) {
-          return { role: "user", content: msg.content };
-        }
-        return msg;
-      }).filter((msg) => msg.content && msg.content.trim().length > 0);
+      const formattedMessages = messages
+        .map((msg) => {
+          if (typeof msg === "string") {
+            return { role: "user", content: msg };
+          }
+          if (msg.content && !msg.role) {
+            return { role: "user", content: msg.content };
+          }
+          return msg;
+        })
+        .filter((msg) => msg.content && msg.content.trim().length > 0);
 
       const allMessages = [{ role: "system", content: systemPrompt }, ...formattedHistory, ...formattedMessages];
 
@@ -565,7 +567,7 @@ class OpenAIService {
   async handleOdooOrder(businessId, orderRequest, phoneNumber) {
     try {
       // For now, return a message that order creation requires more details
-      return "✅ I understand you want to create an order. To create a proper order, please provide more details like:\n• What product do you want to order?\n• How many units?\n• Any special requirements?\n\nFor example: 'Create an order for 5 laptops'";
+      return "✅ I understand you want to create an order. To create a proper order, please provide more details like:\n� What product do you want to order?\n� How many units?\n� Any special requirements?\n\nFor example: 'Create an order for 5 laptops'";
     } catch (error) {
       console.error("Error handling Odoo order:", error.message);
       return "❌ Sorry, I could not process your order. Please try again or contact support.";
@@ -864,7 +866,7 @@ Return JSON:
         const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
         followUpAnalysis = JSON.parse(jsonString);
       } catch (parseError) {
-        return "I'm having trouble understanding your email details. Could you please provide:\n• Email subject\n• Email message content";
+        return "I'm having trouble understanding your email details. Could you please provide:\n� Email subject\n� Email message content";
       }
 
       if (followUpAnalysis.has_all_info) {
@@ -876,7 +878,7 @@ Return JSON:
       }
     } catch (error) {
       console.error("Error handling email follow-up:", error.message);
-      return "I'm having trouble processing your email. Please provide:\n• Email subject\n• Email message content";
+      return "I'm having trouble processing your email. Please provide:\n� Email subject\n� Email message content";
     }
   }
 
@@ -884,7 +886,7 @@ Return JSON:
     const missing = analysis.missing_fields || [];
 
     if (missing.includes("subject") && missing.includes("body")) {
-      return `I'd be happy to help you send an email! 📧
+      return `I'd be happy to help you send an email! ??
 
 To send your email, I need a few more details:
 
@@ -901,7 +903,7 @@ Just need to know: **What should the email subject be?**`;
 
 Now I need to know: **What should the email message content be?**`;
     } else {
-      return `I need a bit more information to send your email. Could you please specify:\n• Email subject\n• Email message content`;
+      return `I need a bit more information to send your email. Could you please specify:\n� Email subject\n� Email message content`;
     }
   }
 
@@ -912,7 +914,7 @@ Now I need to know: **What should the email message content be?**`;
       const businessOwnerEmail = await this.getBusinessOwnerEmail(businessId);
 
       if (!businessOwnerEmail) {
-        return "❌ I couldn't find the business owner's email address. Please configure the business owner email in your settings.";
+        return "? I couldn't find the business owner's email address. Please configure the business owner email in your settings.";
       }
 
       const emailData = {
@@ -926,17 +928,17 @@ Now I need to know: **What should the email message content be?**`;
       // Send email using Google Service
       const result = await GoogleService.sendEmail(businessId, emailData);
 
-      return `✅ **Email Sent Successfully!**
+      return `? **Email Sent Successfully!**
 
  **Email Details:**
-• To: ${businessOwnerEmail}
-• Subject: ${analysis.subject}
-• Message: ${analysis.body.substring(0, 100)}${analysis.body.length > 100 ? "..." : ""}
+� To: ${businessOwnerEmail}
+� Subject: ${analysis.subject}
+� Message: ${analysis.body.substring(0, 100)}${analysis.body.length > 100 ? "..." : ""}
 
-Your email has been sent via Gmail! 🎉`;
+Your email has been sent via Gmail! ??`;
     } catch (error) {
       console.error("Error sending complete email:", error.message);
-      return "❌ I encountered an error while sending your email. Please try again or contact support.";
+      return "? I encountered an error while sending your email. Please try again or contact support.";
     }
   }
 
@@ -1074,11 +1076,11 @@ Your email has been sent via Gmail! 🎉`;
 
       // Google Service returns the event data directly, not a success object
       if (result && result.id) {
-        return `✅ Calendar event "${eventData.title}" created successfully!\n\n📅 Event Details:\n• Title: ${
+        return `? Calendar event "${eventData.title}" created successfully!\n\n?? Event Details:\n� Title: ${
           eventData.title
-        }\n• Start: ${new Date(eventData.start).toLocaleString()}\n• End: ${new Date(
+        }\n� Start: ${new Date(eventData.start).toLocaleString()}\n� End: ${new Date(
           eventData.end
-        ).toLocaleString()}\n• Description: ${eventData.description || "No description"}`;
+        ).toLocaleString()}\n� Description: ${eventData.description || "No description"}`;
       } else {
         throw new Error("Calendar event creation returned invalid result");
       }
@@ -1087,13 +1089,13 @@ Your email has been sent via Gmail! 🎉`;
 
       // Provide more specific error messages
       if (error.message.includes("Failed to parse event data")) {
-        return "❌ I couldn't understand the meeting details from your message. Please try rephrasing with clear date, time, and title information.";
+        return "? I couldn't understand the meeting details from your message. Please try rephrasing with clear date, time, and title information.";
       } else if (error.message.includes("Missing required event fields")) {
-        return "❌ I need more information to create the calendar event. Please include the title, date, and time.";
+        return "? I need more information to create the calendar event. Please include the title, date, and time.";
       } else if (error.message.includes("Failed to create calendar event")) {
-        return "❌ I couldn't create the calendar event. Please check your Google Calendar integration is properly configured.";
+        return "? I couldn't create the calendar event. Please check your Google Calendar integration is properly configured.";
       } else {
-        return "❌ I apologize, but I encountered an error while trying to create your calendar event. Please try again or check your calendar configuration.";
+        return "? I apologize, but I encountered an error while trying to create your calendar event. Please try again or check your calendar configuration.";
       }
     }
   }
@@ -1110,14 +1112,14 @@ Your email has been sent via Gmail! 🎉`;
 
       if (result.success && result.events.length > 0) {
         const eventsList = result.events
-          .map((event) => `• ${event.summary} - ${new Date(event.start.dateTime || event.start.date).toLocaleString()}`)
+          .map((event) => `� ${event.summary} - ${new Date(event.start.dateTime || event.start.date).toLocaleString()}`)
           .join("\n");
 
-        return `📅 Your upcoming events:\n${eventsList}`;
+        return `?? Your upcoming events:\n${eventsList}`;
       } else if (result.success) {
-        return "📅 You have no upcoming events scheduled.";
+        return "?? You have no upcoming events scheduled.";
       } else {
-        return `❌ Failed to check calendar: ${result.error}`;
+        return `? Failed to check calendar: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling calendar check intent:", error.message);
@@ -1154,9 +1156,9 @@ Your email has been sent via Gmail! 🎉`;
       const result = await GoogleService.updateCalendarEvent(businessId, updateData.eventId, updateData);
 
       if (result.success) {
-        return `✅ Calendar event updated successfully`;
+        return `? Calendar event updated successfully`;
       } else {
-        return `❌ Failed to update calendar event: ${result.error}`;
+        return `? Failed to update calendar event: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling calendar update intent:", error.message);
@@ -1190,9 +1192,9 @@ Your email has been sent via Gmail! 🎉`;
       const result = await GoogleService.deleteCalendarEvent(businessId, deleteData.eventId || deleteData.title);
 
       if (result.success) {
-        return `✅ Calendar event deleted successfully`;
+        return `? Calendar event deleted successfully`;
       } else {
-        return `❌ Failed to delete calendar event: ${result.error}`;
+        return `? Failed to delete calendar event: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling calendar delete intent:", error.message);
@@ -1232,9 +1234,9 @@ Your email has been sent via Gmail! 🎉`;
       const result = await HubSpotService.createContact(businessId, contactData);
 
       if (result.success) {
-        return `✅ Contact "${contactData.firstName} ${contactData.lastName}" created successfully in HubSpot`;
+        return `? Contact "${contactData.firstName} ${contactData.lastName}" created successfully in HubSpot`;
       } else {
-        return `❌ Failed to create contact: ${result.error}`;
+        return `? Failed to create contact: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling HubSpot contact create intent:", error.message);
@@ -1270,14 +1272,14 @@ Your email has been sent via Gmail! 🎉`;
 
       if (result.success && result.contacts.length > 0) {
         const contactsList = result.contacts
-          .map((contact) => `• ${contact.firstName} ${contact.lastName} - ${contact.email}`)
+          .map((contact) => `� ${contact.firstName} ${contact.lastName} - ${contact.email}`)
           .join("\n");
 
-        return `📇 Found ${result.contacts.length} contact(s):\n${contactsList}`;
+        return `?? Found ${result.contacts.length} contact(s):\n${contactsList}`;
       } else if (result.success) {
-        return "📇 No contacts found matching your search criteria.";
+        return "?? No contacts found matching your search criteria.";
       } else {
-        return `❌ Failed to search contacts: ${result.error}`;
+        return `? Failed to search contacts: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling HubSpot contact search intent:", error.message);
@@ -1328,9 +1330,9 @@ Your email has been sent via Gmail! 🎉`;
       const result = await HubSpotService.createDeal(businessId, dealData);
 
       if (result.success) {
-        return `✅ Deal "${dealData.name}" created successfully in HubSpot`;
+        return `? Deal "${dealData.name}" created successfully in HubSpot`;
       } else {
-        return `❌ Failed to create deal: ${result.error}`;
+        return `? Failed to create deal: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling HubSpot deal create intent:", error.message);
@@ -1383,9 +1385,9 @@ Your email has been sent via Gmail! 🎉`;
       const result = await HubSpotService.createCompany(businessId, companyData);
 
       if (result.success) {
-        return `✅ Company "${companyData.name}" created successfully in HubSpot`;
+        return `? Company "${companyData.name}" created successfully in HubSpot`;
       } else {
-        return `❌ Failed to create company: ${result.error}`;
+        return `? Failed to create company: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling HubSpot company create intent:", error.message);
@@ -1439,9 +1441,9 @@ Your email has been sent via Gmail! 🎉`;
       const result = await OdooService.createCustomer(businessId, customerData);
 
       if (result.success) {
-        return `✅ Customer "${customerData.name}" created successfully in Odoo`;
+        return `? Customer "${customerData.name}" created successfully in Odoo`;
       } else {
-        return `❌ Failed to create customer: ${result.error}`;
+        return `? Failed to create customer: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling Odoo customer create intent:", error.message);
@@ -1476,13 +1478,13 @@ Your email has been sent via Gmail! 🎉`;
       const result = await OdooService.searchCustomers(businessId, searchData.searchTerm);
 
       if (result.success && result.customers.length > 0) {
-        const customersList = result.customers.map((customer) => `• ${customer.name} - ${customer.email}`).join("\n");
+        const customersList = result.customers.map((customer) => `� ${customer.name} - ${customer.email}`).join("\n");
 
-        return `👥 Found ${result.customers.length} customer(s):\n${customersList}`;
+        return `?? Found ${result.customers.length} customer(s):\n${customersList}`;
       } else if (result.success) {
-        return "👥 No customers found matching your search criteria.";
+        return "?? No customers found matching your search criteria.";
       } else {
-        return `❌ Failed to search customers: ${result.error}`;
+        return `? Failed to search customers: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling Odoo customer search intent:", error.message);
@@ -1521,9 +1523,9 @@ Your email has been sent via Gmail! 🎉`;
       const result = await OdooService.createProduct(businessId, productData);
 
       if (result.success) {
-        return `✅ Product "${productData.name}" created successfully in Odoo`;
+        return `? Product "${productData.name}" created successfully in Odoo`;
       } else {
-        return `❌ Failed to create product: ${result.error}`;
+        return `? Failed to create product: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling Odoo product create intent:", error.message);
@@ -1648,7 +1650,7 @@ Return JSON:
         const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
         followUpAnalysis = JSON.parse(jsonString);
       } catch (parseError) {
-        return "I'm having trouble understanding your order details. Could you please provide:\n• Customer name\n• Product name\n• Quantity";
+        return "I'm having trouble understanding your order details. Could you please provide:\n� Customer name\n� Product name\n� Quantity";
       }
 
       if (followUpAnalysis.has_all_info) {
@@ -1660,7 +1662,7 @@ Return JSON:
       }
     } catch (error) {
       console.error("Error handling order follow-up:", error.message);
-      return "I'm having trouble processing your order. Please provide:\n• Customer name\n• Product name\n• Quantity";
+      return "I'm having trouble processing your order. Please provide:\n� Customer name\n� Product name\n� Quantity";
     }
   }
 
@@ -1668,7 +1670,7 @@ Return JSON:
     const missing = analysis.missing_fields || [];
 
     if (missing.includes("customer") && missing.includes("products")) {
-      return `I'd be happy to help you create an order! 📝
+      return `I'd be happy to help you create an order! ??
 
 To create your order, I need a few more details:
 
@@ -1690,7 +1692,7 @@ Now I need to know: **What product would you like to order and how many?**`;
 
 Just need: **How many units of each product?**`;
     } else {
-      return `I need a bit more information to create your order. Could you please specify:\n• Customer name\n• Product details\n• Quantities`;
+      return `I need a bit more information to create your order. Could you please specify:\n� Customer name\n� Product details\n� Quantities`;
     }
   }
 
@@ -1743,20 +1745,20 @@ Just need: **How many units of each product?**`;
         const customerName = analysis.customer || analysis.customer_info || "Customer";
         const productSummary = orderLines.map((line) => `${line.quantity} units`).join(", ");
 
-        return `✅ **Order Created Successfully!**
+        return `? **Order Created Successfully!**
 
-📋 **Order Details:**
-• Customer: ${customerName}
-• Products: ${productSummary}
-• Order ID: ${result.id}
+?? **Order Details:**
+� Customer: ${customerName}
+� Products: ${productSummary}
+� Order ID: ${result.id}
 
-Your order has been created in Odoo and is ready for processing! 🎉`;
+Your order has been created in Odoo and is ready for processing! ??`;
       } else {
-        return `❌ Sorry, I couldn't create your order: ${result.error}`;
+        return `? Sorry, I couldn't create your order: ${result.error}`;
       }
     } catch (error) {
       console.error("Error creating complete order:", error.message);
-      return "❌ I encountered an error while creating your order. Please try again or contact support.";
+      return "? I encountered an error while creating your order. Please try again or contact support.";
     }
   }
 
@@ -1789,9 +1791,9 @@ Your order has been created in Odoo and is ready for processing! 🎉`;
       const result = await OdooService.createInvoice(businessId, invoiceData);
 
       if (result.success) {
-        return `✅ Invoice created successfully in Odoo`;
+        return `? Invoice created successfully in Odoo`;
       } else {
-        return `❌ Failed to create invoice: ${result.error}`;
+        return `? Failed to create invoice: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling Odoo invoice create intent:", error.message);
@@ -1810,14 +1812,14 @@ Your order has been created in Odoo and is ready for processing! 🎉`;
 
       if (result.success && result.products.length > 0) {
         const inventoryList = result.products
-          .map((product) => `• ${product.name} - Qty: ${product.qty_available}`)
+          .map((product) => `� ${product.name} - Qty: ${product.qty_available}`)
           .join("\n");
 
-        return `📦 Current inventory:\n${inventoryList}`;
+        return `?? Current inventory:\n${inventoryList}`;
       } else if (result.success) {
-        return "📦 Your inventory is currently empty.";
+        return "?? Your inventory is currently empty.";
       } else {
-        return `❌ Failed to retrieve inventory: ${result.error}`;
+        return `? Failed to retrieve inventory: ${result.error}`;
       }
     } catch (error) {
       console.error("Error handling Odoo inventory check intent:", error.message);
@@ -1972,7 +1974,7 @@ Return JSON:
         const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
         followUpAnalysis = JSON.parse(jsonString);
       } catch (parseError) {
-        return "I'm having trouble understanding your lead details. Could you please provide:\n• Lead name\n• Contact name\n• Email\n• Phone\n• Description";
+        return "I'm having trouble understanding your lead details. Could you please provide:\n� Lead name\n� Contact name\n� Email\n� Phone\n� Description";
       }
 
       if (followUpAnalysis.has_all_info) {
@@ -1984,7 +1986,7 @@ Return JSON:
       }
     } catch (error) {
       console.error("Error handling lead follow-up:", error.message);
-      return "I'm having trouble processing your lead. Please provide:\n• Lead name\n• Contact name\n• Email\n• Phone\n• Description";
+      return "I'm having trouble processing your lead. Please provide:\n� Lead name\n� Contact name\n� Email\n� Phone\n� Description";
     }
   }
 
@@ -1992,7 +1994,7 @@ Return JSON:
     const missing = analysis.missing_fields || [];
 
     if (missing.length >= 3) {
-      return `I'd be happy to help you create a lead! 📋
+      return `I'd be happy to help you create a lead! ??
 
 To create your lead, I need the following information:
 
@@ -2040,23 +2042,23 @@ For example: "Lead: New Customer Inquiry, Contact: John Smith, Email: john@examp
       const result = await OdooService.createLead(businessId, leadData);
 
       if (result.success) {
-        return `✅ **Lead Created Successfully!**
+        return `? **Lead Created Successfully!**
 
-📋 **Lead Details:**
-• Lead Name: ${analysis.name}
-• Contact: ${analysis.contact_name}
-• Email: ${analysis.email}
-• Phone: ${analysis.phone}
-• Description: ${analysis.description}
-• Lead ID: ${result.id}
+?? **Lead Details:**
+� Lead Name: ${analysis.name}
+� Contact: ${analysis.contact_name}
+� Email: ${analysis.email}
+� Phone: ${analysis.phone}
+� Description: ${analysis.description}
+� Lead ID: ${result.id}
 
-Your lead has been created in Odoo and is ready for follow-up! 🎉`;
+Your lead has been created in Odoo and is ready for follow-up! ??`;
       } else {
-        return `❌ Sorry, I couldn't create your lead: ${result.error}`;
+        return `? Sorry, I couldn't create your lead: ${result.error}`;
       }
     } catch (error) {
       console.error("Error creating complete lead:", error.message);
-      return "❌ I encountered an error while creating your lead. Please try again or contact support.";
+      return "? I encountered an error while creating your lead. Please try again or contact support.";
     }
   }
 
@@ -2167,7 +2169,7 @@ Your lead has been created in Odoo and is ready for follow-up! 🎉`;
 
       // Check if this is a follow-up to a previous order status request
       const isFollowUp = this.isOrderStatusFollowUp(message, conversationHistory);
-      
+
       if (isFollowUp) {
         return await this.handleOrderStatusFollowUp(businessId, message, conversationHistory, businessTone);
       }
@@ -2210,7 +2212,7 @@ Look for patterns like:
         return this.formatOrderStatusResponse(result);
       } else {
         // No order ID provided, ask for it
-        return `I'd be happy to help you check an order status! 📋
+        return `I'd be happy to help you check an order status! ??
 
 To check an order status, I need the **Order ID** of the order you want to check.
 
@@ -2218,7 +2220,6 @@ Please provide the Order ID (the numeric ID of the order).
 
 For example: "Order ID: 123" or "Check status of order 456"`;
       }
-
     } catch (error) {
       console.error("Error handling Odoo order status intent:", error.message);
       return "I apologize, but I could not check the order status. Please try again.";
@@ -2231,7 +2232,7 @@ For example: "Order ID: 123" or "Check status of order 456"`;
 
       // Check if this is a follow-up to a previous order cancellation request
       const isFollowUp = this.isOrderCancelFollowUp(message, conversationHistory);
-      
+
       if (isFollowUp) {
         return await this.handleOrderCancelFollowUp(businessId, message, conversationHistory, businessTone);
       }
@@ -2280,7 +2281,7 @@ Look for patterns like:
         return this.formatOrderCancelResponse(result);
       } else {
         // No order ID provided, ask for it
-        return `I'd be happy to help you cancel an order! ⚠️
+        return `I'd be happy to help you cancel an order! ??
 
 To cancel an order, I need the **Order ID** of the order you want to cancel.
 
@@ -2288,9 +2289,8 @@ Please provide the Order ID (the numeric ID of the order).
 
 For example: "Cancel order 123" or "Cancel order 456"
 
-⚠️ **Warning:** Cancelling an order cannot be undone. Please make sure you want to cancel the order.`;
+?? **Warning:** Cancelling an order cannot be undone. Please make sure you want to cancel the order.`;
       }
-
     } catch (error) {
       console.error("Error handling Odoo order cancel intent:", error.message);
       return "I apologize, but I could not cancel the order. Please try again.";
@@ -2330,10 +2330,10 @@ For example: "Cancel order 123" or "Cancel order 456"
   manualOrderStatusAnalysis(message) {
     // Look for "Order ID: 5" or just "5" or "order 5" patterns
     const orderIdMatch = message.match(/(?:order\s+id\s*:?\s*)?(\d+)/i);
-    
+
     return {
       order_id: orderIdMatch ? orderIdMatch[1] : null,
-      has_order_id: !!orderIdMatch
+      has_order_id: !!orderIdMatch,
     };
   }
 
@@ -2341,11 +2341,11 @@ For example: "Cancel order 123" or "Cancel order 456"
     // Look for "Order ID: 5" or just "5" or "order 5" patterns
     const orderIdMatch = message.match(/(?:order\s+id\s*:?\s*)?(\d+)/i);
     const confirmationMatch = message.match(/(yes|no|confirm|cancel)/i);
-    
+
     return {
       order_id: orderIdMatch ? orderIdMatch[1] : null,
       has_order_id: !!orderIdMatch,
-      confirmation: confirmationMatch ? confirmationMatch[1].toLowerCase().includes("yes") : null
+      confirmation: confirmationMatch ? confirmationMatch[1].toLowerCase().includes("yes") : null,
     };
   }
 
@@ -2361,13 +2361,13 @@ For example: "Cancel order 123" or "Cancel order 456"
   // Helper methods for formatting responses
   formatOrderStatusResponse(result) {
     if (!result.success) {
-      return `❌ **Error:** ${result.error}`;
+      return `? **Error:** ${result.error}`;
     }
 
     const order = result.order;
     const stateDisplay = this.getOrderStateDisplay(order.state);
 
-    return `📋 **Order Status**
+    return `?? **Order Status**
 
 **Order:** ${order.name} (ID: ${order.id})
 **Customer:** ${order.customer}
@@ -2376,30 +2376,30 @@ For example: "Cancel order 123" or "Cancel order 456"
 **Order Date:** ${new Date(order.date_order).toLocaleDateString()}
 
 **Order Items:**
-${order.order_lines.map((line) => `• ${line.product} - Qty: ${line.quantity} - $${line.total}`).join("\n")}
+${order.order_lines.map((line) => `� ${line.product} - Qty: ${line.quantity} - $${line.total}`).join("\n")}
 
 ${this.getOrderStatusMessage(order.state)}`;
   }
 
   formatOrderCancelResponse(result) {
     if (!result.success) {
-      return `❌ **Cancellation Failed:** ${result.error}`;
+      return `? **Cancellation Failed:** ${result.error}`;
     }
 
-    return `✅ **Order Cancelled Successfully**
+    return `? **Order Cancelled Successfully**
 
 Order ID ${result.orderId} has been cancelled and is no longer active.
 
-⚠️ **Note:** This action cannot be undone.`;
+?? **Note:** This action cannot be undone.`;
   }
 
   formatOrderSearchResponse(result, action) {
     if (!result.success) {
-      return `❌ **Search Failed:** ${result.error}`;
+      return `? **Search Failed:** ${result.error}`;
     }
 
     if (result.orders.length === 0) {
-      return `🔍 **No Orders Found**
+      return `?? **No Orders Found**
 
 No orders match your search criteria. Please try a different search term.`;
     }
@@ -2413,7 +2413,7 @@ No orders match your search criteria. Please try a different search term.`;
 **Status:** ${this.getOrderStateDisplay(order.state)}
 **Amount:** $${order.amount_total}
 
-⚠️ **Are you sure you want to cancel this order?** Please confirm by saying "Yes, cancel order ${
+?? **Are you sure you want to cancel this order?** Please confirm by saying "Yes, cancel order ${
         order.id
       }" or "Cancel order ${order.id}".`;
     }
@@ -2421,7 +2421,7 @@ No orders match your search criteria. Please try a different search term.`;
     const orderList = result.orders
       .map(
         (order) =>
-          `• **${order.name}** (ID: ${order.id}) - ${
+          `� **${order.name}** (ID: ${order.id}) - ${
             order.partner_id ? order.partner_id[1] : "Unknown"
           } - ${this.getOrderStateDisplay(order.state)} - $${order.amount_total}`
       )
@@ -2439,9 +2439,9 @@ ${action === "cancel" ? "To cancel a specific order, please provide the Order ID
     const stateMap = {
       draft: " Draft",
       sent: " Quotation Sent",
-      sale: "✅ Sales Order",
-      done: "✅ Done",
-      cancel: "❌ Cancelled",
+      sale: "? Sales Order",
+      done: "? Done",
+      cancel: "? Cancelled",
     };
     return stateMap[state] || state;
   }
@@ -2455,6 +2455,114 @@ ${action === "cancel" ? "To cancel a specific order, please provide the Order ID
       cancel: "This order has been cancelled.",
     };
     return messages[state] || "";
+  }
+
+  async handleOrderStatusFollowUp(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[ODOO_ORDER_STATUS_FOLLOWUP] Processing order status follow-up for business ${businessId}: ${message}`
+      );
+
+      // Extract order identifier from the follow-up message
+      const orderPrompt = `Extract order identifier from this follow-up message: "${message}"
+
+Return JSON with this structure:
+{
+  "order_id": "order ID if provided",
+  "has_order_id": true/false
+}
+
+Look for patterns like:
+- "Order ID: 123"
+- "5"
+- "SO001"`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: orderPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      let analysis;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        analysis = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error("Error parsing order status follow-up analysis:", parseError);
+        analysis = this.manualOrderStatusAnalysis(message);
+      }
+
+      if (analysis.has_order_id && analysis.order_id) {
+        // Order ID provided, get the status
+        const result = await OdooService.getOrderStatus(businessId, parseInt(analysis.order_id));
+        return this.formatOrderStatusResponse(result);
+      } else {
+        return "I could not find an order ID in your message. Please provide the Order ID in the format: Order ID: 123";
+      }
+    } catch (error) {
+      console.error("Error handling order status follow-up:", error.message);
+      return "I apologize, but I could not check the order status. Please try again.";
+    }
+  }
+
+  async handleOrderCancelFollowUp(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(
+        `[ODOO_ORDER_CANCEL_FOLLOWUP] Processing order cancel follow-up for business ${businessId}: ${message}`
+      );
+
+      // Extract order identifier from the follow-up message
+      const orderPrompt = `Extract order identifier from this follow-up message: "${message}"
+
+Return JSON with this structure:
+{
+  "order_id": "order ID if provided",
+  "has_order_id": true/false,
+  "confirmation": true/false
+}
+
+Look for patterns like:
+- "Order ID: 123"
+- "Cancel order 456"
+- "Yes, cancel order 789"
+- "5"`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: orderPrompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      let analysis;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        analysis = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error("Error parsing order cancel follow-up analysis:", parseError);
+        analysis = this.manualOrderCancelAnalysis(message);
+      }
+
+      if (analysis.has_order_id && analysis.order_id) {
+        if (analysis.confirmation === false) {
+          return "Order cancellation cancelled. No changes were made.";
+        }
+
+        // Order ID provided, cancel the order
+        const result = await OdooService.cancelOrder(businessId, parseInt(analysis.order_id));
+        return this.formatOrderCancelResponse(result);
+      } else {
+        return "I could not find an order ID in your message. Please provide the Order ID in the format: Order ID: 123";
+      }
+    } catch (error) {
+      console.error("Error handling order cancel follow-up:", error.message);
+      return "I apologize, but I could not cancel the order. Please try again.";
+    }
   }
 }
 
