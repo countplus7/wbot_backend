@@ -821,16 +821,28 @@ Note: Email will be sent TO the business owner FROM the integrated Google Worksp
 
   isEmailFollowUp(message, conversationHistory) {
     // Check if the last few messages indicate we're in an email sending flow
-    const recentMessages = conversationHistory.slice(-3);
-    return recentMessages.some(
+    const recentMessages = conversationHistory.slice(-5);
+
+    // Check if bot recently asked for email details
+    const botAskedForEmail = recentMessages.some(
       (msg) =>
         msg.content &&
         (msg.content.includes("What should the email subject be") ||
           msg.content.includes("What should the email content be") ||
           msg.content.includes("email subject") ||
           msg.content.includes("email content") ||
-          msg.content.includes("email details"))
+          msg.content.includes("email details") ||
+          msg.content.includes("To send your email, I need"))
     );
+
+    // Check if current message looks like email details (Subject: ... Message: ...)
+    const messageHasEmailFormat =
+      message &&
+      (/subject\s*:\s*.+/i.test(message) ||
+        /message\s*:\s*.+/i.test(message) ||
+        (message.toLowerCase().includes("subject") && message.toLowerCase().includes("message")));
+
+    return botAskedForEmail || messageHasEmailFormat;
   }
 
   async handleEmailFollowUp(businessId, message, conversationHistory, businessTone) {
@@ -909,12 +921,17 @@ Now I need to know: **What should the email message content be?**`;
 
   async sendCompleteEmail(businessId, analysis, message) {
     try {
-      // Get business owner email (for now, we'll need to implement this)
-      // This could come from business configuration, Google Workspace integration, etc.
+      // Get business owner email from Google Workspace integration
       const businessOwnerEmail = await this.getBusinessOwnerEmail(businessId);
 
       if (!businessOwnerEmail) {
-        return "? I couldn't find the business owner's email address. Please configure the business owner email in your settings.";
+        return `❌ **Unable to Send Email**
+
+I couldn't find a configured email address for this business. Please ensure:
+• Google Workspace integration is set up
+• You've authorized Gmail access in your integrations
+
+You can configure this in your business settings.`;
       }
 
       const emailData = {
@@ -928,29 +945,46 @@ Now I need to know: **What should the email message content be?**`;
       // Send email using Google Service
       const result = await GoogleService.sendEmail(businessId, emailData);
 
-      return `? **Email Sent Successfully!**
+      return `✅ **Email Sent Successfully!**
 
- **Email Details:**
-� To: ${businessOwnerEmail}
-� Subject: ${analysis.subject}
-� Message: ${analysis.body.substring(0, 100)}${analysis.body.length > 100 ? "..." : ""}
+📧 **Email Details:**
+• To: ${businessOwnerEmail}
+• Subject: ${analysis.subject}
+• Message: ${analysis.body.substring(0, 100)}${analysis.body.length > 100 ? "..." : ""}
 
-Your email has been sent via Gmail! ??`;
+Your email has been sent via Gmail! 🚀`;
     } catch (error) {
       console.error("Error sending complete email:", error.message);
-      return "? I encountered an error while sending your email. Please try again or contact support.";
+
+      if (error.message.includes("No Google integration found")) {
+        return `❌ **Email Setup Required**
+
+To send emails, please set up Google Workspace integration:
+1. Go to your business integrations 
+2. Connect Google Workspace
+3. Authorize Gmail access
+
+Once configured, you'll be able to send emails through WhatsApp!`;
+      }
+
+      return `❌ I encountered an error while sending your email: ${error.message}
+
+Please check your email configuration or try again.`;
     }
   }
 
   async getBusinessOwnerEmail(businessId) {
-    // TODO: Implement logic to get business owner email
-    // This could come from:
-    // 1. Business configuration table
-    // 2. Google Workspace integration (get the authenticated user's email)
-    // 3. Admin user email from the system
+    try {
+      // Try to get email from Google Workspace integration
+      const userInfo = await GoogleService.getUserInfo(businessId);
+      if (userInfo && userInfo.email) {
+        return userInfo.email;
+      }
+    } catch (error) {
+      console.warn("Could not get email from Google integration:", error.message);
+    }
 
-    // For now, return a placeholder - this needs to be implemented
-    return "owner@business.com"; // This should be replaced with actual logic
+    return null;
   }
 
   manualEmailAnalysis(message) {
