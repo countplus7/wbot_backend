@@ -825,8 +825,8 @@ Note: Email will be sent TO the business owner FROM the integrated Google Worksp
     return recentMessages.some(
       (msg) =>
         msg.content &&
-        (msg.content.includes("What is the subject") ||
-          msg.content.includes("What is the message") ||
+        (msg.content.includes("What should the email subject be") ||
+          msg.content.includes("What should the email content be") ||
           msg.content.includes("email subject") ||
           msg.content.includes("email content") ||
           msg.content.includes("email details"))
