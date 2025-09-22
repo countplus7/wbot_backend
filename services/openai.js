@@ -237,7 +237,18 @@ class OpenAIService {
         }))
         .filter((msg) => msg.content && msg.content.trim().length > 0);
 
-      const allMessages = [{ role: "system", content: systemPrompt }, ...formattedHistory, ...messages];
+      // Ensure messages are properly formatted
+      const formattedMessages = messages.map((msg) => {
+        if (typeof msg === 'string') {
+          return { role: "user", content: msg };
+        }
+        if (msg.content && !msg.role) {
+          return { role: "user", content: msg.content };
+        }
+        return msg;
+      }).filter((msg) => msg.content && msg.content.trim().length > 0);
+
+      const allMessages = [{ role: "system", content: systemPrompt }, ...formattedHistory, ...formattedMessages];
 
       const response = await openai.chat.completions.create({
         model: this.chatModel,
@@ -249,7 +260,7 @@ class OpenAIService {
       return response.choices[0].message.content.trim();
     } catch (error) {
       console.error("Error generating general response:", error.message);
-      return "I apologize, but I am having trouble processing your request. Please try again.";
+      return "I apologize, but I'm having trouble processing your request right now. Please try again.";
     }
   }
 
@@ -2286,16 +2297,18 @@ For example: "Cancel order 123" or "Cancel order 456"
     }
   }
 
-  // Updated follow-up detection methods
+  // Updated follow-up detection methods with better pattern matching
   isOrderStatusFollowUp(message, conversationHistory) {
     const recentMessages = conversationHistory.slice(-3);
     return recentMessages.some(
       (msg) =>
         msg.content &&
         (msg.content.includes("check an order status") ||
+          msg.content.includes("I need the **Order ID**") ||
           msg.content.includes("I need the Order ID") ||
           msg.content.includes("Please provide the Order ID") ||
-          msg.content.includes("order status"))
+          msg.content.includes("order status") ||
+          msg.content.includes("To check an order status"))
     );
   }
 
@@ -2305,9 +2318,11 @@ For example: "Cancel order 123" or "Cancel order 456"
       (msg) =>
         msg.content &&
         (msg.content.includes("cancel an order") ||
+          msg.content.includes("I need the **Order ID**") ||
           msg.content.includes("I need the Order ID") ||
           msg.content.includes("Please provide the Order ID") ||
-          msg.content.includes("cancel order"))
+          msg.content.includes("cancel order") ||
+          msg.content.includes("To cancel an order"))
     );
   }
 
